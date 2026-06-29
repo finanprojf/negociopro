@@ -40,6 +40,8 @@ dependencies:
 
   # UUID
   uuid: ^4.4.0
+  # Gráficas
+  fl_chart: ^0.68.0
 
   # URL launcher (WhatsApp)
   url_launcher: ^6.3.0

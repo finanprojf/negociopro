@@ -139,7 +139,7 @@ class ApartadoService {
       }, 'id', apartadoId);
     }
 
-    if (SupabaseService.isOnline) {
+  if (SupabaseService.isOnline) {
       try {
         await SupabaseService.client.from('abonos_apartado').insert({
           'id': abonoId,
@@ -149,10 +149,33 @@ class ApartadoService {
           'monto': monto,
           'metodo_pago': metodoPago,
         });
-        await LocalDatabase.marcarSynced('abonos_apartado', abonoId);
-      } catch (_) {}
-    }
 
+        // Actualizar saldo en Supabase
+        final apartado = await SupabaseService.client
+            .from('apartados')
+            .select('saldo_pendiente, monto_pagado')
+            .eq('id', apartadoId)
+            .single();
+
+        final saldoActual = (apartado['saldo_pendiente'] as num).toDouble();
+        final pagadoActual = (apartado['monto_pagado'] as num).toDouble();
+        final nuevoSaldo = (saldoActual - monto).clamp(0.0, double.infinity);
+        final nuevoPagado = pagadoActual + monto;
+        final nuevoEstado = nuevoSaldo <= 0 ? 'completado' : 'activo';
+
+        await SupabaseService.client.from('apartados').update({
+          'saldo_pendiente': nuevoSaldo,
+          'monto_pagado': nuevoPagado,
+          'estado': nuevoEstado,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', apartadoId);
+
+        await LocalDatabase.marcarSynced('abonos_apartado', abonoId);
+        print('✅ Abono apartado sincronizado');
+      } catch (e) {
+        print('❌ Error sync abono apartado: $e');
+      }
+    }
     return true;
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
 import '../../services/supabase_service.dart';
@@ -11,31 +13,40 @@ class ReportesScreen extends StatefulWidget {
 }
 
 class _ReportesScreenState extends State<ReportesScreen> {
- String _periodo = 'hoy';
-  bool _loadingDatos = false;
+  String _periodo = 'hoy';
+  bool _loading = false;
 
   Map<String, Map<String, double>> _datos = {
-    'hoy':    {'ventas': 0, 'gastos': 0, 'ganancia': 0},
-    'semana': {'ventas': 0, 'gastos': 0, 'ganancia': 0},
-    'mes':    {'ventas': 0, 'gastos': 0, 'ganancia': 0},
+    'hoy':    {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0},
+    'semana': {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0},
+    'mes':    {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0},
   };
 
+  List<Map<String, dynamic>> _productosTop = [];
+  List<Map<String, dynamic>> _productosMenos = [];
+
   Map<String, double> get _actual => _datos[_periodo]!;
-@override
+
+  double get _margen {
+    final ventas = _actual['ventas'] ?? 0;
+    final ganancia = _actual['ganancia'] ?? 0;
+    if (ventas == 0) return 0;
+    return (ganancia / ventas) * 100;
+  }
+
+  @override
   void initState() {
     super.initState();
     _cargarDatos();
   }
 
   Future<void> _cargarDatos() async {
-    setState(() => _loadingDatos = true);
+    setState(() => _loading = true);
     try {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
 
       final ahora = DateTime.now().toUtc();
-
-      // Fechas
       final inicioHoy = DateTime.utc(ahora.year, ahora.month, ahora.day);
       final inicioSemana = inicioHoy.subtract(Duration(days: ahora.weekday - 1));
       final inicioMes = DateTime.utc(ahora.year, ahora.month, 1);
@@ -47,11 +58,40 @@ class _ReportesScreenState extends State<ReportesScreen> {
 
         final ventas = await SupabaseService.client
             .from('ventas')
-            .select('total')
+            .select('id, total, tipo_pago')
             .eq('empresa_id', empresaId)
             .eq('estado', 'completada')
             .gte('created_at', inicio.toIso8601String())
             .lt('created_at', fin.toIso8601String());
+
+        double totalVentas = 0;
+        double totalFiado = 0;
+        final ventasIds = <String>[];
+        for (final v in ventas) {
+          if (v['tipo_pago'] != 'fiado') {
+            totalVentas += (v['total'] as num).toDouble();
+            ventasIds.add(v['id'] as String);
+          } else {
+            totalFiado += (v['total'] as num).toDouble();
+          }
+        }
+
+        double gananciaReal = 0;
+        if (ventasIds.isNotEmpty) {
+          final detalles = await SupabaseService.client
+              .from('detalle_ventas')
+              .select('cantidad, precio_unitario, productos(precio_compra)')
+              .inFilter('venta_id', ventasIds);
+
+          for (final d in detalles) {
+            final precioVenta = (d['precio_unitario'] as num).toDouble();
+            final precioCompra = d['productos'] != null
+                ? (d['productos']['precio_compra'] as num).toDouble()
+                : 0.0;
+            final cantidad = (d['cantidad'] as num).toDouble();
+            gananciaReal += (precioVenta - precioCompra) * cantidad;
+          }
+        }
 
         final gastos = await SupabaseService.client
             .from('gastos')
@@ -60,121 +100,189 @@ class _ReportesScreenState extends State<ReportesScreen> {
             .gte('created_at', inicio.toIso8601String())
             .lt('created_at', fin.toIso8601String());
 
-        double totalVentas = 0;
-        for (final v in ventas) {
-          totalVentas += (v['total'] as num).toDouble();
-        }
-
         double totalGastos = 0;
         for (final g in gastos) {
           totalGastos += (g['monto'] as num).toDouble();
         }
 
+        // Apartados cobrados
+        final abonos = await SupabaseService.client
+            .from('abonos_apartado')
+            .select('monto')
+            .eq('empresa_id', empresaId)
+            .gte('created_at', inicio.toIso8601String())
+            .lt('created_at', fin.toIso8601String());
+
+        double totalApartados = 0;
+        for (final a in abonos) {
+          totalApartados += (a['monto'] as num).toDouble();
+        }
+
         _datos[periodo] = {
           'ventas': totalVentas,
           'gastos': totalGastos,
-          'ganancia': totalVentas - totalGastos,
+          'ganancia': gananciaReal,
+          'fiado': totalFiado,
+          'apartados': totalApartados,
         };
       }
 
-      if (mounted) setState(() => _loadingDatos = false);
+      // Productos
+      final allVentasIds = await _getVentasIds(empresaId);
+      if (allVentasIds.isNotEmpty) {
+        final detallesAll = await SupabaseService.client
+            .from('detalle_ventas')
+            .select('nombre_producto, cantidad, precio_unitario')
+            .inFilter('venta_id', allVentasIds);
+
+        final Map<String, Map<String, dynamic>> prodMap = {};
+        for (final d in detallesAll) {
+          final nombre = d['nombre_producto'] as String;
+          final cantidad = (d['cantidad'] as num).toDouble();
+          final monto = (d['precio_unitario'] as num).toDouble() * cantidad;
+
+          if (prodMap.containsKey(nombre)) {
+            prodMap[nombre]!['cantidad'] += cantidad;
+            prodMap[nombre]!['monto'] += monto;
+          } else {
+            prodMap[nombre] = {'nombre': nombre, 'cantidad': cantidad, 'monto': monto};
+          }
+        }
+
+        final sorted = prodMap.values.toList()
+          ..sort((a, b) => (b['cantidad'] as double).compareTo(a['cantidad'] as double));
+
+        if (mounted) {
+          setState(() {
+            _productosTop = sorted.take(5).toList();
+            _productosMenos = sorted.length > 5
+                ? sorted.reversed.take(5).toList()
+                : sorted.reversed.toList();
+            _loading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _loading = false);
+      }
     } catch (e) {
       print('❌ Error reportes: $e');
-      if (mounted) setState(() => _loadingDatos = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
+
+  Future<List<String>> _getVentasIds(String empresaId) async {
+    final ventas = await SupabaseService.client
+        .from('ventas').select('id')
+        .eq('empresa_id', empresaId).eq('estado', 'completada');
+    return (ventas as List).map((v) => v['id'] as String).toList();
+  }
+
+  // Formato corto para KPIs
+  String _corto(double valor) {
+    if (valor >= 1000000) return 'RD\$ ${(valor / 1000000).toStringAsFixed(1)}M';
+    if (valor >= 1000) return 'RD\$ ${(valor / 1000).toStringAsFixed(1)}k';
+    return AppFormatters.moneda(valor);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Reportes')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _buildSelectorPeriodo(),
-          const SizedBox(height: 20),
-          _buildKPIs(),
-          const SizedBox(height: 20),
-          _buildBarrasSimples(),
-          const SizedBox(height: 20),
-          _buildProductosTop(),
-          const SizedBox(height: 20),
-          _buildClientesTop(),
-        ]),
+      appBar: AppBar(
+        title: const Text('Reportes'),
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _cargarDatos),
+        ],
       ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          : RefreshIndicator(
+              onRefresh: _cargarDatos,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _buildSelectorPeriodo(),
+                  const SizedBox(height: 20),
+                  _buildKPIs(),
+                  const SizedBox(height: 24),
+                  _buildGraficoBarras(),
+                  const SizedBox(height: 24),
+                  _buildGraficoPie(),
+                  const SizedBox(height: 24),
+                  _buildSeccion('📈 Más vendidos'),
+                  const SizedBox(height: 12),
+                  _buildProductosList(_productosTop, top: true),
+                
+                ]),
+              ),
+            ),
     );
   }
 
   Widget _buildSelectorPeriodo() {
-    final opciones = [
-      {'id': 'hoy', 'label': 'Hoy'},
-      {'id': 'semana', 'label': 'Semana'},
-      {'id': 'mes', 'label': 'Mes'},
-    ];
+    final periodos = {'hoy': 'Hoy', 'semana': 'Semana', 'mes': 'Mes'};
     return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: opciones.map((o) {
-          final sel = _periodo == o['id'];
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _periodo = o['id']!),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: sel ? AppColors.surface : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: sel ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 4, offset: const Offset(0, 2))] : null,
-                ),
-                child: Text(o['label']!,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: 'Poppins', fontSize: 13,
-                      fontWeight: sel ? FontWeight.w700 : FontWeight.w400,
-                      color: sel ? AppColors.textPrimary : AppColors.textMuted,
-                    )),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+      decoration: BoxDecoration(color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.cardBorder)),
+      child: Row(children: periodos.entries.map((e) {
+        final sel = _periodo == e.key;
+        return Expanded(child: GestureDetector(
+          onTap: () => setState(() => _periodo = e.key),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            margin: const EdgeInsets.all(4),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: sel ? AppColors.primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(8)),
+            child: Text(e.value, textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(fontSize: 13,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                    color: sel ? Colors.white : AppColors.textSecondary)),
+          ),
+        ));
+      }).toList()),
     );
   }
 
   Widget _buildKPIs() {
-    return Column(children: [
-      Row(children: [
-        Expanded(child: _KPICard('Ventas totales',
-            AppFormatters.moneda(_actual['ventas']!),
-            Icons.trending_up_rounded, AppColors.colorVentas)),
-        const SizedBox(width: 12),
-        Expanded(child: _KPICard('Ganancias',
-            AppFormatters.moneda(_actual['ganancia']!),
-            Icons.account_balance_wallet_rounded, AppColors.primary)),
-      ]),
-      const SizedBox(height: 12),
-      Row(children: [
-        Expanded(child: _KPICard('Gastos',
-            AppFormatters.moneda(_actual['gastos']!),
-            Icons.receipt_long_rounded, AppColors.colorGastos)),
-        const SizedBox(width: 12),
-        Expanded(child: _KPICard('Margen',
-            '${((_actual['ganancia']! / (_actual['ventas']! == 0 ? 1 : _actual['ventas']!)) * 100).toStringAsFixed(1)}%',
-            Icons.pie_chart_outline_rounded, AppColors.colorReportes)),
-      ]),
+    final margenColor = _margen >= 20 ? AppColors.success
+        : _margen >= 10 ? AppColors.warning : AppColors.danger;
+
+    return Row(children: [
+      Expanded(child: _KPICard(label: 'Ventas',
+          valor: _corto(_actual['ventas'] ?? 0),
+          sub: 'contado', icon: Icons.trending_up_rounded,
+          color: AppColors.colorVentas)),
+      const SizedBox(width: 8),
+      Expanded(child: _KPICard(label: 'Ganancia',
+          valor: _corto(_actual['ganancia'] ?? 0),
+          sub: 'neta', icon: Icons.account_balance_wallet_rounded,
+          color: AppColors.success)),
+      const SizedBox(width: 8),
+      Expanded(child: _KPICard(label: 'Gastos',
+          valor: _corto(_actual['gastos'] ?? 0),
+          sub: 'total', icon: Icons.receipt_long_rounded,
+          color: AppColors.colorGastos)),
+      const SizedBox(width: 8),
+      Expanded(child: _KPICard(label: 'Margen',
+          valor: '${_margen.toStringAsFixed(1)}%',
+          sub: 'rentabilidad', icon: Icons.pie_chart_rounded,
+          color: margenColor)),
     ]);
   }
 
-  Widget _buildBarrasSimples() {
-    final total = _actual['ventas']! + _actual['gastos']!;
-    final pVentas = total > 0 ? _actual['ventas']! / total : 0.0;
-    final pGastos = total > 0 ? _actual['gastos']! / total : 0.0;
+  Widget _buildGraficoBarras() {
+    final ventas = _actual['ventas'] ?? 0;
+    final gastos = _actual['gastos'] ?? 0;
+    final ganancia = _actual['ganancia'] ?? 0;
+    final fiado = _actual['fiado'] ?? 0;
+    final apartados = _actual['apartados'] ?? 0;
+    final maxVal = [ventas, gastos, ganancia, fiado, apartados]
+        .reduce((a, b) => a > b ? a : b);
+    if (maxVal == 0) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -182,134 +290,251 @@ class _ReportesScreenState extends State<ReportesScreen> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.cardBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Distribución', style: TextStyle(fontFamily: 'Poppins',
-            fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-        const SizedBox(height: 16),
-        _BarraItem('Ventas', pVentas, AppColors.colorVentas,
-            AppFormatters.moneda(_actual['ventas']!)),
-        const SizedBox(height: 12),
-        _BarraItem('Gastos', pGastos, AppColors.colorGastos,
-            AppFormatters.moneda(_actual['gastos']!)),
-        const SizedBox(height: 12),
-        _BarraItem('Ganancia neta', pVentas - pGastos > 0 ? pVentas - pGastos : 0,
-            AppColors.primary, AppFormatters.moneda(_actual['ganancia']!)),
+        Text('Resumen del período', style: GoogleFonts.poppins(
+            fontSize: 14, fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary)),
+        const SizedBox(height: 20),
+        SizedBox(
+          height: 180,
+          child: BarChart(BarChartData(
+            alignment: BarChartAlignment.spaceAround,
+            maxY: maxVal * 1.2,
+            barTouchData: BarTouchData(
+              touchTooltipData: BarTouchTooltipData(
+                getTooltipColor: (_) => AppColors.textPrimary,
+                getTooltipItem: (group, groupIndex, rod, rodIndex) =>
+                    BarTooltipItem(AppFormatters.moneda(rod.toY),
+                        GoogleFonts.poppins(color: Colors.white,
+                            fontSize: 11, fontWeight: FontWeight.w600)),
+              ),
+            ),
+            titlesData: FlTitlesData(
+              leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              bottomTitles: AxisTitles(sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (val, meta) {
+                  final labels = ['Ventas', 'Gastos', 'Ganancia', 'Fiado', 'Apartados'];
+                  if (val.toInt() >= labels.length) return const SizedBox();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(labels[val.toInt()],
+                        style: GoogleFonts.poppins(fontSize: 9,
+                            color: AppColors.textMuted)),
+                  );
+                },
+              )),
+            ),
+            gridData: FlGridData(
+              show: true, drawVerticalLine: false,
+              getDrawingHorizontalLine: (_) => const FlLine(
+                  color: AppColors.cardBorder, strokeWidth: 1),
+            ),
+            borderData: FlBorderData(show: false),
+            barGroups: [
+              _bar(0, ventas, AppColors.colorVentas),
+              _bar(1, gastos, AppColors.colorGastos),
+              _bar(2, ganancia, AppColors.success),
+              _bar(3, fiado, AppColors.colorFiado),
+              _bar(4, apartados, AppColors.colorApartados),
+            ],
+          )),
+        ),
       ]),
     );
   }
 
- Widget _buildProductosTop() {
-    final productos = <Map<String, dynamic>>[];
-    return _SeccionLista('Productos más vendidos', Icons.star_rounded,
-        AppColors.accent, productos.map((p) =>
-            _ItemLista(p['nombre'] as String, p['cantidad'] as String,
-                AppFormatters.moneda(p['monto'] as double))).toList());
+  BarChartGroupData _bar(int x, double y, Color color) {
+    return BarChartGroupData(x: x, barRods: [
+      BarChartRodData(toY: y, color: color, width: 26,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(6))),
+    ]);
   }
 
-  Widget _buildClientesTop() {
-    final clientes = <Map<String, dynamic>>[];
-    return _SeccionLista('Mejores clientes', Icons.people_rounded,
-        AppColors.colorClientes, clientes.map((c) =>
-            _ItemLista(c['nombre'] as String, c['info'] as String,
-                AppFormatters.moneda(c['monto'] as double))).toList());
+  Widget _buildGraficoPie() {
+    final ventas = _actual['ventas'] ?? 0;
+    final fiado = _actual['fiado'] ?? 0;
+    final gastos = _actual['gastos'] ?? 0;
+    final apartados = _actual['apartados'] ?? 0;
+    final total = ventas + fiado + gastos + apartados;
+    if (total == 0) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.cardBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Distribución', style: GoogleFonts.poppins(
+            fontSize: 14, fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary)),
+        const SizedBox(height: 16),
+        Row(children: [
+          SizedBox(
+            width: 140, height: 140,
+            child: PieChart(PieChartData(
+              sectionsSpace: 2,
+              centerSpaceRadius: 40,
+              sections: [
+                if (ventas > 0) PieChartSectionData(
+                    value: ventas, color: AppColors.colorVentas,
+                    title: '${(ventas / total * 100).toStringAsFixed(0)}%',
+                    titleStyle: GoogleFonts.poppins(fontSize: 10,
+                        fontWeight: FontWeight.w700, color: Colors.white),
+                    radius: 50),
+                if (fiado > 0) PieChartSectionData(
+                    value: fiado, color: AppColors.colorFiado,
+                    title: '${(fiado / total * 100).toStringAsFixed(0)}%',
+                    titleStyle: GoogleFonts.poppins(fontSize: 10,
+                        fontWeight: FontWeight.w700, color: Colors.white),
+                    radius: 50),
+                if (gastos > 0) PieChartSectionData(
+                    value: gastos, color: AppColors.colorGastos,
+                    title: '${(gastos / total * 100).toStringAsFixed(0)}%',
+                    titleStyle: GoogleFonts.poppins(fontSize: 10,
+                        fontWeight: FontWeight.w700, color: Colors.white),
+                    radius: 50),
+                if (apartados > 0) PieChartSectionData(
+                    value: apartados, color: AppColors.colorApartados,
+                    title: '${(apartados / total * 100).toStringAsFixed(0)}%',
+                    titleStyle: GoogleFonts.poppins(fontSize: 10,
+                        fontWeight: FontWeight.w700, color: Colors.white),
+                    radius: 50),
+              ],
+            )),
+          ),
+          const SizedBox(width: 20),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _Leyenda('Ventas', AppColors.colorVentas,
+                AppFormatters.moneda(ventas)),
+            const SizedBox(height: 8),
+            _Leyenda('Fiado', AppColors.colorFiado,
+                AppFormatters.moneda(fiado)),
+            const SizedBox(height: 8),
+            _Leyenda('Gastos', AppColors.colorGastos,
+                AppFormatters.moneda(gastos)),
+            const SizedBox(height: 8),
+            _Leyenda('Apartados', AppColors.colorApartados,
+                AppFormatters.moneda(apartados)),
+          ])),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _buildSeccion(String titulo) => Text(titulo,
+      style: GoogleFonts.poppins(fontSize: 15,
+          fontWeight: FontWeight.w700, color: AppColors.textPrimary));
+
+  Widget _buildProductosList(List<Map<String, dynamic>> productos,
+      {required bool top}) {
+    if (productos.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.cardBorder)),
+        child: Center(child: Text('Sin datos disponibles',
+            style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textMuted))),
+      );
+    }
+    final color = top ? AppColors.primary : AppColors.colorGastos;
+    final maxCantidad = (productos.first['cantidad'] as double);
+
+    return Container(
+      decoration: BoxDecoration(color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.cardBorder)),
+      child: Column(children: productos.asMap().entries.map((e) {
+        final i = e.key; final p = e.value;
+        final pct = maxCantidad > 0 ? (p['cantidad'] as double) / maxCantidad : 0.0;
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(border: i < productos.length - 1
+              ? const Border(bottom: BorderSide(color: AppColors.cardBorder))
+              : null),
+          child: Row(children: [
+            Container(
+              width: 28, height: 28,
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Center(child: Text('${i + 1}',
+                  style: GoogleFonts.poppins(fontSize: 13,
+                      fontWeight: FontWeight.w700, color: color)))),
+            const SizedBox(width: 12),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(p['nombre'] as String,
+                  style: GoogleFonts.poppins(fontSize: 13,
+                      fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 4),
+              ClipRRect(borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(value: pct,
+                      backgroundColor: AppColors.cardBorder,
+                      color: color, minHeight: 5)),
+              const SizedBox(height: 2),
+              Text('${(p['cantidad'] as double).toStringAsFixed(0)} unidades',
+                  style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted)),
+            ])),
+            const SizedBox(width: 12),
+            Text(AppFormatters.moneda(p['monto'] as double),
+                style: GoogleFonts.poppins(fontSize: 13,
+                    fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          ]),
+        );
+      }).toList()),
+    );
   }
 }
-
-// ============================================================
-// WIDGETS
-// ============================================================
 
 class _KPICard extends StatelessWidget {
-  final String label; final String valor;
-  final IconData icon; final Color color;
-  const _KPICard(this.label, this.valor, this.icon, this.color);
+  final String label, valor, sub;
+  final IconData icon;
+  final Color color;
+  const _KPICard({required this.label, required this.valor,
+      required this.sub, required this.icon, required this.color});
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.cardBorder)),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(width: 36, height: 36,
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, color: color, size: 20)),
-      const SizedBox(height: 12),
-      Text(label, style: const TextStyle(fontFamily: 'Poppins',
-          fontSize: 11, color: AppColors.textMuted)),
-      const SizedBox(height: 4),
-      Text(valor, style: const TextStyle(fontFamily: 'Poppins',
-          fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-    ]),
-  );
-}
-
-class _BarraItem extends StatelessWidget {
-  final String label; final double valor;
-  final Color color; final String texto;
-  const _BarraItem(this.label, this.valor, this.color, this.texto);
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(label, style: const TextStyle(fontFamily: 'Poppins',
-          fontSize: 12, color: AppColors.textSecondary)),
-      Text(texto, style: TextStyle(fontFamily: 'Poppins',
-          fontSize: 12, fontWeight: FontWeight.w700, color: color)),
-    ]),
-    const SizedBox(height: 6),
-    ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: LinearProgressIndicator(
-        value: valor.clamp(0.0, 1.0),
-        backgroundColor: AppColors.surfaceAlt,
-        color: color, minHeight: 8,
-      ),
-    ),
-  ]);
-}
-
-class _SeccionLista extends StatelessWidget {
-  final String titulo; final IconData icon;
-  final Color color; final List<Widget> items;
-  const _SeccionLista(this.titulo, this.icon, this.color, this.items);
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.cardBorder)),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(width: 8),
-        Text(titulo, style: const TextStyle(fontFamily: 'Poppins',
-            fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.cardBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(width: 32, height: 32,
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8)),
+            child: Icon(icon, color: color, size: 18)),
+        const SizedBox(height: 8),
+        Text(valor, style: GoogleFonts.poppins(fontSize: 13,
+            fontWeight: FontWeight.w700, color: color)),
+        Text(label, style: GoogleFonts.poppins(fontSize: 10,
+            color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+        Text(sub, style: GoogleFonts.poppins(
+            fontSize: 9, color: AppColors.textMuted)),
       ]),
-      const SizedBox(height: 14),
-      ...items,
-    ]),
-  );
+    );
+  }
 }
 
-class _ItemLista extends StatelessWidget {
-  final String nombre; final String info; final String monto;
-  const _ItemLista(this.nombre, this.info, this.monto);
+class _Leyenda extends StatelessWidget {
+  final String label; final Color color; final String valor;
+  const _Leyenda(this.label, this.color, this.valor);
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Row(children: [
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(nombre, style: const TextStyle(fontFamily: 'Poppins',
-            fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-        Text(info, style: const TextStyle(fontFamily: 'Poppins',
-            fontSize: 11, color: AppColors.textMuted)),
-      ])),
-      Text(monto, style: const TextStyle(fontFamily: 'Poppins',
-          fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-    ]),
-  );
+  Widget build(BuildContext context) => Row(children: [
+    Container(width: 10, height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+    const SizedBox(width: 8),
+    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: GoogleFonts.poppins(
+          fontSize: 10, color: AppColors.textMuted)),
+      Text(valor, style: GoogleFonts.poppins(fontSize: 11,
+          fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+    ])),
+  ]);
 }

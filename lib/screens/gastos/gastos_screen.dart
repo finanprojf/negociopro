@@ -5,6 +5,7 @@ import '../../models/gasto_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/gasto_service.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../services/supabase_service.dart';
 class GastosScreen extends StatefulWidget {
   const GastosScreen({super.key});
 
@@ -96,7 +97,40 @@ class _GastosScreenState extends State<GastosScreen> {
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
       itemCount: _gastos.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => _GastoTile(gasto: _gastos[i]),
+     itemBuilder: (_, i) => _GastoTile(
+        gasto: _gastos[i],
+        onEliminar: () async {
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (_) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: const Text('Eliminar gasto',
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700)),
+              content: Text('¿Seguro que quieres eliminar "${_gastos[i].descripcion}"?',
+                  style: const TextStyle(fontFamily: 'Poppins')),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancelar')),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Eliminar',
+                      style: TextStyle(color: AppColors.danger,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          );
+          if (confirm == true) {
+            await SupabaseService.client
+                .from('gastos')
+                .delete()
+                .eq('id', _gastos[i].id);
+            _cargar();
+          }
+        },
+      ),
     );
   }
 
@@ -233,7 +267,8 @@ class _Col extends StatelessWidget {
 
 class _GastoTile extends StatelessWidget {
   final GastoModel gasto;
-  const _GastoTile({required this.gasto});
+  final VoidCallback onEliminar;
+  const _GastoTile({required this.gasto, required this.onEliminar});
 
   @override
   Widget build(BuildContext context) {
@@ -271,9 +306,15 @@ class _GastoTile extends StatelessWidget {
                     fontSize: 11, color: AppColors.textMuted)),
           ]),
         ])),
-        Text(AppFormatters.moneda(gasto.monto),
+       Text(AppFormatters.moneda(gasto.monto),
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
                 fontWeight: FontWeight.w700, color: AppColors.colorFiado)),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: onEliminar,
+          child: const Icon(Icons.delete_outline_rounded,
+              color: AppColors.danger, size: 20),
+        ),
       ]),
     );
   }

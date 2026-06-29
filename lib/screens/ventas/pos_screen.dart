@@ -8,6 +8,7 @@ import '../../services/inventario_service.dart';
 import '../../services/venta_service.dart';
 import '../../services/cliente_service.dart';
 import '../../models/cliente_model.dart';
+import 'historial_ventas_screen.dart';
 class _ItemCarrito {
   final ProductoModel producto;
   double cantidad;
@@ -112,6 +113,11 @@ Future<void> _cargarClientes() async {
       appBar: AppBar(
         title: const Text('Nueva venta'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history_rounded),
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const HistorialVentasScreen())),
+          ),
           if (_carrito.isNotEmpty)
             TextButton(
               onPressed: () => setState(() => _carrito.clear()),

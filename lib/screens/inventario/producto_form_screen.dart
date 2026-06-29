@@ -4,6 +4,9 @@ import '../../theme/app_colors.dart';
 import '../../models/producto_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/inventario_service.dart';
+import '../../services/supabase_service.dart';
+import '../../services/gasto_service.dart';
+import '../../models/gasto_model.dart';
 class ProductoFormScreen extends StatefulWidget {
   final ProductoModel? producto;
   const ProductoFormScreen({super.key, this.producto});
@@ -71,18 +74,36 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      await InventarioService.guardarProducto(ProductoModel(
-        id: '',
-        empresaId: '',
-        nombre: _nombreCtrl.text.trim(),
-        descripcion: _descripcionCtrl.text.trim().isEmpty
-            ? null : _descripcionCtrl.text.trim(),
-        precioCompra: double.tryParse(_precioCompraCtrl.text) ?? 0,
-        precioVenta: double.tryParse(_precioVentaCtrl.text) ?? 0,
-        stockActual: double.tryParse(_stockActualCtrl.text) ?? 0,
-        stockMinimo: double.tryParse(_stockMinimoCtrl.text) ?? 5,
-        unidad: _unidad,
-      ));
+   // Si es producto nuevo con stock, registrar como gasto automático
+      if (!_esEdicion) {
+        final stock = double.tryParse(_stockActualCtrl.text) ?? 0;
+        final costo = double.tryParse(_precioCompraCtrl.text) ?? 0;
+        if (stock > 0 && costo > 0) {
+          await GastoService.guardarGasto(GastoModel(
+            id: '',
+            empresaId: '',
+            categoria: 'mercancia',
+            descripcion: '${_nombreCtrl.text.trim()} — $stock ${_unidad}s',
+            monto: stock * costo,
+            fecha: DateTime.now(),
+          ));
+        }
+      }
+    await InventarioService.guardarProducto(
+        ProductoModel(
+          id: _esEdicion ? widget.producto!.id : '',
+          empresaId: '',
+          nombre: _nombreCtrl.text.trim(),
+          descripcion: _descripcionCtrl.text.trim().isEmpty ? null : _descripcionCtrl.text.trim(),
+          precioCompra: double.tryParse(_precioCompraCtrl.text) ?? 0,
+          precioVenta: double.tryParse(_precioVentaCtrl.text) ?? 0,
+          stockActual: double.tryParse(_stockActualCtrl.text) ?? 0,
+          stockMinimo: double.tryParse(_stockMinimoCtrl.text) ?? 5,
+          unidad: _unidad,
+        ),
+        esNuevo: !_esEdicion,
+      );
+      
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -341,9 +362,17 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
           TextButton(onPressed: () => Navigator.pop(context),
               child: const Text('Cancelar')),
           TextButton(
-            onPressed: () {
+          onPressed: () async {
               Navigator.pop(context);
-              Navigator.pop(context, true);
+              try {
+                await SupabaseService.client
+                    .from('productos')
+                    .update({'activo': false})
+                    .eq('id', widget.producto!.id);
+                if (context.mounted) Navigator.pop(context, true);
+              } catch (e) {
+                print('❌ Error eliminar: $e');
+              }
             },
             child: const Text('Eliminar',
                 style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700)),

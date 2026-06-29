@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import '../../theme/app_colors.dart';
 import '../../models/producto_model.dart';
 import '../../services/apartado_service.dart';
+import '../../services/cliente_service.dart';
+import '../../models/cliente_model.dart';
 class ApartadoFormScreen extends StatefulWidget {
   const ApartadoFormScreen({super.key});
 
@@ -20,12 +22,26 @@ class _ApartadoFormScreenState extends State<ApartadoFormScreen> {
   String? _clienteSeleccionado;
   bool _loading = false;
 
-  // Demo clientes
-  final List<Map<String, String>> _clientes = [
-    {'id': 'c1', 'nombre': 'María López'},
-    {'id': 'c2', 'nombre': 'Juan Pérez'},
-    {'id': 'c3', 'nombre': 'Ana García'},
-  ];
+@override
+  void initState() {
+    super.initState();
+    _cargarClientes();
+  }
+
+  Future<void> _cargarClientes() async {
+    try {
+      final clientes = await ClienteService.getClientes();
+      setState(() {
+        _clientes = clientes.map((c) => {
+          'id': c.id,
+          'nombre': c.nombre,
+        }).toList();
+      });
+    } catch (e) {
+      print('❌ Error clientes apartado: $e');
+    }
+  }
+ List<Map<String, String>> _clientes = [];
 
   double get _montoTotal => double.tryParse(_montoCtrl.text) ?? 0;
   double get _abonoInicial => double.tryParse(_abonoInicialCtrl.text) ?? 0;

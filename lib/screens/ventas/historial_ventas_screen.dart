@@ -4,7 +4,7 @@ import '../../models/venta_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/venta_service.dart';
 import 'detalle_venta_screen.dart';
-
+import '../../services/supabase_service.dart';
 class HistorialVentasScreen extends StatefulWidget {
   const HistorialVentasScreen({super.key});
 
@@ -117,11 +117,12 @@ class _HistorialVentasScreenState extends State<HistorialVentasScreen> {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       itemCount: _ventas.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => _VentaTile(
+     itemBuilder: (_, i) => _VentaTile(
         venta: _ventas[i],
         onTap: () => Navigator.push(context,
             MaterialPageRoute(builder: (_) =>
                 DetalleVentaScreen(venta: _ventas[i]))),
+        onEliminar: () => _cargar(),
       ),
     );
   }
@@ -141,8 +142,8 @@ class _HistorialVentasScreenState extends State<HistorialVentasScreen> {
 }
 
 class _VentaTile extends StatelessWidget {
-  final VentaModel venta; final VoidCallback onTap;
-  const _VentaTile({required this.venta, required this.onTap});
+  final VentaModel venta; final VoidCallback onTap; final VoidCallback onEliminar;
+  const _VentaTile({required this.venta, required this.onTap, required this.onEliminar});
 
   @override
   Widget build(BuildContext context) {
@@ -206,8 +207,47 @@ class _VentaTile extends StatelessWidget {
             ),
           ]),
           const SizedBox(width: 4),
-          const Icon(Icons.chevron_right_rounded,
-              color: AppColors.textMuted, size: 18),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded,
+                    color: AppColors.danger, size: 20),
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      title: const Text('Eliminar venta',
+                          style: TextStyle(fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w700)),
+                      content: Text(
+                        '¿Seguro que quieres eliminar la venta ${venta.numeroFormateado}?',
+                        style: const TextStyle(fontFamily: 'Poppins')),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancelar')),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Eliminar',
+                              style: TextStyle(color: AppColors.danger,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                   await SupabaseService.client
+                        .from('ventas')
+                        .update({'estado': 'anulada'})
+                        .eq('id', venta.id);
+                    onEliminar();
+                  }
+                },
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.textMuted, size: 18),
+            ]),
         ]),
       ),
     );

@@ -83,18 +83,27 @@ class InventarioService {
       'synced': 0,
     };
 
-    // Guardar local primero
-    await LocalDatabase.insertar('productos', map);
+   // Guardar local primero
+    if (esNuevo) {
+      await LocalDatabase.insertar('productos', map);
+    } else {
+      await LocalDatabase.actualizar('productos', map, 'id', id);
+    }
 
     // Intentar sync online
-  if (SupabaseService.isOnline) {
+    if (SupabaseService.isOnline) {
       try {
         final dataOnline = {
           ...producto.toMap(),
           'id': id,
           'empresa_id': empresaId,
         };
-        await SupabaseService.client.from('productos').insert(dataOnline);
+        if (esNuevo) {
+          await SupabaseService.client.from('productos').insert(dataOnline);
+        } else {
+          await SupabaseService.client.from('productos')
+              .update(dataOnline).eq('id', id);
+        }
         await LocalDatabase.marcarSynced('productos', id);
         print('✅ Producto guardado en Supabase');
       } catch (e) {

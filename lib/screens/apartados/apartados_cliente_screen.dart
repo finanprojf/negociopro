@@ -1,0 +1,339 @@
+import 'package:flutter/material.dart';
+import '../../theme/app_colors.dart';
+import '../../models/cliente_model.dart';
+import '../../models/apartado_model.dart';
+import '../../utils/formatters.dart';
+import '../../services/supabase_service.dart';
+import '../../services/apartado_service.dart';
+import 'abono_apartado_screen.dart';
+import 'apartado_form_screen.dart';
+
+class ApartadosClienteScreen extends StatefulWidget {
+  final ClienteModel cliente;
+  const ApartadosClienteScreen({super.key, required this.cliente});
+
+  @override
+  State<ApartadosClienteScreen> createState() => _ApartadosClienteScreenState();
+}
+
+class _ApartadosClienteScreenState extends State<ApartadosClienteScreen> {
+  List<ApartadoModel> _apartados = [];
+  bool _loading = true;
+
+  double get _totalPendiente => _apartados
+      .where((a) => a.estado == 'activo')
+      .fold(0, (s, a) => s + a.saldoPendiente);
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+void _mostrarHistorial() async {
+    try {
+      final res = await SupabaseService.client
+          .from('abonos_apartado')
+          .select('*, apartados(descripcion)')
+          .eq('cliente_id', widget.cliente.id)
+          .order('created_at', ascending: false);
+
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => Container(
+          height: MediaQuery.of(context).size.height * 0.6,
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: Row(children: [
+                const Icon(Icons.history_rounded,
+                    color: AppColors.colorApartados),
+                const SizedBox(width: 10),
+                const Text('Historial de pagos',
+                    style: TextStyle(fontFamily: 'Poppins',
+                        fontSize: 16, fontWeight: FontWeight.w700)),
+                const Spacer(),
+                Text('${res.length} pagos',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 13, color: AppColors.textMuted)),
+              ]),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: res.isEmpty
+                  ? const Center(child: Text('Sin pagos registrados',
+                      style: TextStyle(fontFamily: 'Poppins',
+                          color: AppColors.textMuted)))
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: res.length,
+                      separatorBuilder: (_, __) => const Divider(),
+                      itemBuilder: (_, i) {
+                        final p = res[i];
+                        final descripcion = p['apartados'] != null
+                            ? p['apartados']['descripcion'] as String
+                            : 'Apartado';
+                        return Row(children: [
+                          Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.accentSurface,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.payments_rounded,
+                                color: AppColors.colorApartados, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                            Text(descripcion,
+                                style: const TextStyle(fontFamily: 'Poppins',
+                                    fontSize: 13, fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                            Text(AppFormatters.fechaHora(
+                                DateTime.parse(p['created_at'])),
+                                style: const TextStyle(fontFamily: 'Poppins',
+                                    fontSize: 11, color: AppColors.textMuted)),
+                          ])),
+                          Text(AppFormatters.moneda(
+                              (p['monto'] as num).toDouble()),
+                              style: const TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 15, fontWeight: FontWeight.w700,
+                                  color: AppColors.colorApartados)),
+                        ]);
+                      },
+                    ),
+            ),
+          ]),
+        ),
+      );
+    } catch (e) {
+      print('❌ Error historial apartados: $e');
+    }
+  }
+  Future<void> _cargar() async {
+    setState(() => _loading = true);
+    try {
+      final res = await SupabaseService.client
+          .from('apartados')
+          .select()
+          .eq('cliente_id', widget.cliente.id)
+          .order('created_at', ascending: false);
+      if (mounted) {
+        setState(() {
+          _apartados = res.map((m) => ApartadoModel.fromMap(m)).toList();
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+    appBar: AppBar(
+        title: Text('Apartados — ${widget.cliente.nombre}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history_rounded),
+            tooltip: 'Historial de pagos',
+            onPressed: () => _mostrarHistorial(),
+          ),
+        ],
+      ),
+      body: Column(children: [
+        // Resumen
+        Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.colorApartados.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.colorApartados.withValues(alpha: 0.2)),
+          ),
+          child: Row(children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: AppColors.colorClientes.withValues(alpha: 0.12),
+              child: Text(widget.cliente.iniciales,
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 20, fontWeight: FontWeight.w700,
+                      color: AppColors.colorClientes)),
+            ),
+            const SizedBox(width: 16),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(widget.cliente.nombre,
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 16, fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary)),
+              const SizedBox(height: 4),
+              Text('Total pendiente: ${AppFormatters.moneda(_totalPendiente)}',
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 13, color: AppColors.colorApartados,
+                      fontWeight: FontWeight.w600)),
+            ])),
+          ]),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              : _apartados.isEmpty
+                  ? Center(child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center, children: [
+                      const Icon(Icons.bookmark_border_rounded,
+                          size: 64, color: AppColors.textMuted),
+                      const SizedBox(height: 16),
+                      Text('${widget.cliente.nombre} no tiene apartados',
+                          style: const TextStyle(fontFamily: 'Poppins',
+                              fontSize: 16, color: AppColors.textMuted)),
+                    ]))
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                      itemCount: _apartados.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) => _ApartadoCard(
+                        apartado: _apartados[i],
+                        onAbonar: () async {
+                          await Navigator.push(context,
+                              MaterialPageRoute(builder: (_) =>
+                                  AbonoApartadoScreen(apartado: _apartados[i])));
+                          _cargar();
+                        },
+                      ),
+                    ),
+        ),
+      ]),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          await Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const ApartadoFormScreen()));
+          _cargar();
+        },
+        backgroundColor: AppColors.colorApartados,
+        child: const Icon(Icons.add_rounded, color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _ApartadoCard extends StatelessWidget {
+  final ApartadoModel apartado;
+  final VoidCallback onAbonar;
+  const _ApartadoCard({required this.apartado, required this.onAbonar});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color; String label; Color bg;
+    if (apartado.estaCompletado) {
+      color = AppColors.success; bg = AppColors.successSurface; label = 'Completado';
+    } else if (apartado.estaCancelado) {
+      color = AppColors.danger; bg = AppColors.dangerSurface; label = 'Cancelado';
+    } else {
+      color = AppColors.colorApartados; bg = AppColors.accentSurface; label = 'Activo';
+    }
+
+    return Container(
+      decoration: BoxDecoration(color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.cardBorder)),
+      child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(children: [
+            Row(children: [
+              Expanded(child: Text(apartado.descripcion,
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 14, fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: bg,
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text(label, style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Total', style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 11, color: AppColors.textMuted)),
+                Text(AppFormatters.moneda(apartado.montoTotal),
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 14, fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
+              ]),
+              Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                const Text('Pagado', style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 11, color: AppColors.textMuted)),
+                Text(AppFormatters.moneda(apartado.montoPagado),
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 14, fontWeight: FontWeight.w600,
+                        color: AppColors.success)),
+              ]),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                const Text('Pendiente', style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 11, color: AppColors.textMuted)),
+                Text(AppFormatters.moneda(apartado.saldoPendiente),
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 14, fontWeight: FontWeight.w600,
+                        color: AppColors.colorApartados)),
+              ]),
+            ]),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: apartado.porcentajePagado,
+                backgroundColor: AppColors.cardBorder,
+                color: apartado.estaCompletado
+                    ? AppColors.success : AppColors.colorApartados,
+                minHeight: 6,
+              ),
+            ),
+            if (apartado.fechaEstimada != null) ...[
+              const SizedBox(height: 8),
+              Row(children: [
+                const Icon(Icons.calendar_today_outlined,
+                    size: 12, color: AppColors.textMuted),
+                const SizedBox(width: 4),
+                Text('Fecha estimada: ${AppFormatters.fecha(apartado.fechaEstimada)}',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 11, color: AppColors.textMuted)),
+              ]),
+            ],
+          ]),
+        ),
+        if (!apartado.estaCompletado && !apartado.estaCancelado)
+          Container(
+            decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: AppColors.cardBorder))),
+            child: TextButton.icon(
+              onPressed: onAbonar,
+              icon: const Icon(Icons.payments_rounded,
+                  size: 16, color: AppColors.colorApartados),
+              label: const Text('Registrar abono',
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontSize: 13, fontWeight: FontWeight.w600,
+                      color: AppColors.colorApartados)),
+              style: TextButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 42)),
+            ),
+          ),
+      ]),
+    );
+  }
+}

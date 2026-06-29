@@ -5,6 +5,10 @@ import '../../utils/formatters.dart';
 import 'cliente_form_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
+import '../fiado/fiado_cliente_screen.dart';
+import '../apartados/apartados_cliente_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 class ClienteDetalleScreen extends StatelessWidget {
   final ClienteModel cliente;
   const ClienteDetalleScreen({super.key, required this.cliente});
@@ -13,7 +17,7 @@ class ClienteDetalleScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-    appBar: AppBar(
+      appBar: AppBar(
         title: const Text('Detalle de cliente'),
         actions: [
           IconButton(
@@ -98,14 +102,27 @@ class ClienteDetalleScreen extends StatelessWidget {
             const SizedBox(height: 16),
             // Acciones rápidas
             Row(children: [
-              Expanded(child: _AccionBtn(Icons.point_of_sale_rounded,
-                  'Nueva venta', AppColors.colorVentas, () {})),
+            Expanded(child: _AccionBtn(Icons.phone_rounded,
+                  'Llamar', AppColors.colorVentas, () async {
+                    if (cliente.telefono != null) {
+                      final uri = Uri.parse('tel:${cliente.telefono}');
+                      if (await canLaunchUrl(uri)) await launchUrl(uri);
+                    }
+                  })),
               const SizedBox(width: 10),
-              Expanded(child: _AccionBtn(Icons.handshake_outlined,
-                  'Nuevo fiado', AppColors.colorFiado, () {})),
+            Expanded(child: _AccionBtn(Icons.handshake_outlined,
+                  'Fiado', AppColors.colorFiado, () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => FiadoClienteScreen(
+                            cliente: cliente)));
+                  })),
               const SizedBox(width: 10),
-              Expanded(child: _AccionBtn(Icons.bookmark_outlined,
-                  'Apartado', AppColors.colorApartados, () {})),
+            Expanded(child: _AccionBtn(Icons.bookmark_outlined,
+                  'Apartados', AppColors.colorApartados, () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => ApartadosClienteScreen(
+                            cliente: cliente)));
+                  })),
             ]),
             const SizedBox(height: 16),
             // Info adicional
