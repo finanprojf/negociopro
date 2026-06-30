@@ -46,23 +46,29 @@ class _ReportesScreenState extends State<ReportesScreen> {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
 
-      final ahora = DateTime.now().toUtc();
-      final inicioHoy = DateTime.utc(ahora.year, ahora.month, ahora.day);
-      final inicioSemana = inicioHoy.subtract(Duration(days: ahora.weekday - 1));
-      final inicioMes = DateTime.utc(ahora.year, ahora.month, 1);
-      final fin = inicioHoy.add(const Duration(days: 1));
+      // Usar hora LOCAL del dispositivo (RD) para definir los rangos.
+      final ahoraLocal = DateTime.now();
+      final inicioHoyLocal = DateTime(ahoraLocal.year, ahoraLocal.month, ahoraLocal.day);
+      final inicioSemanaLocal = inicioHoyLocal.subtract(Duration(days: ahoraLocal.weekday - 1));
+      final inicioMesLocal = DateTime(ahoraLocal.year, ahoraLocal.month, 1);
+      final finHoyLocal = inicioHoyLocal.add(const Duration(days: 1));
 
       for (final periodo in ['hoy', 'semana', 'mes']) {
-        final inicio = periodo == 'hoy' ? inicioHoy
-            : periodo == 'semana' ? inicioSemana : inicioMes;
+        final inicioLocal = periodo == 'hoy' ? inicioHoyLocal
+            : periodo == 'semana' ? inicioSemanaLocal : inicioMesLocal;
+        // El fin siempre es "ahora" excepto para hoy, que es el final del día actual
+        final finLocal = periodo == 'hoy' ? finHoyLocal : ahoraLocal.add(const Duration(minutes: 1));
+
+        final inicioUtc = inicioLocal.toUtc().toIso8601String();
+        final finUtc = finLocal.toUtc().toIso8601String();
 
         final ventas = await SupabaseService.client
             .from('ventas')
             .select('id, total, tipo_pago')
             .eq('empresa_id', empresaId)
             .eq('estado', 'completada')
-            .gte('created_at', inicio.toIso8601String())
-            .lt('created_at', fin.toIso8601String());
+            .gte('created_at', inicioUtc)
+            .lt('created_at', finUtc);
 
         double totalVentas = 0;
         double totalFiado = 0;
@@ -97,21 +103,20 @@ class _ReportesScreenState extends State<ReportesScreen> {
             .from('gastos')
             .select('monto')
             .eq('empresa_id', empresaId)
-            .gte('created_at', inicio.toIso8601String())
-            .lt('created_at', fin.toIso8601String());
+            .gte('created_at', inicioUtc)
+            .lt('created_at', finUtc);
 
         double totalGastos = 0;
         for (final g in gastos) {
           totalGastos += (g['monto'] as num).toDouble();
         }
 
-        // Apartados cobrados
         final abonos = await SupabaseService.client
             .from('abonos_apartado')
             .select('monto')
             .eq('empresa_id', empresaId)
-            .gte('created_at', inicio.toIso8601String())
-            .lt('created_at', fin.toIso8601String());
+            .gte('created_at', inicioUtc)
+            .lt('created_at', finUtc);
 
         double totalApartados = 0;
         for (final a in abonos) {
@@ -177,7 +182,6 @@ class _ReportesScreenState extends State<ReportesScreen> {
     return (ventas as List).map((v) => v['id'] as String).toList();
   }
 
-  // Formato corto para KPIs
   String _corto(double valor) {
     if (valor >= 1000000) return 'RD\$ ${(valor / 1000000).toStringAsFixed(1)}M';
     if (valor >= 1000) return 'RD\$ ${(valor / 1000).toStringAsFixed(1)}k';
@@ -213,7 +217,6 @@ class _ReportesScreenState extends State<ReportesScreen> {
                   _buildSeccion('📈 Más vendidos'),
                   const SizedBox(height: 12),
                   _buildProductosList(_productosTop, top: true),
-                
                 ]),
               ),
             ),

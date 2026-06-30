@@ -48,8 +48,12 @@ class AppFormatters {
   }
 
   /// Tiempo relativo: "hace 5 min", "hace 2 horas"
-  static String tiempoRelativo(DateTime date) {
-    final diff = DateTime.now().difference(date);
+static String tiempoRelativo(DateTime date) {
+    // Forzar interpretación UTC restando el offset local manualmente
+    final ahora = DateTime.now();
+    final offset = ahora.timeZoneOffset;
+    final fechaAjustada = date.isUtc ? date.subtract(offset) : date;
+    final diff = ahora.difference(fechaAjustada);
     if (diff.inMinutes < 1) return 'ahora mismo';
     if (diff.inMinutes < 60) return 'hace ${diff.inMinutes} min';
     if (diff.inHours < 24) return 'hace ${diff.inHours} h';

@@ -12,7 +12,7 @@ import '../reportes/reportes_screen.dart';
 import '../empresa/empresa_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
-
+import 'dart:async';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -30,14 +30,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _productosSinStock = 0;
   int _apartadosActivos = 0;
 
+ Timer? _timer;
+
   @override
   void initState() {
     super.initState();
     _cargarNombre();
     _cargarResumen();
-    Future.delayed(const Duration(seconds: 30), () {
-      if (mounted) _cargarResumen();
+    _timer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) {
+        _cargarResumen();
+        setState(() {}); // refresca el FutureBuilder de actividad reciente
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   Future<void> _cargarNombre() async {
@@ -62,9 +73,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (empresaId == null) return;
       _empresaId = empresaId;
 
-      final hoy = DateTime.now().toUtc();
-      final inicio = DateTime.utc(hoy.year, hoy.month, hoy.day).toIso8601String();
-      final fin = DateTime.utc(hoy.year, hoy.month, hoy.day + 1).toIso8601String();
+      // Usar hora LOCAL del dispositivo para calcular el rango de "hoy",
+      // y convertir a UTC solo para la consulta a Supabase.
+      final ahoraLocal = DateTime.now();
+      final inicioLocal = DateTime(ahoraLocal.year, ahoraLocal.month, ahoraLocal.day);
+      final finLocal = inicioLocal.add(const Duration(days: 1));
+      final inicioUtc = inicioLocal.toUtc().toIso8601String();
+      final finUtc = finLocal.toUtc().toIso8601String();
 
       // Ventas hoy
       final ventas = await SupabaseService.client
@@ -72,8 +87,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .select('id, total, tipo_pago')
           .eq('empresa_id', empresaId)
           .eq('estado', 'completada')
-          .gte('created_at', inicio)
-          .lt('created_at', fin);
+          .gte('created_at', inicioUtc)
+          .lt('created_at', finUtc);
 
       double totalVentas = 0;
       final ventasIds = <String>[];
@@ -287,7 +302,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'screen': const InventarioScreen(),
       });
     }
-  
+   
     if (alerts.isEmpty) return const SizedBox.shrink();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Alertas', style: GoogleFonts.poppins(
@@ -361,62 +376,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (_empresaId != null)
         FutureBuilder(
           future: Future.wait([
-            // Ventas
             SupabaseService.client
                 .from('ventas')
                 .select('id, numero_venta, total, tipo_pago, created_at')
                 .eq('empresa_id', _empresaId!)
                 .eq('estado', 'completada')
                 .order('created_at', ascending: false)
-                .limit(3),
-            // Gastos
+                .limit(5),
             SupabaseService.client
                 .from('gastos')
                 .select('id, descripcion, monto, created_at')
                 .eq('empresa_id', _empresaId!)
                 .order('created_at', ascending: false)
-                .limit(3),
-            // Abonos fiado
+                .limit(5),
             SupabaseService.client
                 .from('abonos_fiado')
                 .select('id, monto, created_at, clientes(nombre)')
                 .eq('empresa_id', _empresaId!)
                 .order('created_at', ascending: false)
-                .limit(3),
-            // Abonos apartado
+                .limit(5),
             SupabaseService.client
                 .from('abonos_apartado')
                 .select('id, monto, created_at, apartados(descripcion)')
                 .eq('empresa_id', _empresaId!)
                 .order('created_at', ascending: false)
-                .limit(3),
-                // Apartados nuevos
-            SupabaseService.client
-                .from('apartados')
-                .select('id, descripcion, monto_total, created_at')
-                .eq('empresa_id', _empresaId!)
-                .order('created_at', ascending: false)
-                .limit(3),
+                .limit(5),
           ]),
           builder: (context, snapshot) {
-            if (!snapshot.hasData) return const SizedBox.shrink();
+            if (!snapshot.hasData) {
+              return Center(child: Text('Sin actividad reciente',
+                  style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textMuted)));
+            }
             final results = snapshot.data!;
-
-            // Combinar todo en una lista
             final List<Map<String, dynamic>> actividad = [];
 
-            // Ventas
             for (final v in results[0] as List) {
               actividad.add({
                 'tipo': 'venta',
                 'titulo': 'Venta #${v['numero_venta']}',
                 'monto': (v['total'] as num).toDouble(),
-                'fecha': DateTime.parse(v['created_at']),
+              'fecha': DateTime.parse(v['created_at']),
                 'positivo': true,
               });
             }
-
-            // Gastos
             for (final g in results[1] as List) {
               actividad.add({
                 'tipo': 'gasto',
@@ -426,8 +428,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'positivo': false,
               });
             }
-
-            // Abonos fiado
             for (final f in results[2] as List) {
               final nombre = f['clientes'] != null
                   ? f['clientes']['nombre'] as String : 'Cliente';
@@ -435,12 +435,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'tipo': 'fiado',
                 'titulo': 'Abono fiado — $nombre',
                 'monto': (f['monto'] as num).toDouble(),
-                'fecha': DateTime.parse(f['created_at']),
+             'fecha': DateTime.parse(f['created_at']),
                 'positivo': true,
               });
             }
-
-            // Abonos apartado
             for (final a in results[3] as List) {
               final desc = a['apartados'] != null
                   ? a['apartados']['descripcion'] as String : 'Apartado';
@@ -448,28 +446,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'tipo': 'apartado',
                 'titulo': 'Abono apartado — $desc',
                 'monto': (a['monto'] as num).toDouble(),
-                'fecha': DateTime.parse(a['created_at']),
+             'fecha': DateTime.parse(a['created_at']),
                 'positivo': true,
               });
             }
-// Apartados nuevos
-            for (final a in results[4] as List) {
-              actividad.add({
-                'tipo': 'apartado',
-                'titulo': 'Nuevo apartado — ${a['descripcion']}',
-                'monto': (a['monto_total'] as num).toDouble(),
-                'fecha': DateTime.parse(a['created_at']),
-                'positivo': true,
-              });
-            }
-            // Ordenar por fecha
+
             actividad.sort((a, b) =>
                 (b['fecha'] as DateTime).compareTo(a['fecha'] as DateTime));
 
             if (actividad.isEmpty) {
               return Center(child: Text('Sin actividad reciente',
-                  style: GoogleFonts.poppins(
-                      fontSize: 14, color: AppColors.textMuted)));
+                  style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textMuted)));
             }
 
             return Column(
