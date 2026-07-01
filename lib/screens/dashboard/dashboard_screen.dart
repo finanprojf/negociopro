@@ -13,6 +13,7 @@ import '../empresa/empresa_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import 'dart:async';
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -29,8 +30,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _productosLowStock = 0;
   int _productosSinStock = 0;
   int _apartadosActivos = 0;
-
- Timer? _timer;
+  Timer? _timer;
 
   @override
   void initState() {
@@ -40,7 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _timer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted) {
         _cargarResumen();
-        setState(() {}); // refresca el FutureBuilder de actividad reciente
+        setState(() {});
       }
     });
   }
@@ -51,6 +51,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+DateTime _toLocal(String dateStr) {
+    try {
+      final utcStr = dateStr
+          .replaceAll('+00:00', 'Z')
+          .replaceAll('+0000', 'Z');
+      return DateTime.parse(utcStr);
+    } catch (_) {
+      return DateTime.now().toUtc();
+    }
+  }
   Future<void> _cargarNombre() async {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
@@ -73,15 +83,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (empresaId == null) return;
       _empresaId = empresaId;
 
-      // Usar hora LOCAL del dispositivo para calcular el rango de "hoy",
-      // y convertir a UTC solo para la consulta a Supabase.
       final ahoraLocal = DateTime.now();
       final inicioLocal = DateTime(ahoraLocal.year, ahoraLocal.month, ahoraLocal.day);
       final finLocal = inicioLocal.add(const Duration(days: 1));
       final inicioUtc = inicioLocal.toUtc().toIso8601String();
       final finUtc = finLocal.toUtc().toIso8601String();
 
-      // Ventas hoy
       final ventas = await SupabaseService.client
           .from('ventas')
           .select('id, total, tipo_pago')
@@ -99,7 +106,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
 
-      // Ganancia real por margen de producto
       double gananciaReal = 0;
       if (ventasIds.isNotEmpty) {
         final detalles = await SupabaseService.client
@@ -117,14 +123,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
 
-      // Stock
       final stockBajo = await SupabaseService.client
           .from('productos')
           .select('id, stock_actual, stock_minimo')
           .eq('empresa_id', empresaId)
           .eq('activo', true);
 
-      // Apartados activos
       final apartados = await SupabaseService.client
           .from('apartados')
           .select('id')
@@ -222,7 +226,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       actions: [
         IconButton(
           icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
-          onPressed: () { _cargarNombre(); _cargarResumen(); },
+          onPressed: () { _cargarNombre(); _cargarResumen(); setState(() {}); },
         ),
         IconButton(
           icon: const Icon(Icons.notifications_outlined, color: AppColors.textSecondary),
@@ -302,7 +306,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'screen': const InventarioScreen(),
       });
     }
-   
     if (alerts.isEmpty) return const SizedBox.shrink();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Alertas', style: GoogleFonts.poppins(
@@ -367,18 +370,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ]);
   }
 
- Widget _buildRecentActivity() {
+  Widget _buildRecentActivity() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Actividad reciente', style: GoogleFonts.poppins(
-          fontSize: 16, fontWeight: FontWeight.w700,
-          color: AppColors.textPrimary)),
+          fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
       const SizedBox(height: 8),
       if (_empresaId != null)
         FutureBuilder(
           future: Future.wait([
-            SupabaseService.client
+          SupabaseService.client
                 .from('ventas')
-                .select('id, numero_venta, total, tipo_pago, created_at')
+                .select('id, numero_venta, total, tipo_pago, monto_pagado, created_at')
                 .eq('empresa_id', _empresaId!)
                 .eq('estado', 'completada')
                 .order('created_at', ascending: false)
@@ -410,12 +412,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final results = snapshot.data!;
             final List<Map<String, dynamic>> actividad = [];
 
-            for (final v in results[0] as List) {
+           for (final v in results[0] as List) {
+              final esCredito = v['tipo_pago'] == 'fiado';
+              final montoMostrar = esCredito
+                  ? (v['monto_pagado'] as num).toDouble()
+                  : (v['total'] as num).toDouble();
+              final saldoFiado = esCredito
+                  ? (v['total'] as num).toDouble() - (v['monto_pagado'] as num).toDouble()
+                  : 0.0;
               actividad.add({
                 'tipo': 'venta',
-                'titulo': 'Venta #${v['numero_venta']}',
-                'monto': (v['total'] as num).toDouble(),
-              'fecha': DateTime.parse(v['created_at']),
+                'titulo': saldoFiado > 0
+                    ? 'Venta #${v['numero_venta']} (+${AppFormatters.moneda(saldoFiado)} fiado)'
+                    : 'Venta #${v['numero_venta']}',
+                'monto': montoMostrar,
+                'fecha': _toLocal(v['created_at'] as String),
                 'positivo': true,
               });
             }
@@ -424,7 +435,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'tipo': 'gasto',
                 'titulo': g['descripcion'] as String,
                 'monto': (g['monto'] as num).toDouble(),
-                'fecha': DateTime.parse(g['created_at']),
+                'fecha': _toLocal(g['created_at'] as String),
                 'positivo': false,
               });
             }
@@ -435,7 +446,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'tipo': 'fiado',
                 'titulo': 'Abono fiado — $nombre',
                 'monto': (f['monto'] as num).toDouble(),
-             'fecha': DateTime.parse(f['created_at']),
+                'fecha': _toLocal(f['created_at'] as String),
                 'positivo': true,
               });
             }
@@ -446,13 +457,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'tipo': 'apartado',
                 'titulo': 'Abono apartado — $desc',
                 'monto': (a['monto'] as num).toDouble(),
-             'fecha': DateTime.parse(a['created_at']),
+                'fecha': _toLocal(a['created_at'] as String),
                 'positivo': true,
               });
             }
 
-            actividad.sort((a, b) =>
-                (b['fecha'] as DateTime).compareTo(a['fecha'] as DateTime));
+        actividad.sort((a, b) =>
+    (b['fecha'] as DateTime).compareTo(a['fecha'] as DateTime));
 
             if (actividad.isEmpty) {
               return Center(child: Text('Sin actividad reciente',
@@ -476,7 +487,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 return _ActivityTile(
                   icon: icon, color: color,
                   title: item['titulo'] as String,
-                  subtitle: AppFormatters.tiempoRelativo(item['fecha'] as DateTime),
+             subtitle: AppFormatters.tiempoRelativo(item['fecha'] as DateTime),
                   amount: '${item['positivo'] ? '+' : '-'}${AppFormatters.moneda(item['monto'] as double)}',
                   positive: item['positivo'] as bool,
                 );

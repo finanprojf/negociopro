@@ -3,6 +3,8 @@ import '../models/venta_model.dart';
 import '../models/producto_model.dart';
 import 'supabase_service.dart';
 import 'local_database.dart';
+import 'gasto_service.dart';
+import '../models/gasto_model.dart';
 class VentaService {
   static const _uuid = Uuid();
 
@@ -15,14 +17,14 @@ class VentaService {
         List<dynamic> res;
 
         if (fecha != null) {
-          final inicio = DateTime(fecha.year, fecha.month, fecha.day);
-          final fin = inicio.add(const Duration(days: 1));
+        final inicioLocal = DateTime(fecha.year, fecha.month, fecha.day);
+          final finLocal = inicioLocal.add(const Duration(days: 1));
           res = await SupabaseService.client
               .from('ventas')
               .select('*, clientes(nombre), detalle_ventas(*)')
               .eq('empresa_id', empresaId)
-              .gte('created_at', inicio.toIso8601String())
-              .lt('created_at', fin.toIso8601String())
+              .gte('created_at', inicioLocal.toUtc().toIso8601String())
+              .lt('created_at', finLocal.toUtc().toIso8601String())
               .order('created_at', ascending: false);
         } else {
           res = await SupabaseService.client
@@ -66,7 +68,7 @@ class VentaService {
     if (empresaId == null) return false;
 
     final ventaId = _uuid.v4();
-    final ahora = DateTime.now().toIso8601String();
+   final ahora = DateTime.now().toUtc().toIso8601String();
 
     double subtotal = 0;
     for (final item in items) {
@@ -118,14 +120,15 @@ class VentaService {
           {'stock_actual': nuevoStock, 'updated_at': ahora}, 'id', p.id);
     }
 
-    if (tipoPago == 'fiado' && clienteId != null) {
+  if (tipoPago == 'fiado' && clienteId != null) {
+      final saldoFiado = total - montoPagado;
       await LocalDatabase.insertar('fiados', {
         'id': _uuid.v4(),
         'empresa_id': empresaId,
         'cliente_id': clienteId,
         'venta_id': ventaId,
-        'monto_original': total,
-        'saldo_pendiente': total,
+        'monto_original': saldoFiado,
+        'saldo_pendiente': saldoFiado,
         'estado': 'activo',
         'synced': 0,
         'created_at': ahora,
@@ -139,9 +142,32 @@ class VentaService {
       } catch (_) {}
     }
 
+    if (SupabaseService.isOnline) {
+      try {
+        await _syncVenta(ventaId, ventaMap, items, ahora);
+      } catch (_) {}
+    }
+
+    if (SupabaseService.isOnline) {
+      try {
+        await _syncVenta(ventaId, ventaMap, items, ahora);
+      } catch (_) {}
+    }
+
+    // Si hay descuento, registrarlo como gasto
+    if (descuento > 0) {
+      await GastoService.guardarGasto(GastoModel(
+        id: '',
+        empresaId: empresaId,
+        categoria: 'otros',
+        descripcion: 'Descuento en venta',
+        monto: descuento,
+        fecha: DateTime.now(),
+      ));
+    }
+
     return true;
   }
-
   static Future<void> _syncVenta(
     String ventaId,
     Map<String, dynamic> ventaMap,
@@ -157,13 +183,15 @@ class VentaService {
         .insert({'id': ventaId, ...ventaOnline});
 // Si es fiado, crear en Supabase también
     if (ventaMap['tipo_pago'] == 'fiado' && ventaMap['cliente_id'] != null) {
+     final saldoFiado = (ventaMap['total'] as num).toDouble() - 
+                   (ventaMap['monto_pagado'] as num).toDouble();
       await SupabaseService.client.from('fiados').insert({
         'id': const Uuid().v4(),
         'empresa_id': ventaMap['empresa_id'],
         'cliente_id': ventaMap['cliente_id'],
         'venta_id': ventaId,
-        'monto_original': ventaMap['total'],
-        'saldo_pendiente': ventaMap['total'],
+        'monto_original': saldoFiado,
+        'saldo_pendiente': saldoFiado,
         'estado': 'activo',
       });
     }

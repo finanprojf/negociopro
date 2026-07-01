@@ -37,7 +37,7 @@ List<Map<String, String>> _clientesFiltrados = [];
 List<Map<String, String>> _clientesDemo = [];
   double get _total => _carrito.fold(0, (s, i) => s + i.subtotal);
   int get _totalItems => _carrito.fold(0, (s, i) => s + i.cantidad.toInt());
-
+double _montoIngresadoTemp = 0;
   @override
  void initState() {
     super.initState();
@@ -51,7 +51,102 @@ List<Map<String, String>> _clientesDemo = [];
     _searchCtrl.dispose();
     super.dispose();
   }
+Future<void> _agregarClienteRapido() async {
+    final nombreCtrl = TextEditingController();
+    final telefonoCtrl = TextEditingController();
+    
+    final resultado = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Nuevo cliente',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: nombreCtrl,
+            style: const TextStyle(fontFamily: 'Poppins'),
+            decoration: const InputDecoration(
+              labelText: 'Nombre *',
+              prefixIcon: Icon(Icons.person_outline),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: telefonoCtrl,
+            keyboardType: TextInputType.phone,
+            style: const TextStyle(fontFamily: 'Poppins'),
+            decoration: const InputDecoration(
+              labelText: 'Teléfono',
+              prefixIcon: Icon(Icons.phone_outlined),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () {
+              if (nombreCtrl.text.trim().isEmpty) return;
+              Navigator.pop(context, {
+                'nombre': nombreCtrl.text.trim(),
+                'telefono': telefonoCtrl.text.trim(),
+              });
+            },
+            child: const Text('Guardar',
+                style: TextStyle(color: AppColors.primary,
+                    fontWeight: FontWeight.w700))),
+        ],
+      ),
+    );
 
+    if (resultado != null) {
+      try {
+        final cliente = await ClienteService.guardarCliente(ClienteModel(
+          id: '',
+          empresaId: '',
+          nombre: resultado['nombre']!,
+          telefono: resultado['telefono']!.isEmpty 
+              ? null : resultado['telefono'],
+        ));
+       await _cargarClientes();
+        // Seleccionar el cliente recién creado y continuar con la venta
+        final clienteNuevo = _clientesDemo.firstWhere(
+            (c) => c['nombre'] == resultado['nombre'],
+            orElse: () => _clientesDemo.last);
+       setState(() {
+          _clienteSeleccionado = clienteNuevo['id'];
+          _tipoPago = 'fiado';
+        });
+        // Registrar la venta automáticamente con el cliente nuevo
+        await VentaService.registrarVenta(
+          items: _carrito.map((i) => {
+            'producto': i.producto,
+            'cantidad': i.cantidad,
+          }).toList(),
+          tipoPago: 'fiado',
+          clienteId: clienteNuevo['id'],
+          montoPagado: _montoIngresadoTemp,
+          descuento: 0,
+        );
+        setState(() {
+          _carrito.clear();
+          _clienteSeleccionado = null;
+          _tipoPago = 'efectivo';
+        });
+        if (context.mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('¡Venta registrada! ${resultado['nombre']} debe RD${_total - _montoIngresadoTemp}'),
+            backgroundColor: AppColors.success,
+          ));
+        }
+    
+      } catch (e) {
+        print('❌ Error agregar cliente: $e');
+      }
+    }
+  }
  Future<void> _cargarProductos() async {
     setState(() => _loading = true);
     try {
@@ -428,7 +523,130 @@ Future<void> _cargarClientes() async {
             const SizedBox(height: 16),
             SizedBox(width: double.infinity, height: 50,
               child: ElevatedButton(
-               onPressed: () async {
+              onPressed: () async {
+                  final montoIngresado = double.tryParse(ctrl.text) ?? _total;
+                  
+                  // Si el monto es menor al total
+                  if (_tipoPago == 'efectivo' && montoIngresado < _total) {
+                    Navigator.pop(ctx);
+                    final faltante = _total - montoIngresado;
+                    _montoIngresadoTemp = montoIngresado;
+                    final opcion = await showDialog<String>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        title: const Text('Pago incompleto',
+                            style: TextStyle(fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w700)),
+                        content: Text(
+                          'Faltan ${AppFormatters.moneda(faltante)} para completar el pago.\n\n¿Qué deseas hacer?',
+                          style: const TextStyle(fontFamily: 'Poppins')),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, 'cancelar'),
+                            child: const Text('Cancelar',
+                                style: TextStyle(color: AppColors.textMuted)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, 'descuento'),
+                            child: const Text('Descuento',
+                                style: TextStyle(color: AppColors.warning,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, 'fiado'),
+                            child: const Text('Fiado',
+                                style: TextStyle(color: AppColors.colorFiado,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (opcion == null || opcion == 'cancelar') return;
+                  if (opcion == 'fiado') {
+      // Si no tiene cliente seleccionado, pedir que elija uno
+      if (_clienteSeleccionado == null) {
+        final clienteElegido = await showDialog<String>(
+          context: context,
+          builder: (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            title: const Text('Seleccionar cliente',
+                style: TextStyle(fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700)),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 300,
+              child: ListView.builder(
+                itemCount: _clientesDemo.length,
+                itemBuilder: (_, i) {
+                  final c = _clientesDemo[i];
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.colorFiado.withValues(alpha: 0.1),
+                      child: Text(c['nombre']![0],
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.colorFiado)),
+                    ),
+                    title: Text(c['nombre']!,
+                        style: const TextStyle(fontFamily: 'Poppins',
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    onTap: () => Navigator.pop(context, c['id']),
+                  );
+                },
+              ),
+            ),
+           actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, null),
+                child: const Text('Cancelar')),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context, null);
+                  await _agregarClienteRapido();
+                },
+                child: const Text('+ Nuevo cliente',
+                    style: TextStyle(color: AppColors.primary,
+                        fontWeight: FontWeight.w700))),
+            ],
+          ),
+        );
+        if (clienteElegido == null) return;
+        _clienteSeleccionado = clienteElegido;
+      }
+      setState(() => _tipoPago = 'fiado');
+    }
+                    // Si es descuento, el monto ingresado es el total a cobrar
+                    await VentaService.registrarVenta(
+                      items: _carrito.map((i) => {
+                        'producto': i.producto,
+                        'cantidad': i.cantidad,
+                      }).toList(),
+                      tipoPago: opcion == 'fiado' ? 'fiado' : 'efectivo',
+                      clienteId: _clienteSeleccionado,
+                      montoPagado: montoIngresado,
+                      descuento: opcion == 'descuento' ? faltante : 0,
+                    );
+                    setState(() {
+                      _carrito.clear();
+                      _clienteSeleccionado = null;
+                      _tipoPago = 'efectivo';
+                    });
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(opcion == 'fiado'
+                            ? '¡Venta registrada en fiado!'
+                            : '¡Venta con descuento registrada!'),
+                        backgroundColor: AppColors.success,
+                      ));
+                      Navigator.pop(context);
+                    }
+                    return;
+                  }
+
                   Navigator.pop(ctx);
                   await VentaService.registrarVenta(
                     items: _carrito.map((i) => {

@@ -4,6 +4,8 @@ import '../../models/cliente_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/supabase_service.dart';
 import 'fiado_cliente_screen.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../ventas/pos_screen.dart';
 
 class _ClienteFiado {
   final ClienteModel cliente;
@@ -52,15 +54,17 @@ class _FiadoScreenState extends State<FiadoScreen> {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
 
-      // Traer fiados agrupados por cliente
-      final res = await SupabaseService.client
+      var query = SupabaseService.client
           .from('fiados')
           .select('*, clientes(id, nombre, telefono, cedula)')
-          .eq('empresa_id', empresaId)
-          .eq('estado', _filtro == 'todos' ? '' : _filtro)
-          .order('created_at', ascending: false);
+          .eq('empresa_id', empresaId);
 
-      // Agrupar por cliente
+      if (_filtro != 'todos') {
+        query = query.eq('estado', _filtro);
+      }
+
+      final res = await query.order('created_at', ascending: false);
+
       final Map<String, _ClienteFiado> mapa = {};
       for (final f in res) {
         if (f['clientes'] == null) continue;
@@ -116,6 +120,19 @@ class _FiadoScreenState extends State<FiadoScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Fiado')),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const PosScreen())),
+        backgroundColor: AppColors.colorFiado,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.handshake_outlined, color: Colors.white, size: 20),
+            Text('Fiado', style: GoogleFonts.poppins(
+                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 9)),
+          ],
+        ),
+      ),
       body: Column(children: [
         _buildResumenTotal(),
         _buildBuscadorFiltros(),
@@ -201,7 +218,7 @@ class _FiadoScreenState extends State<FiadoScreen> {
       onRefresh: _cargar,
       color: AppColors.colorFiado,
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         itemCount: _filtrados.length,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (_, i) => _ClienteFiadoCard(
@@ -231,10 +248,6 @@ class _FiadoScreenState extends State<FiadoScreen> {
     ]));
   }
 }
-
-// ============================================================
-// WIDGETS
-// ============================================================
 
 class _Chip extends StatelessWidget {
   final String label, value, selected;
@@ -284,7 +297,6 @@ class _ClienteFiadoCard extends StatelessWidget {
           border: Border.all(color: AppColors.cardBorder),
         ),
         child: Row(children: [
-          // Avatar
           CircleAvatar(
             radius: 24,
             backgroundColor: AppColors.colorFiado.withValues(alpha: 0.1),

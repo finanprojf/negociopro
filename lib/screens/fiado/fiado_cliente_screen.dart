@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_colors.dart';
 import '../../models/cliente_model.dart';
-import '../../models/fiado_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/fiado_service.dart';
 import '../../services/supabase_service.dart';
@@ -16,12 +15,12 @@ class FiadoClienteScreen extends StatefulWidget {
 }
 
 class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
-  List<FiadoModel> _fiados = [];
+  List<Map<String, dynamic>> _fiados = [];
   bool _loading = true;
 
   double get _totalPendiente => _fiados
-      .where((f) => f.estado == 'activo')
-      .fold(0, (s, f) => s + f.saldoPendiente);
+      .where((f) => f['estado'] == 'activo')
+      .fold(0, (s, f) => s + (f['saldo_pendiente'] as num).toDouble());
 
   bool get _tienePendiente => _totalPendiente > 0;
 
@@ -36,156 +35,55 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
     try {
       final res = await SupabaseService.client
           .from('fiados')
-          .select()
+          .select('''
+            *,
+            ventas(
+              numero_venta,
+              detalle_ventas(nombre_producto, cantidad, precio_unitario)
+            )
+          ''')
           .eq('cliente_id', widget.cliente.id)
           .order('created_at', ascending: false);
+
       if (mounted) {
         setState(() {
-          _fiados = res.map((m) => FiadoModel.fromMap(m)).toList();
+          _fiados = List<Map<String, dynamic>>.from(res);
           _loading = false;
         });
       }
     } catch (e) {
+      print('❌ Error fiados cliente: $e');
       if (mounted) setState(() => _loading = false);
     }
   }
-void _mostrarHistorial() async {
-    try {
-      final res = await SupabaseService.client
-          .from('abonos_fiado')
-          .select()
-          .eq('cliente_id', widget.cliente.id)
-          .order('created_at', ascending: false);
 
-      if (!mounted) return;
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => Container(
-          height: MediaQuery.of(context).size.height * 0.6,
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+  Future<void> _eliminarFiado(Map<String, dynamic> fiado) async {
+    final saldo = (fiado['saldo_pendiente'] as num).toDouble();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(saldo > 0 ? '⚠ Fiado con deuda' : 'Eliminar fiado',
+            style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        content: Text(saldo > 0
+            ? 'Este fiado aún tiene ${AppFormatters.moneda(saldo)} pendiente.\n\n¿Deseas eliminarlo de todas formas?'
+            : '¿Deseas eliminar este fiado?',
+            style: const TextStyle(fontFamily: 'Poppins')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: const Text('No, cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sí, eliminar',
+                style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700)),
           ),
-          child: Column(children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              child: Row(children: [
-                const Icon(Icons.history_rounded, color: AppColors.colorFiado),
-                const SizedBox(width: 10),
-                const Text('Historial de pagos',
-                    style: TextStyle(fontFamily: 'Poppins',
-                        fontSize: 16, fontWeight: FontWeight.w700)),
-                const Spacer(),
-                Text('${res.length} pagos',
-                    style: const TextStyle(fontFamily: 'Poppins',
-                        fontSize: 13, color: AppColors.textMuted)),
-              ]),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: res.isEmpty
-                  ? const Center(child: Text('Sin pagos registrados',
-                      style: TextStyle(fontFamily: 'Poppins',
-                          color: AppColors.textMuted)))
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: res.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (_, i) {
-                        final p = res[i];
-                        return Row(children: [
-                          Container(
-                            width: 40, height: 40,
-                            decoration: BoxDecoration(
-                              color: AppColors.successSurface,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(Icons.payments_rounded,
-                                color: AppColors.success, size: 20),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                            Text(AppFormatters.fechaHora(
-                                DateTime.parse(p['created_at'])),
-                                style: const TextStyle(fontFamily: 'Poppins',
-                                    fontSize: 12, color: AppColors.textMuted)),
-                            Text(p['metodo_pago'] ?? 'efectivo',
-                                style: const TextStyle(fontFamily: 'Poppins',
-                                    fontSize: 12, color: AppColors.textSecondary)),
-                          ])),
-                          Text(AppFormatters.moneda(
-                              (p['monto'] as num).toDouble()),
-                              style: const TextStyle(fontFamily: 'Poppins',
-                                  fontSize: 15, fontWeight: FontWeight.w700,
-                                  color: AppColors.success)),
-                        ]);
-                      },
-                    ),
-            ),
-          ]),
-        ),
-      );
-    } catch (e) {
-      print('❌ Error historial: $e');
-    }
-  }
-  Future<void> _eliminarFiado(FiadoModel fiado) async {
-    // Si tiene deuda pendiente advertir
-    if (!fiado.estaPagado) {
-      final confirmar = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('⚠ Fiado con deuda',
-              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-          content: Text(
-            'Este fiado aún tiene ${AppFormatters.moneda(fiado.saldoPendiente)} pendiente.\n\n¿Deseas eliminarlo de todas formas?',
-            style: const TextStyle(fontFamily: 'Poppins'),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false),
-                child: const Text('No, cancelar')),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Sí, eliminar',
-                  style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700)),
-            ),
-          ],
-        ),
-      );
-      if (confirmar != true) return;
-    } else {
-      final confirmar = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Eliminar fiado',
-              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-          content: const Text('Este fiado ya está pagado. ¿Deseas eliminarlo?',
-              style: TextStyle(fontFamily: 'Poppins')),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false),
-                child: const Text('No')),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Sí, eliminar',
-                  style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700)),
-            ),
-          ],
-        ),
-      );
-      if (confirmar != true) return;
-    }
+        ],
+      ),
+    );
+    if (confirm != true) return;
 
     try {
-      await SupabaseService.client
-          .from('fiados')
-          .delete()
-          .eq('id', fiado.id);
+      await SupabaseService.client.from('fiados').delete().eq('id', fiado['id']);
       _cargar();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -207,7 +105,7 @@ void _mostrarHistorial() async {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-     appBar: AppBar(
+      appBar: AppBar(
         title: Text('Fiado — ${widget.cliente.nombre}'),
         actions: [
           IconButton(
@@ -320,11 +218,122 @@ void _mostrarHistorial() async {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       itemCount: _fiados.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (_, i) => _FiadoCard(
-        fiado: _fiados[i],
-        onAbonar: () => _mostrarAbonoFiado(_fiados[i]),
-        onEliminar: () => _eliminarFiado(_fiados[i]),
-      ),
+      itemBuilder: (_, i) {
+        final f = _fiados[i];
+        final estado = f['estado'] as String;
+        final saldo = (f['saldo_pendiente'] as num).toDouble();
+        final original = (f['monto_original'] as num).toDouble();
+        final pagado = original - saldo;
+        final porcentaje = original > 0 ? pagado / original : 0.0;
+
+        // Obtener productos de la venta
+        final venta = f['ventas'] as Map<String, dynamic>?;
+        final detalles = venta != null
+            ? (venta['detalle_ventas'] as List? ?? [])
+            : [];
+
+        Color color; String label; Color bg;
+        if (estado == 'pagado') {
+          color = AppColors.success; bg = AppColors.successSurface; label = '✓ Pagado';
+        } else if (estado == 'vencido') {
+          color = AppColors.danger; bg = AppColors.dangerSurface; label = '⚠ Vencido';
+        } else {
+          color = AppColors.colorFiado;
+          bg = AppColors.dangerSurface.withValues(alpha: 0.2);
+          label = 'Activo';
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(children: [
+                Row(children: [
+                  Text(AppFormatters.fecha(DateTime.parse(f['created_at'])),
+                      style: const TextStyle(fontFamily: 'Poppins',
+                          fontSize: 12, color: AppColors.textMuted)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: bg,
+                        borderRadius: BorderRadius.circular(20)),
+                    child: Text(label, style: TextStyle(fontFamily: 'Poppins',
+                        fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => _eliminarFiado(f),
+                    child: const Icon(Icons.delete_outline_rounded,
+                        color: AppColors.textMuted, size: 18),
+                  ),
+                ]),
+                // Productos
+                if (detalles.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceAlt,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: detalles.map((d) {
+                        final nombre = d['nombre_producto'] as String;
+                        final cantidad = (d['cantidad'] as num).toDouble();
+                        final precio = (d['precio_unitario'] as num).toDouble();
+                        return Text(
+                          '• $nombre x${cantidad.toStringAsFixed(0)} — ${AppFormatters.moneda(precio * cantidad)}',
+                          style: const TextStyle(fontFamily: 'Poppins',
+                              fontSize: 11, color: AppColors.textSecondary),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  _Col('Original', AppFormatters.moneda(original), AppColors.textPrimary),
+                  _Col('Pagado', AppFormatters.moneda(pagado), AppColors.success),
+                  _Col('Pendiente', AppFormatters.moneda(saldo), AppColors.colorFiado),
+                ]),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: porcentaje.toDouble(),
+                    backgroundColor: AppColors.cardBorder,
+                    color: estado == 'pagado' ? AppColors.success : AppColors.colorFiado,
+                    minHeight: 6,
+                  ),
+                ),
+              ]),
+            ),
+            if (estado == 'activo')
+              Container(
+                decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: AppColors.cardBorder))),
+                child: TextButton.icon(
+                  onPressed: () => _mostrarAbonoFiado(f),
+                  icon: const Icon(Icons.payments_rounded,
+                      size: 16, color: AppColors.colorFiado),
+                  label: const Text('Abonar a este',
+                      style: TextStyle(fontFamily: 'Poppins',
+                          fontSize: 13, fontWeight: FontWeight.w600,
+                          color: AppColors.colorFiado)),
+                  style: TextButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 42)),
+                ),
+              ),
+          ]),
+        );
+      },
     );
   }
 
@@ -339,7 +348,6 @@ void _mostrarHistorial() async {
     ]));
   }
 
-  // Abono general (salda todos los fiados activos)
   void _mostrarAbono({double? monto}) {
     final ctrl = TextEditingController(
         text: monto != null ? monto.toStringAsFixed(2) : '');
@@ -373,14 +381,10 @@ void _mostrarHistorial() async {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
               autofocus: monto == null,
-              onChanged: (_) => setModal(() {}),
               style: const TextStyle(fontFamily: 'Poppins', fontSize: 24,
                   fontWeight: FontWeight.w700),
               textAlign: TextAlign.center,
-              decoration: const InputDecoration(
-                labelText: 'Monto',
-                prefixText: 'RD\$ ',
-              ),
+              decoration: const InputDecoration(labelText: 'Monto', prefixText: 'RD\$ '),
             ),
             const SizedBox(height: 20),
             SizedBox(
@@ -391,18 +395,17 @@ void _mostrarHistorial() async {
                   if (montoAbono <= 0) return;
                   Navigator.pop(ctx);
 
-                  // Abonar a todos los fiados activos en orden
                   double restante = montoAbono;
                   final fiadosActivos = _fiados
-                      .where((f) => f.estado == 'activo')
+                      .where((f) => f['estado'] == 'activo')
                       .toList();
 
                   for (final f in fiadosActivos) {
                     if (restante <= 0) break;
-                    final abonoEste = restante >= f.saldoPendiente
-                        ? f.saldoPendiente : restante;
+                    final saldo = (f['saldo_pendiente'] as num).toDouble();
+                    final abonoEste = restante >= saldo ? saldo : restante;
                     await FiadoService.registrarAbono(
-                        f.id, f.clienteId, abonoEste, 'efectivo');
+                        f['id'], f['cliente_id'], abonoEste, 'efectivo');
                     restante -= abonoEste;
                   }
 
@@ -410,18 +413,15 @@ void _mostrarHistorial() async {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(monto != null
-                          ? '¡Deuda saldada completamente!'
-                          : 'Abono registrado'),
+                          ? '¡Deuda saldada!' : 'Abono registrado'),
                       backgroundColor: AppColors.success,
                     ));
                   }
                 },
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.colorFiado),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.colorFiado),
                 child: Text(monto != null ? 'Confirmar — saldar todo' : 'Confirmar abono',
                     style: const TextStyle(fontFamily: 'Poppins',
-                        fontSize: 16, fontWeight: FontWeight.w700,
-                        color: Colors.white)),
+                        fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
               ),
             ),
           ]),
@@ -430,9 +430,9 @@ void _mostrarHistorial() async {
     );
   }
 
-  // Abono a un fiado específico
-  void _mostrarAbonoFiado(FiadoModel fiado) {
+  void _mostrarAbonoFiado(Map<String, dynamic> fiado) {
     final ctrl = TextEditingController();
+    final saldo = (fiado['saldo_pendiente'] as num).toDouble();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -452,7 +452,7 @@ void _mostrarHistorial() async {
               style: TextStyle(fontFamily: 'Poppins',
                   fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          Text('Pendiente: ${AppFormatters.moneda(fiado.saldoPendiente)}',
+          Text('Pendiente: ${AppFormatters.moneda(saldo)}',
               style: const TextStyle(fontFamily: 'Poppins',
                   fontSize: 13, color: AppColors.textSecondary)),
           const SizedBox(height: 20),
@@ -465,15 +465,12 @@ void _mostrarHistorial() async {
                 fontWeight: FontWeight.w700),
             textAlign: TextAlign.center,
             decoration: const InputDecoration(
-              labelText: 'Monto del abono',
-              prefixText: 'RD\$ ',
-            ),
+                labelText: 'Monto del abono', prefixText: 'RD\$ '),
           ),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(child: GestureDetector(
-              onTap: () => ctrl.text =
-                  (fiado.saldoPendiente * 0.5).toStringAsFixed(2),
+              onTap: () => ctrl.text = (saldo * 0.5).toStringAsFixed(2),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(color: AppColors.surfaceAlt,
@@ -486,7 +483,7 @@ void _mostrarHistorial() async {
             )),
             const SizedBox(width: 8),
             Expanded(child: GestureDetector(
-              onTap: () => ctrl.text = fiado.saldoPendiente.toStringAsFixed(2),
+              onTap: () => ctrl.text = saldo.toStringAsFixed(2),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(color: AppColors.surfaceAlt,
@@ -505,112 +502,102 @@ void _mostrarHistorial() async {
               onPressed: () async {
                 Navigator.pop(ctx);
                 await FiadoService.registrarAbono(
-                  fiado.id, fiado.clienteId,
+                  fiado['id'], fiado['cliente_id'],
                   double.tryParse(ctrl.text) ?? 0, 'efectivo',
                 );
                 _cargar();
               },
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.colorFiado),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.colorFiado),
               child: const Text('Confirmar abono',
                   style: TextStyle(fontFamily: 'Poppins',
-                      fontSize: 16, fontWeight: FontWeight.w600,
-                      color: Colors.white)),
+                      fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
             ),
           ),
         ]),
       ),
     );
   }
-}
 
-class _FiadoCard extends StatelessWidget {
-  final FiadoModel fiado;
-  final VoidCallback onAbonar;
-  final VoidCallback onEliminar;
-  const _FiadoCard({required this.fiado,
-      required this.onAbonar, required this.onEliminar});
+  void _mostrarHistorial() async {
+    try {
+      final res = await SupabaseService.client
+          .from('abonos_fiado')
+          .select()
+          .eq('cliente_id', widget.cliente.id)
+          .order('created_at', ascending: false);
 
-  @override
-  Widget build(BuildContext context) {
-    Color color; String label; Color bg;
-    if (fiado.estaPagado) {
-      color = AppColors.success; bg = AppColors.successSurface; label = '✓ Pagado';
-    } else if (fiado.estaVencido) {
-      color = AppColors.danger; bg = AppColors.dangerSurface; label = '⚠ Vencido';
-    } else {
-      color = AppColors.colorFiado; bg = AppColors.dangerSurface.withValues(alpha: 0.2);
-      label = 'Activo';
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.all(14),
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => Container(
+          height: MediaQuery.of(context).size.height * 0.6,
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
           child: Column(children: [
-            Row(children: [
-              Text(AppFormatters.fecha(fiado.createdAt),
-                  style: const TextStyle(fontFamily: 'Poppins',
-                      fontSize: 12, color: AppColors.textMuted)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: bg,
-                    borderRadius: BorderRadius.circular(20)),
-                child: Text(label, style: TextStyle(fontFamily: 'Poppins',
-                    fontSize: 10, fontWeight: FontWeight.w600, color: color)),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: onEliminar,
-                child: const Icon(Icons.delete_outline_rounded,
-                    color: AppColors.textMuted, size: 18),
-              ),
-            ]),
-            const SizedBox(height: 12),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              _Col('Original', AppFormatters.moneda(fiado.montoOriginal),
-                  AppColors.textPrimary),
-              _Col('Pagado', AppFormatters.moneda(fiado.montoPagado),
-                  AppColors.success),
-              _Col('Pendiente', AppFormatters.moneda(fiado.saldoPendiente),
-                  AppColors.colorFiado),
-            ]),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: fiado.porcentajePagado,
-                backgroundColor: AppColors.cardBorder,
-                color: fiado.estaPagado ? AppColors.success : AppColors.colorFiado,
-                minHeight: 6,
-              ),
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: Row(children: [
+                const Icon(Icons.history_rounded, color: AppColors.colorFiado),
+                const SizedBox(width: 10),
+                const Text('Historial de pagos',
+                    style: TextStyle(fontFamily: 'Poppins',
+                        fontSize: 16, fontWeight: FontWeight.w700)),
+                const Spacer(),
+                Text('${res.length} pagos',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 13, color: AppColors.textMuted)),
+              ]),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: res.isEmpty
+                  ? const Center(child: Text('Sin pagos registrados',
+                      style: TextStyle(fontFamily: 'Poppins',
+                          color: AppColors.textMuted)))
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: res.length,
+                      separatorBuilder: (_, __) => const Divider(),
+                      itemBuilder: (_, i) {
+                        final p = res[i];
+                        return Row(children: [
+                          Container(width: 40, height: 40,
+                              decoration: BoxDecoration(
+                                  color: AppColors.successSurface,
+                                  borderRadius: BorderRadius.circular(10)),
+                              child: const Icon(Icons.payments_rounded,
+                                  color: AppColors.success, size: 20)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                            Text(AppFormatters.fechaHora(
+                                DateTime.parse(p['created_at'])),
+                                style: const TextStyle(fontFamily: 'Poppins',
+                                    fontSize: 12, color: AppColors.textMuted)),
+                            Text(p['metodo_pago'] ?? 'efectivo',
+                                style: const TextStyle(fontFamily: 'Poppins',
+                                    fontSize: 12, color: AppColors.textSecondary)),
+                          ])),
+                          Text(AppFormatters.moneda(
+                              (p['monto'] as num).toDouble()),
+                              style: const TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 15, fontWeight: FontWeight.w700,
+                                  color: AppColors.success)),
+                        ]);
+                      },
+                    ),
             ),
           ]),
         ),
-        if (!fiado.estaPagado)
-          Container(
-            decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.cardBorder))),
-            child: TextButton.icon(
-              onPressed: onAbonar,
-              icon: const Icon(Icons.payments_rounded,
-                  size: 16, color: AppColors.colorFiado),
-              label: const Text('Abonar a este',
-                  style: TextStyle(fontFamily: 'Poppins',
-                      fontSize: 13, fontWeight: FontWeight.w600,
-                      color: AppColors.colorFiado)),
-              style: TextButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 42)),
-            ),
-          ),
-      ]),
-    );
+      );
+    } catch (e) {
+      print('❌ Error historial: $e');
+    }
   }
 }
 

@@ -184,11 +184,16 @@ class _VentaTile extends StatelessWidget {
                   fontSize: 11, color: AppColors.textMuted),
             ),
           ])),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(AppFormatters.moneda(venta.total),
+         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(AppFormatters.moneda(venta.tipoPago == 'fiado'
+                    ? venta.montoPagado : venta.total),
                 style: const TextStyle(fontFamily: 'Poppins',
                     fontSize: 15, fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary)),
+            if (venta.tipoPago == 'fiado' && venta.total > venta.montoPagado)
+              Text('Fiado: ${AppFormatters.moneda(venta.total - venta.montoPagado)}',
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 10, color: AppColors.colorFiado)),
             const SizedBox(height: 3),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
