@@ -7,6 +7,10 @@ import '../../services/inventario_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/gasto_service.dart';
 import '../../models/gasto_model.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 class ProductoFormScreen extends StatefulWidget {
   final ProductoModel? producto;
   const ProductoFormScreen({super.key, this.producto});
@@ -27,7 +31,9 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
   String _unidad = 'unidad';
   bool _loading = false;
   bool get _esEdicion => widget.producto != null;
-
+File? _imagenSeleccionada;
+  String? _rutaImagenGuardada;
+  final _picker = ImagePicker();
   final List<String> _unidades = [
     'unidad', 'paquete', 'caja', 'botella', 'lata',
     'kg', 'libra', 'litro', 'docena', 'par', 'otro'
@@ -46,6 +52,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
       _stockActualCtrl.text = p.stockActual.toString();
       _stockMinimoCtrl.text = p.stockMinimo.toString();
       _unidad = p.unidad;
+      if (p.fotoUrl != null) _rutaImagenGuardada = p.fotoUrl;
     }
   }
 
@@ -93,6 +100,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
         ProductoModel(
           id: _esEdicion ? widget.producto!.id : '',
           empresaId: '',
+          fotoUrl: _imagenSeleccionada?.path ?? _rutaImagenGuardada,
           nombre: _nombreCtrl.text.trim(),
           descripcion: _descripcionCtrl.text.trim().isEmpty ? null : _descripcionCtrl.text.trim(),
           precioCompra: double.tryParse(_precioCompraCtrl.text) ?? 0,
@@ -195,38 +203,108 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
     );
   }
 
-  Widget _buildFoto() {
+ Widget _buildFoto() {
     return Center(
       child: GestureDetector(
-        onTap: () {}, // TODO: image_picker
+        onTap: _elegirFoto,
         child: Container(
-          width: 110,
-          height: 110,
+          width: 110, height: 110,
           decoration: BoxDecoration(
             color: AppColors.colorInventario.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: AppColors.colorInventario.withValues(alpha: 0.3),
               width: 2,
-              style: BorderStyle.solid,
             ),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.add_photo_alternate_outlined,
-                  color: AppColors.colorInventario, size: 32),
-              const SizedBox(height: 6),
-              const Text('Agregar foto',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
-                      color: AppColors.colorInventario, fontWeight: FontWeight.w500)),
-            ],
-          ),
+          child: _imagenSeleccionada != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.file(_imagenSeleccionada!, fit: BoxFit.cover))
+              : _rutaImagenGuardada != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.file(File(_rutaImagenGuardada!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _iconoFoto()))
+                  : _iconoFoto(),
         ),
       ),
     );
   }
 
+  Widget _iconoFoto() {
+    return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Icon(Icons.add_photo_alternate_outlined,
+          color: AppColors.colorInventario, size: 32),
+      const SizedBox(height: 6),
+      const Text('Agregar foto',
+          style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
+              color: AppColors.colorInventario, fontWeight: FontWeight.w500)),
+    ]);
+  }
+
+  Future<void> _elegirFoto() async {
+    final opcion = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.camera_alt_rounded,
+                color: AppColors.primary),
+            title: const Text('Tomar foto',
+                style: TextStyle(fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600)),
+            onTap: () => Navigator.pop(context, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_rounded,
+                color: AppColors.primary),
+            title: const Text('Elegir de galería',
+                style: TextStyle(fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600)),
+            onTap: () => Navigator.pop(context, ImageSource.gallery),
+          ),
+          if (_rutaImagenGuardada != null || _imagenSeleccionada != null)
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded,
+                  color: AppColors.danger),
+              title: const Text('Quitar foto',
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600, color: AppColors.danger)),
+              onTap: () {
+                setState(() {
+                  _imagenSeleccionada = null;
+                  _rutaImagenGuardada = null;
+                });
+                Navigator.pop(context);
+              },
+            ),
+        ]),
+      ),
+    );
+
+ if (opcion == null) return;
+    final foto = await _picker.pickImage(
+        source: opcion, maxWidth: 800, maxHeight: 800, imageQuality: 80);
+    if (foto != null) {
+      // Copiar a directorio permanente de la app
+      final dir = await getApplicationDocumentsDirectory();
+      final nombre = 'producto_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final rutaPermanente = path.join(dir.path, nombre);
+      final fotoFinal = await File(foto.path).copy(rutaPermanente);
+      setState(() {
+        _imagenSeleccionada = fotoFinal;
+        _rutaImagenGuardada = fotoFinal.path;
+      });
+    }
+  }
   Widget _buildSeccion(String titulo) {
     return Text(titulo.toUpperCase(),
       style: const TextStyle(fontFamily: 'Poppins', fontSize: 11,

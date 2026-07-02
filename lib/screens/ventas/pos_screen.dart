@@ -9,6 +9,7 @@ import '../../services/venta_service.dart';
 import '../../services/cliente_service.dart';
 import '../../models/cliente_model.dart';
 import 'historial_ventas_screen.dart';
+import 'dart:io';
 class _ItemCarrito {
   final ProductoModel producto;
   double cantidad;
@@ -713,12 +714,21 @@ class _ProdCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Row(children: [
-                Container(width: 28, height: 28,
+              Container(width: 28, height: 28,
                     decoration: BoxDecoration(
                       color: AppColors.colorVentas.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(7)),
-                    child: const Icon(Icons.inventory_2_rounded,
-                        color: AppColors.colorVentas, size: 16)),
+                    child: producto.fotoUrl != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(7),
+                            child: Image.file(
+                                File(producto.fotoUrl!),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                    Icons.inventory_2_rounded,
+                                    color: AppColors.colorVentas, size: 16)))
+                        : const Icon(Icons.inventory_2_rounded,
+                            color: AppColors.colorVentas, size: 16)),
                 const Spacer(),
                 if (producto.sinStock)
                   Container(

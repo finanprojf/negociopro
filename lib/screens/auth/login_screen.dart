@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
 import 'register_screen.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../../services/supabase_service.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -28,10 +29,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-    await Supabase.instance.client.auth.signInWithPassword(
+  await Supabase.instance.client.auth.signInWithPassword(
         email: _correoCtrl.text.trim(),
         password: _passCtrl.text,
       );
+      // Guardar empresaId en cache para modo offline
+      await SupabaseService.getEmpresaId();
       if (mounted) {
         setState(() => _loading = false);
         Navigator.of(context).pushAndRemoveUntil(

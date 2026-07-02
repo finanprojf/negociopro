@@ -63,7 +63,7 @@ class ProductoModel {
       stockActual: (map['stock_actual'] ?? 0).toDouble(),
       stockMinimo: (map['stock_minimo'] ?? 5).toDouble(),
       unidad: map['unidad'] ?? 'unidad',
-      activo: map['activo'] ?? true,
+     activo: map['activo'] == true || map['activo'] == 1,
       createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : null,
       updatedAt: map['updated_at'] != null ? DateTime.parse(map['updated_at']) : null,
       categoriaNombre: map['categoria_nombre'],

@@ -12,7 +12,7 @@ class VentaService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
-    if (SupabaseService.isOnline) {
+   if (await SupabaseService.isOnlineAsync) {
       try {
         List<dynamic> res;
 
@@ -136,19 +136,19 @@ class VentaService {
       });
     }
 
-    if (SupabaseService.isOnline) {
+    if (await SupabaseService.isOnlineAsync) {
       try {
         await _syncVenta(ventaId, ventaMap, items, ahora);
       } catch (_) {}
     }
 
-    if (SupabaseService.isOnline) {
+   if (await SupabaseService.isOnlineAsync) {
       try {
         await _syncVenta(ventaId, ventaMap, items, ahora);
       } catch (_) {}
     }
 
-    if (SupabaseService.isOnline) {
+   if (await SupabaseService.isOnlineAsync) {
       try {
         await _syncVenta(ventaId, ventaMap, items, ahora);
       } catch (_) {}

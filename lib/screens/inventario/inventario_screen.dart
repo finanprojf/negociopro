@@ -5,6 +5,7 @@ import '../../utils/formatters.dart';
 import 'producto_form_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/inventario_service.dart';
+import 'dart:io';
 class InventarioScreen extends StatefulWidget {
   const InventarioScreen({super.key});
 
@@ -346,10 +347,14 @@ class _ProductoTile extends StatelessWidget {
                 color: AppColors.colorInventario.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: producto.fotoUrl != null
+             child: producto.fotoUrl != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(producto.fotoUrl!, fit: BoxFit.cover),
+                      child: Image.file(File(producto.fotoUrl!), 
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                              Icons.inventory_2_rounded,
+                              color: AppColors.colorInventario, size: 26)),
                     )
                   : const Icon(Icons.inventory_2_rounded,
                       color: AppColors.colorInventario, size: 26),

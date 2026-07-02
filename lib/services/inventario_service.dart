@@ -14,7 +14,7 @@ class InventarioService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
-    if (SupabaseService.isOnline) {
+  if (await SupabaseService.isOnlineAsync) {
       try {
         final res = await SupabaseService.client
             .from('categorias')
@@ -36,7 +36,18 @@ class InventarioService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
-    if (SupabaseService.isOnline) {
+ final local = await LocalDatabase.consultar('productos', empresaId, 
+        orderBy: 'nombre ASC');
+    print('📦 Productos en SQLite: ${local.length}');
+    print('🌐 Online: ${await SupabaseService.isOnlineAsync}');
+   print('📋 Primer producto local: ${local.isNotEmpty ? local.first : 'vacío'}');
+    final productosLocal = local
+        .where((m) => !soloActivos || m['activo'] == 1)
+        .map((m) => ProductoModel.fromMap(m))
+        .toList();
+
+  // Si hay internet, traer de Supabase y actualizar local
+    if (await SupabaseService.isOnlineAsync) {
       try {
         var query = SupabaseService.client
             .from('productos')
@@ -44,6 +55,22 @@ class InventarioService {
             .eq('empresa_id', empresaId);
         if (soloActivos) query = query.eq('activo', true);
         final res = await query.order('nombre');
+        
+      // Guardar en local
+        for (final m in res) {
+          final map = Map<String, dynamic>.from(m);
+          if (m['categorias'] != null) {
+            map['categoria_nombre'] = m['categorias']['nombre'];
+          }
+          map.remove('categorias');
+          map['synced'] = 1;
+          try {
+            await LocalDatabase.insertar('productos', map);
+          } catch (e) {
+            print('❌ Error guardando producto local: $e');
+          }
+        }
+        
         return res.map((m) {
           final map = Map<String, dynamic>.from(m);
           if (m['categorias'] != null) {
@@ -54,16 +81,8 @@ class InventarioService {
       } catch (_) {}
     }
 
-    final local = await LocalDatabase.consultar('productos', empresaId, orderBy: 'nombre ASC');
-    return local
-        .where((m) => !soloActivos || m['activo'] == 1)
-        .map((m) => ProductoModel.fromMap(m))
-        .toList();
-  }
-
-  static Future<List<ProductoModel>> getProductosBajoStock() async {
-    final todos = await getProductos();
-    return todos.where((p) => p.stockBajo).toList();
+   // Si llegó aquí es porque no hay internet o falló Supabase
+    return productosLocal;
   }
 
  static Future<bool> guardarProducto(ProductoModel producto,
@@ -91,7 +110,7 @@ class InventarioService {
     }
 
     // Intentar sync online
-    if (SupabaseService.isOnline) {
+    if (await SupabaseService.isOnlineAsync) {
       try {
         final dataOnline = {
           ...producto.toMap(),
@@ -123,7 +142,7 @@ class InventarioService {
         'productos', {'stock_actual': cantidad, 'updated_at': DateTime.now().toIso8601String()},
         'id', productoId);
 
-    if (SupabaseService.isOnline) {
+   if (await SupabaseService.isOnlineAsync) {
       try {
         await SupabaseService.client
             .from('productos')

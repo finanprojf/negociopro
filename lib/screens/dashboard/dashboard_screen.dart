@@ -77,11 +77,14 @@ DateTime _toLocal(String dateStr) {
     }
   }
 
-  Future<void> _cargarResumen() async {
+ Future<void> _cargarResumen() async {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
       _empresaId = empresaId;
+
+      // Si no hay internet salir inmediatamente
+      if (!await SupabaseService.isOnlineAsync) return;
 
       final ahoraLocal = DateTime.now();
       final inicioLocal = DateTime(ahoraLocal.year, ahoraLocal.month, ahoraLocal.day);

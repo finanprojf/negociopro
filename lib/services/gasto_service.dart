@@ -10,7 +10,7 @@ class GastoService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
-    if (SupabaseService.isOnline) {
+    if (await SupabaseService.isOnlineAsync) {
       try {
         List<dynamic> res;
 
@@ -58,7 +58,7 @@ class GastoService {
 
     await LocalDatabase.insertar('gastos', map);
 
-    if (SupabaseService.isOnline) {
+   if (await SupabaseService.isOnlineAsync) {
       try {
         await SupabaseService.client.from('gastos').insert({
           ...gasto.toMap(),

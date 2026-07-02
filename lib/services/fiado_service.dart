@@ -10,7 +10,7 @@ class FiadoService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
-    if (SupabaseService.isOnline) {
+   if (await SupabaseService.isOnlineAsync) {
       try {
         List<dynamic> res;
         if (estado != null) {
@@ -79,7 +79,7 @@ class FiadoService {
       }, 'id', fiadoId);
     }
 
-    if (SupabaseService.isOnline) {
+    if (await SupabaseService.isOnlineAsync) {
       try {
         await SupabaseService.client.from('abonos_fiado').insert({
           'id': abonoId,

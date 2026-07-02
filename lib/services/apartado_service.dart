@@ -10,7 +10,7 @@ class ApartadoService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
-    if (SupabaseService.isOnline) {
+    if (await SupabaseService.isOnlineAsync) {
       try {
         List<dynamic> res;
         if (estado != null) {
@@ -86,7 +86,7 @@ class ApartadoService {
       });
     }
 
-    if (SupabaseService.isOnline) {
+    if (await SupabaseService.isOnlineAsync) {
       try {
         final onlineMap = Map<String, dynamic>.from(map)..remove('synced');
         await SupabaseService.client.from('apartados').insert(onlineMap);
@@ -139,7 +139,7 @@ class ApartadoService {
       }, 'id', apartadoId);
     }
 
-  if (SupabaseService.isOnline) {
+  if (await SupabaseService.isOnlineAsync) {
       try {
         await SupabaseService.client.from('abonos_apartado').insert({
           'id': abonoId,

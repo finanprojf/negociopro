@@ -10,7 +10,7 @@ class ClienteService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
-    if (SupabaseService.isOnline) {
+   if (await SupabaseService.isOnlineAsync) {
       try {
         final res = await SupabaseService.client
             .from('clientes')
@@ -46,7 +46,7 @@ class ClienteService {
 
     await LocalDatabase.insertar('clientes', map);
 
-   if (SupabaseService.isOnline) {
+  if (await SupabaseService.isOnlineAsync) {
       try {
        print('💾 guardando cliente empresaId: $empresaId');
        print('💾 guardando cliente empresaId: $empresaId');
@@ -77,7 +77,7 @@ class ClienteService {
         {'puntos_fidelidad': puntos, 'updated_at': DateTime.now().toIso8601String()},
         'id', clienteId);
 
-    if (SupabaseService.isOnline) {
+    if (await SupabaseService.isOnlineAsync) {
       try {
         await SupabaseService.client
             .from('clientes')
