@@ -6,7 +6,8 @@ import '../../services/supabase_service.dart';
 import 'fiado_cliente_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../ventas/pos_screen.dart';
-
+import '../../services/cliente_service.dart';
+import '../../services/fiado_service.dart';
 class _ClienteFiado {
   final ClienteModel cliente;
   final double totalPendiente;
@@ -48,29 +49,28 @@ class _FiadoScreenState extends State<FiadoScreen> {
     super.dispose();
   }
 
-  Future<void> _cargar() async {
+ Future<void> _cargar() async {
     setState(() => _loading = true);
     try {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
 
-      var query = SupabaseService.client
-          .from('fiados')
-          .select('*, clientes(id, nombre, telefono, cedula)')
-          .eq('empresa_id', empresaId);
+      final fiados = await FiadoService.getFiados(
+          estado: _filtro == 'todos' ? null : _filtro);
 
-      if (_filtro != 'todos') {
-        query = query.eq('estado', _filtro);
-      }
-
-      final res = await query.order('created_at', ascending: false);
+      // Cargar clientes locales para obtener info
+      final clientesLocal = await ClienteService.getClientes();
+      final clientesMap = {for (final c in clientesLocal) c.id: c};
 
       final Map<String, _ClienteFiado> mapa = {};
-      for (final f in res) {
-        if (f['clientes'] == null) continue;
-        final clienteData = f['clientes'] as Map<String, dynamic>;
-        final clienteId = clienteData['id'] as String;
-        final saldo = (f['saldo_pendiente'] as num).toDouble();
+      for (final f in fiados) {
+        final clienteId = f.clienteId;
+        final saldo = f.saldoPendiente;
+        final cliente = clientesMap[clienteId] ?? ClienteModel(
+          id: clienteId,
+          empresaId: empresaId,
+          nombre: 'Cliente',
+        );
 
         if (mapa.containsKey(clienteId)) {
           mapa[clienteId] = _ClienteFiado(
@@ -80,19 +80,12 @@ class _FiadoScreenState extends State<FiadoScreen> {
           );
         } else {
           mapa[clienteId] = _ClienteFiado(
-            cliente: ClienteModel(
-              id: clienteId,
-              empresaId: empresaId,
-              nombre: clienteData['nombre'] ?? '',
-              telefono: clienteData['telefono'],
-              cedula: clienteData['cedula'],
-            ),
+            cliente: cliente,
             totalPendiente: saldo,
             cantidadFiados: 1,
           );
         }
       }
-
       if (mounted) {
         setState(() {
           _clientes = mapa.values.toList()
@@ -120,19 +113,7 @@ class _FiadoScreenState extends State<FiadoScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Fiado')),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const PosScreen())),
-        backgroundColor: AppColors.colorFiado,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.handshake_outlined, color: Colors.white, size: 20),
-            Text('Fiado', style: GoogleFonts.poppins(
-                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 9)),
-          ],
-        ),
-      ),
+    
       body: Column(children: [
         _buildResumenTotal(),
         _buildBuscadorFiltros(),

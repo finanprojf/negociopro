@@ -187,7 +187,51 @@ class _ReportesScreenState extends State<ReportesScreen> {
     if (valor >= 1000) return 'RD\$ ${(valor / 1000).toStringAsFixed(1)}k';
     return AppFormatters.moneda(valor);
   }
+Widget _buildGananciaReal() {
+    final ventas = _actual['ventas'] ?? 0;
+    final gastos = _actual['gastos'] ?? 0;
+    final neto = ventas - gastos;
+    final esPositivo = neto >= 0;
 
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: esPositivo 
+            ? AppColors.successSurface 
+            : AppColors.dangerSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: esPositivo 
+              ? AppColors.success.withValues(alpha: 0.3)
+              : AppColors.danger.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(children: [
+        Icon(esPositivo 
+            ? Icons.trending_up_rounded 
+            : Icons.trending_down_rounded,
+            color: esPositivo ? AppColors.success : AppColors.danger,
+            size: 32),
+        const SizedBox(width: 16),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Ganancia neta real',
+              style: GoogleFonts.poppins(fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
+          Text('Ventas − Gastos del período',
+              style: GoogleFonts.poppins(fontSize: 11,
+                  color: AppColors.textMuted)),
+        ])),
+        Text(AppFormatters.moneda(neto.abs()),
+            style: GoogleFonts.poppins(fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: esPositivo ? AppColors.success : AppColors.danger)),
+        if (!esPositivo)
+          Text(' 📉', style: GoogleFonts.poppins(fontSize: 16)),
+      ]),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -208,7 +252,9 @@ class _ReportesScreenState extends State<ReportesScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildSelectorPeriodo(),
                   const SizedBox(height: 20),
-                  _buildKPIs(),
+                _buildKPIs(),
+                  const SizedBox(height: 12),
+                  _buildGananciaReal(),
                   const SizedBox(height: 24),
                   _buildGraficoBarras(),
                   const SizedBox(height: 24),
@@ -270,7 +316,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
           sub: 'total', icon: Icons.receipt_long_rounded,
           color: AppColors.colorGastos)),
       const SizedBox(width: 8),
-      Expanded(child: _KPICard(label: 'Margen',
+    Expanded(child: _KPICard(label: 'Margen',
           valor: '${_margen.toStringAsFixed(1)}%',
           sub: 'rentabilidad', icon: Icons.pie_chart_rounded,
           color: margenColor)),

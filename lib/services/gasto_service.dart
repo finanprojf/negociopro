@@ -10,10 +10,14 @@ class GastoService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
+   // Cargar local primero
+    final local = await LocalDatabase.consultar(
+        'gastos', empresaId, orderBy: 'created_at DESC');
+    final gastosLocal = local.map((m) => GastoModel.fromMap(m)).toList();
+
     if (await SupabaseService.isOnlineAsync) {
       try {
         List<dynamic> res;
-
         if (fecha != null) {
           final inicio = DateTime(fecha.year, fecha.month, 1);
           final fin = DateTime(fecha.year, fecha.month + 1, 1);
@@ -31,14 +35,23 @@ class GastoService {
               .eq('empresa_id', empresaId)
               .order('fecha', ascending: false);
         }
-
-        return res.map((m) => GastoModel.fromMap(m)).toList();
+        // Guardar en local
+        for (final m in res) {
+          final map = Map<String, dynamic>.from(m);
+          map['synced'] = 1;
+          await LocalDatabase.insertar('gastos', map);
+        }
+       final gastosOnline = res.map((m) => GastoModel.fromMap(m)).toList();
+        final idsOnline = gastosOnline.map((g) => g.id).toSet();
+        final gastosPendientes = gastosLocal
+            .where((g) => !idsOnline.contains(g.id))
+            .toList();
+        return [...gastosOnline, ...gastosPendientes]
+          ..sort((a, b) => b.fecha.compareTo(a.fecha));
       } catch (_) {}
     }
 
-    final local = await LocalDatabase.consultar(
-        'gastos', empresaId, orderBy: 'fecha DESC');
-    return local.map((m) => GastoModel.fromMap(m)).toList();
+    return gastosLocal;
   }
 
   static Future<bool> guardarGasto(GastoModel gasto) async {

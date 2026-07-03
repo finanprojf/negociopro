@@ -12,7 +12,11 @@ class VentaService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
-   if (await SupabaseService.isOnlineAsync) {
+ // Cargar local primero
+    final local = await LocalDatabase.consultar('ventas', empresaId);
+    final ventasLocal = local.map((m) => VentaModel.fromMap(m)).toList();
+
+    if (await SupabaseService.isOnlineAsync) {
       try {
         List<dynamic> res;
 
@@ -33,19 +37,39 @@ class VentaService {
               .eq('empresa_id', empresaId)
               .order('created_at', ascending: false);
         }
-
-        return res.map((m) {
+// Guardar en local
+        for (final m in res) {
+          final map = Map<String, dynamic>.from(m);
+          map.remove('clientes');
+          map.remove('detalle_ventas');
+          map['synced'] = 1;
+          try {
+            await LocalDatabase.insertar('ventas', map);
+          } catch (_) {}
+        }
+       final ventasOnline = res.map((m) {
           final map = Map<String, dynamic>.from(m);
           if (m['clientes'] != null) {
             map['cliente_nombre'] = m['clientes']['nombre'];
           }
           return VentaModel.fromMap(map);
         }).toList();
+// Releer SQLite completo después de guardar
+        final localActualizado = await LocalDatabase.consultar('ventas', empresaId);
+        final todasLocal = localActualizado.map((m) => VentaModel.fromMap(m)).toList();
+        final idsOnline = ventasOnline.map((v) => v.id).toSet();
+        final ventasNoEnOnline = todasLocal
+            .where((v) => !idsOnline.contains(v.id))
+            .toList();
+        
+        return [...ventasOnline, ...ventasNoEnOnline]
+          ..sort((a, b) => (b.createdAt ?? DateTime.now())
+              .compareTo(a.createdAt ?? DateTime.now()));
+       
       } catch (_) {}
     }
 
-    final local = await LocalDatabase.consultar('ventas', empresaId);
-    return local.map((m) => VentaModel.fromMap(m)).toList();
+  return ventasLocal;
   }
 
   static Future<double> getTotalVentasHoy() async {
@@ -56,7 +80,25 @@ class VentaService {
     }
     return total;
   }
-
+static Future<void> sincronizarPendientes() async {
+    if (!await SupabaseService.isOnlineAsync) return;
+    
+    final pendientes = await LocalDatabase.consultarPendientesSync('ventas');
+    for (final v in pendientes) {
+      try {
+        final items = await LocalDatabase.database.then((db) => 
+            db.query('detalle_ventas', where: 'venta_id = ?', whereArgs: [v['id']]));
+        
+        final ventaMap = Map<String, dynamic>.from(v);
+        await _syncVenta(
+          v['id'] as String,
+          ventaMap,
+          items.map((i) => {'producto': null, 'item': i}).toList(),
+          v['created_at'] as String,
+        );
+      } catch (_) {}
+    }
+  }
   static Future<bool> registrarVenta({
     required List<Map<String, dynamic>> items,
     required String tipoPago,
@@ -136,17 +178,7 @@ class VentaService {
       });
     }
 
-    if (await SupabaseService.isOnlineAsync) {
-      try {
-        await _syncVenta(ventaId, ventaMap, items, ahora);
-      } catch (_) {}
-    }
-
-   if (await SupabaseService.isOnlineAsync) {
-      try {
-        await _syncVenta(ventaId, ventaMap, items, ahora);
-      } catch (_) {}
-    }
+   
 
    if (await SupabaseService.isOnlineAsync) {
       try {
@@ -181,19 +213,24 @@ class VentaService {
     await SupabaseService.client
         .from('ventas')
         .insert({'id': ventaId, ...ventaOnline});
-// Si es fiado, crear en Supabase también
+// Si es fiado, sincronizar el que ya existe en SQLite
     if (ventaMap['tipo_pago'] == 'fiado' && ventaMap['cliente_id'] != null) {
-     final saldoFiado = (ventaMap['total'] as num).toDouble() - 
-                   (ventaMap['monto_pagado'] as num).toDouble();
-      await SupabaseService.client.from('fiados').insert({
-        'id': const Uuid().v4(),
-        'empresa_id': ventaMap['empresa_id'],
-        'cliente_id': ventaMap['cliente_id'],
-        'venta_id': ventaId,
-        'monto_original': saldoFiado,
-        'saldo_pendiente': saldoFiado,
-        'estado': 'activo',
-      });
+      final db = await LocalDatabase.database;
+      final fiadosLocal = await db.query('fiados',
+          where: 'venta_id = ?', whereArgs: [ventaId]);
+      if (fiadosLocal.isNotEmpty) {
+        final f = fiadosLocal.first;
+        await SupabaseService.client.from('fiados').insert({
+          'id': f['id'],
+          'empresa_id': f['empresa_id'],
+          'cliente_id': f['cliente_id'],
+          'venta_id': ventaId,
+          'monto_original': f['monto_original'],
+          'saldo_pendiente': f['saldo_pendiente'],
+          'estado': f['estado'],
+        });
+        await LocalDatabase.marcarSynced('fiados', f['id'] as String);
+      }
     }
     for (final item in items) {
       final p = item['producto'] as ProductoModel;

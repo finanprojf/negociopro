@@ -322,11 +322,17 @@ Future<void> _cargarClientes() async {
         mainAxisSpacing: 8,
       ),
       itemCount: _filtrados.length,
-      itemBuilder: (_, i) => _ProdCard(
-        producto: _filtrados[i],
-        enCarrito: _carrito.any((c) => c.producto.id == _filtrados[i].id),
-        onTap: () => _agregar(_filtrados[i]),
-      ),
+    itemBuilder: (_, i) {
+        final cantidad = _carrito
+            .where((c) => c.producto.id == _filtrados[i].id)
+            .fold(0, (s, c) => s + c.cantidad.toInt());
+        return _ProdCard(
+          producto: _filtrados[i],
+          enCarrito: cantidad > 0,
+          cantidadEnCarrito: cantidad,
+          onTap: () => _agregar(_filtrados[i]),
+        );
+      },
     );
   }
 
@@ -439,8 +445,33 @@ Future<void> _cargarClientes() async {
     }),
   ),
   const SizedBox(height: 8),
-  SizedBox(
-    height: 160,
+              GestureDetector(
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _agregarClienteRapido();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySurface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.primary),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.person_add_rounded,
+                        color: AppColors.primary, size: 18),
+                    const SizedBox(width: 8),
+                    Text('+ Nuevo cliente',
+                        style: GoogleFonts.poppins(fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary)),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 8),
+  const SizedBox(height: 8),
+ SizedBox(
+    height: 120,
     child: ListView.builder(
       itemCount: _clientesFiltrados.length,
       itemBuilder: (_, i) {
@@ -649,14 +680,14 @@ Future<void> _cargarClientes() async {
                   }
 
                   Navigator.pop(ctx);
-                  await VentaService.registrarVenta(
+                await VentaService.registrarVenta(
                     items: _carrito.map((i) => {
                       'producto': i.producto,
                       'cantidad': i.cantidad,
                     }).toList(),
                     tipoPago: _tipoPago,
                     clienteId: _clienteSeleccionado,
-                    montoPagado: double.tryParse(ctrl.text) ?? _total,
+                    montoPagado: _tipoPago == 'fiado' ? 0 : (double.tryParse(ctrl.text) ?? _total),
                   );
                   setState(() {
                     _carrito.clear();
@@ -689,9 +720,12 @@ Future<void> _cargarClientes() async {
 class _ProdCard extends StatelessWidget {
   final ProductoModel producto;
   final bool enCarrito;
+  final int cantidadEnCarrito;
   final VoidCallback onTap;
   const _ProdCard({required this.producto,
-      required this.enCarrito, required this.onTap});
+      required this.enCarrito, 
+      required this.cantidadEnCarrito,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -755,13 +789,37 @@ class _ProdCard extends StatelessWidget {
                           ? AppColors.textMuted : AppColors.primary)),
             ],
           ),
-          if (enCarrito && !producto.sinStock)
+        // Stock en esquina superior derecha
             Positioned(top: 0, right: 0,
-              child: Container(width: 18, height: 18,
-                  decoration: const BoxDecoration(
-                      color: AppColors.primary, shape: BoxShape.circle),
-                  child: const Icon(Icons.check_rounded,
-                      color: Colors.white, size: 12))),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: producto.sinStock 
+                      ? AppColors.danger
+                      : producto.stockBajo 
+                          ? AppColors.warning 
+                          : AppColors.textMuted,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('${producto.stockActual.toInt()}',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 9, fontWeight: FontWeight.w700,
+                        color: Colors.white)),
+              )),
+            // Cantidad en carrito
+            if (enCarrito && !producto.sinStock)
+              Positioned(bottom: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text('${cantidadEnCarrito}x',
+                      style: const TextStyle(fontFamily: 'Poppins',
+                          fontSize: 11, fontWeight: FontWeight.w700,
+                          color: Colors.white)),
+                )),
         ]),
       ),
     );

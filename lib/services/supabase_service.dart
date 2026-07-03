@@ -12,6 +12,8 @@ class SupabaseService {
   }
 
 static String? _empresaIdCache;
+static bool? _onlineCache;
+static DateTime? _onlineCheckedAt;
 
   static Future<String?> getEmpresaId() async {
     // 1. Si ya está en memoria, usarlo directo
@@ -44,19 +46,39 @@ static String? _empresaIdCache;
       return null;
     }
   }
+static Future<void> limpiarCache() async {
+    _empresaIdCache = null;
+    _onlineCache = null;
+    _onlineCheckedAt = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('empresa_id');
+  }
 
- static Future<bool> get isOnlineAsync async {
+  static bool get isOnline => true;
+static Future<bool> get isOnlineAsync async {
+    // Reusar resultado por 5 segundos
+    if (_onlineCache != null && _onlineCheckedAt != null) {
+      final diff = DateTime.now().difference(_onlineCheckedAt!);
+      if (diff.inSeconds < 5) return _onlineCache!;
+    }
     try {
       final result = await Connectivity().checkConnectivity();
-      if (result == ConnectivityResult.none) return false;
-      // Verificar conexión real con timeout corto
-      final response = await SupabaseService.client
+      if (result == ConnectivityResult.none) {
+        _onlineCache = false;
+        _onlineCheckedAt = DateTime.now();
+        return false;
+      }
+      await SupabaseService.client
           .from('empresas')
           .select('id')
           .limit(1)
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(seconds: 1));
+      _onlineCache = true;
+      _onlineCheckedAt = DateTime.now();
       return true;
     } catch (_) {
+      _onlineCache = false;
+      _onlineCheckedAt = DateTime.now();
       return false;
     }
   }

@@ -13,7 +13,8 @@ import '../empresa/empresa_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import 'dart:async';
-
+import '../../services/local_database.dart';
+import '../../services/venta_service.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -82,9 +83,59 @@ DateTime _toLocal(String dateStr) {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
       _empresaId = empresaId;
+      // Sincronizar ventas pendientes
+      await VentaService.sincronizarPendientes();
 
-      // Si no hay internet salir inmediatamente
-      if (!await SupabaseService.isOnlineAsync) return;
+    // Si no hay internet cargar desde SQLite
+      if (!await SupabaseService.isOnlineAsync) {
+        final db = await LocalDatabase.database;
+        final ahoraLocal = DateTime.now();
+        final inicioLocal = DateTime(ahoraLocal.year, ahoraLocal.month, ahoraLocal.day);
+        final finLocal = inicioLocal.add(const Duration(days: 1));
+        final inicioUtc = inicioLocal.toUtc().toIso8601String();
+        final finUtc = finLocal.toUtc().toIso8601String();
+
+        final ventasHoy = await db.query('ventas',
+            where: 'empresa_id = ? AND created_at >= ? AND created_at < ? AND estado = ? AND tipo_pago != ?',
+            whereArgs: [empresaId, inicioUtc, finUtc, 'completada', 'fiado']);
+
+        double totalVentas = 0;
+        double gananciaReal = 0;
+
+        for (final v in ventasHoy) {
+          totalVentas += (v['total'] as num).toDouble();
+          final detalles = await db.query('detalle_ventas',
+              where: 'venta_id = ?', whereArgs: [v['id']]);
+          for (final d in detalles) {
+            final productos = await db.query('productos',
+                where: 'id = ?', whereArgs: [d['producto_id']]);
+            if (productos.isNotEmpty) {
+              final precioVenta = (d['precio_unitario'] as num).toDouble();
+              final precioCompra = (productos.first['precio_compra'] as num).toDouble();
+              final cantidad = (d['cantidad'] as num).toDouble();
+              gananciaReal += (precioVenta - precioCompra) * cantidad;
+            }
+          }
+        }
+
+        // Stock
+        final stockBajo = await db.query('productos',
+            where: 'empresa_id = ? AND activo = ?',
+            whereArgs: [empresaId, 1]);
+
+        if (mounted) {
+          setState(() {
+            _ventasHoy = totalVentas;
+            _gananciasHoy = gananciaReal;
+            _productosLowStock = stockBajo.where((p) =>
+                (p['stock_actual'] as num) > 0 &&
+                (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
+            _productosSinStock = stockBajo.where((p) =>
+                (p['stock_actual'] as num) <= 0).length;
+          });
+        }
+        return;
+      }
 
       final ahoraLocal = DateTime.now();
       final inicioLocal = DateTime(ahoraLocal.year, ahoraLocal.month, ahoraLocal.day);
@@ -102,27 +153,65 @@ DateTime _toLocal(String dateStr) {
 
       double totalVentas = 0;
       final ventasIds = <String>[];
-      for (final v in ventas) {
+    // También incluir ventas locales no sincronizadas
+      final db = await LocalDatabase.database;
+      final ventasLocalHoy = await db.query('ventas',
+          where: 'empresa_id = ? AND created_at >= ? AND created_at < ? AND estado = ? AND synced = ?',
+          whereArgs: [empresaId, inicioUtc, finUtc, 'completada', 0]);
+
+      final idsOnline = (ventas as List).map((v) => v['id'] as String).toSet();
+      final ventasLocalPendientes = ventasLocalHoy
+          .where((v) => !idsOnline.contains(v['id'] as String))
+          .toList();
+
+      final todasVentas = [...ventas, ...ventasLocalPendientes];
+
+      for (final v in todasVentas) {
         if (v['tipo_pago'] != 'fiado') {
           totalVentas += (v['total'] as num).toDouble();
           ventasIds.add(v['id'] as String);
         }
       }
 
-      double gananciaReal = 0;
+    double gananciaReal = 0;
       if (ventasIds.isNotEmpty) {
-        final detalles = await SupabaseService.client
-            .from('detalle_ventas')
-            .select('cantidad, precio_unitario, productos(precio_compra)')
-            .inFilter('venta_id', ventasIds);
+        // IDs de ventas online
+        final idsOnlineVentas = (ventas as List).map((v) => v['id'] as String).toSet();
+        final idsOffline = ventasIds.where((id) => !idsOnlineVentas.contains(id)).toList();
 
-        for (final d in detalles) {
-          final precioVenta = (d['precio_unitario'] as num).toDouble();
-          final precioCompra = d['productos'] != null
-              ? (d['productos']['precio_compra'] as num).toDouble()
-              : 0.0;
-          final cantidad = (d['cantidad'] as num).toDouble();
-          gananciaReal += (precioVenta - precioCompra) * cantidad;
+        // Ganancias de ventas online
+        if (idsOnlineVentas.isNotEmpty) {
+          final detalles = await SupabaseService.client
+              .from('detalle_ventas')
+              .select('cantidad, precio_unitario, productos(precio_compra)')
+              .inFilter('venta_id', idsOnlineVentas.toList());
+
+          for (final d in detalles) {
+            final precioVenta = (d['precio_unitario'] as num).toDouble();
+            final precioCompra = d['productos'] != null
+                ? (d['productos']['precio_compra'] as num).toDouble()
+                : 0.0;
+            final cantidad = (d['cantidad'] as num).toDouble();
+            gananciaReal += (precioVenta - precioCompra) * cantidad;
+          }
+        }
+
+        // Ganancias de ventas offline
+        if (idsOffline.isNotEmpty) {
+          for (final ventaId in idsOffline) {
+            final detalles = await db.query('detalle_ventas',
+                where: 'venta_id = ?', whereArgs: [ventaId]);
+            for (final d in detalles) {
+              final productos = await db.query('productos',
+                  where: 'id = ?', whereArgs: [d['producto_id']]);
+              if (productos.isNotEmpty) {
+                final precioVenta = (d['precio_unitario'] as num).toDouble();
+                final precioCompra = (productos.first['precio_compra'] as num).toDouble();
+                final cantidad = (d['cantidad'] as num).toDouble();
+                gananciaReal += (precioVenta - precioCompra) * cantidad;
+              }
+            }
+          }
         }
       }
 

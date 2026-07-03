@@ -60,7 +60,7 @@ class ClienteModel {
       notas: map['notas'],
       puntosFidelidad: map['puntos_fidelidad'] ?? 0,
       limiteCredito: (map['limite_credito'] ?? 0).toDouble(),
-      activo: map['activo'] ?? true,
+activo: map['activo'] == true || map['activo'] == 1,
       createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : null,
       saldoFiado: map['saldo_fiado'] != null ? (map['saldo_fiado']).toDouble() : null,
       totalCompras: map['total_compras'],

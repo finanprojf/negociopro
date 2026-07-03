@@ -5,7 +5,7 @@ import '../../models/cliente_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/fiado_service.dart';
 import '../../services/supabase_service.dart';
-
+import '../../services/local_database.dart';
 class FiadoClienteScreen extends StatefulWidget {
   final ClienteModel cliente;
   const FiadoClienteScreen({super.key, required this.cliente});
@@ -30,24 +30,100 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
     _cargar();
   }
 
-  Future<void> _cargar() async {
+ Future<void> _cargar() async {
     setState(() => _loading = true);
     try {
-      final res = await SupabaseService.client
-          .from('fiados')
-          .select('''
-            *,
-            ventas(
-              numero_venta,
-              detalle_ventas(nombre_producto, cantidad, precio_unitario)
-            )
-          ''')
-          .eq('cliente_id', widget.cliente.id)
-          .order('created_at', ascending: false);
+      // Cargar local primero
+      final db = await LocalDatabase.database;
+      final localFiados = await db.query('fiados',
+          where: 'cliente_id = ?',
+          whereArgs: [widget.cliente.id],
+          orderBy: 'created_at DESC');
+
+      if (await SupabaseService.isOnlineAsync) {
+        try {
+          final res = await SupabaseService.client
+              .from('fiados')
+              .select('''
+                *,
+                ventas(
+                  numero_venta,
+                  detalle_ventas(nombre_producto, cantidad, precio_unitario)
+                )
+              ''')
+              .eq('cliente_id', widget.cliente.id)
+              .order('created_at', ascending: false);
+
+          // Guardar en local
+          for (final m in res) {
+            final map = Map<String, dynamic>.from(m);
+            map.remove('ventas');
+            map['synced'] = 1;
+            try { await LocalDatabase.insertar('fiados', map); } catch (_) {}
+          }
+
+        // Combinar online con locales no sincronizados
+          final idsOnline = res.map((m) => m['id'] as String).toSet();
+          final localesPendientes = localFiados
+              .where((m) => !idsOnline.contains(m['id'] as String))
+              .toList();
+         // Agregar detalles de venta a los locales pendientes
+          final pendientesConDetalles = await Future.wait(
+            localesPendientes.map((f) async {
+              final map = Map<String, dynamic>.from(f);
+              final ventaId = f['venta_id'] as String?;
+              if (ventaId != null) {
+                final db = await LocalDatabase.database;
+                final detalles = await db.query('detalle_ventas',
+                    where: 'venta_id = ?', whereArgs: [ventaId]);
+                if (detalles.isNotEmpty) {
+                  map['ventas'] = {
+                    'numero_venta': null,
+                    'detalle_ventas': detalles,
+                  };
+                }
+              }
+              return map;
+            }).toList(),
+          );
+
+          final combinados = [
+            ...List<Map<String, dynamic>>.from(res),
+            ...pendientesConDetalles,
+          ];
+          if (mounted) {
+            setState(() {
+              _fiados = combinados;
+              _loading = false;
+            });
+          }
+          return;
+        } catch (_) {}
+      }
+
+    // Sin internet usar local con detalles de venta
+      final fiadosConDetalles = await Future.wait(
+        localFiados.map((f) async {
+          final map = Map<String, dynamic>.from(f);
+          final ventaId = f['venta_id'] as String?;
+          if (ventaId != null) {
+            final db = await LocalDatabase.database;
+            final detalles = await db.query('detalle_ventas',
+                where: 'venta_id = ?', whereArgs: [ventaId]);
+            if (detalles.isNotEmpty) {
+              map['ventas'] = {
+                'numero_venta': null,
+                'detalle_ventas': detalles,
+              };
+            }
+          }
+          return map;
+        }).toList(),
+      );
 
       if (mounted) {
         setState(() {
-          _fiados = List<Map<String, dynamic>>.from(res);
+          _fiados = fiadosConDetalles;
           _loading = false;
         });
       }
@@ -83,7 +159,8 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
     if (confirm != true) return;
 
     try {
-      await SupabaseService.client.from('fiados').delete().eq('id', fiado['id']);
+    await SupabaseService.client.from('fiados').delete().eq('id', fiado['id']);
+      await LocalDatabase.eliminar('fiados', 'id', fiado['id'] as String);
       _cargar();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -222,7 +299,7 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
         final f = _fiados[i];
         final estado = f['estado'] as String;
         final saldo = (f['saldo_pendiente'] as num).toDouble();
-        final original = (f['monto_original'] as num).toDouble();
+      final original = ((f['monto_original'] ?? f['saldo_pendiente'] ?? 0) as num).toDouble();
         final pagado = original - saldo;
         final porcentaje = original > 0 ? pagado / original : 0.0;
 

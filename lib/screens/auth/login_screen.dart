@@ -29,11 +29,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-  await Supabase.instance.client.auth.signInWithPassword(
+ await Supabase.instance.client.auth.signInWithPassword(
         email: _correoCtrl.text.trim(),
         password: _passCtrl.text,
       );
-      // Guardar empresaId en cache para modo offline
+      // Limpiar cache anterior y guardar nuevo empresaId
+      await SupabaseService.limpiarCache();
       await SupabaseService.getEmpresaId();
       if (mounted) {
         setState(() => _loading = false);

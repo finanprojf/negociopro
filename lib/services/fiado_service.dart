@@ -10,7 +10,14 @@ class FiadoService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
-   if (await SupabaseService.isOnlineAsync) {
+ // Cargar local primero
+    final local = await LocalDatabase.consultar('fiados', empresaId);
+    var fiadosLocal = local.map((m) => FiadoModel.fromMap(m)).toList();
+    if (estado != null) {
+      fiadosLocal = fiadosLocal.where((f) => f.estado == estado).toList();
+    }
+
+    if (await SupabaseService.isOnlineAsync) {
       try {
         List<dynamic> res;
         if (estado != null) {
@@ -27,16 +34,23 @@ class FiadoService {
               .eq('empresa_id', empresaId)
               .order('created_at', ascending: false);
         }
-        return res.map((m) => FiadoModel.fromMap(m)).toList();
+      final fiadosOnline = res.map((m) => FiadoModel.fromMap(m)).toList();
+        // Guardar en local
+        for (final m in res) {
+          final map = Map<String, dynamic>.from(m);
+          map.remove('clientes');
+          map['synced'] = 1;
+          try { await LocalDatabase.insertar('fiados', map); } catch (_) {}
+        }
+        final idsOnline = fiadosOnline.map((f) => f.id).toSet();
+        final localesPendientes = fiadosLocal
+            .where((f) => !idsOnline.contains(f.id))
+            .toList();
+        return [...fiadosOnline, ...localesPendientes];
       } catch (_) {}
     }
 
-    final local = await LocalDatabase.consultar('fiados', empresaId);
-    var lista = local.map((m) => FiadoModel.fromMap(m)).toList();
-    if (estado != null) {
-      lista = lista.where((f) => f.estado == estado).toList();
-    }
-    return lista;
+    return fiadosLocal;
   }
 
   static Future<bool> registrarAbono(

@@ -10,7 +10,15 @@ class ClienteService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
-   if (await SupabaseService.isOnlineAsync) {
+    // Cargar local primero siempre
+    final local = await LocalDatabase.consultar('clientes', empresaId, orderBy: 'nombre ASC');
+    final clientesLocal = local
+        .where((m) => m['activo'] == 1)
+        .map((m) => ClienteModel.fromMap(m))
+        .toList();
+
+    // Si hay internet actualizar local y devolver Supabase
+    if (await SupabaseService.isOnlineAsync) {
       try {
         final res = await SupabaseService.client
             .from('clientes')
@@ -18,15 +26,20 @@ class ClienteService {
             .eq('empresa_id', empresaId)
             .eq('activo', true)
             .order('nombre');
-        print('✅ Clientes cargados: ${res.length}');
+        // Guardar en local
+       for (final m in res) {
+          final map = Map<String, dynamic>.from(m);
+          map['synced'] = 1;
+          map['activo'] = m['activo'] == true ? 1 : 0;
+          await LocalDatabase.insertar('clientes', map);
+        }
         return res.map((m) => ClienteModel.fromMap(m)).toList();
-    } catch (e) {
+      } catch (e) {
         print('❌ Error getClientes: $e');
       }
     }
 
-    final local = await LocalDatabase.consultar('clientes', empresaId, orderBy: 'nombre ASC');
-    return local.where((m) => m['activo'] == 1).map((m) => ClienteModel.fromMap(m)).toList();
+    return clientesLocal;
   }
 
   
