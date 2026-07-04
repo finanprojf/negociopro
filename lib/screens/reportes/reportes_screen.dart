@@ -17,13 +17,12 @@ class _ReportesScreenState extends State<ReportesScreen> {
   bool _loading = false;
 
   Map<String, Map<String, double>> _datos = {
-    'hoy':    {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0},
-    'semana': {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0},
-    'mes':    {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0},
+    'hoy':    {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0, 'cobrado_fiado': 0, 'caja_real': 0},
+    'semana': {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0, 'cobrado_fiado': 0, 'caja_real': 0},
+    'mes':    {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0, 'cobrado_fiado': 0, 'caja_real': 0},
   };
 
   List<Map<String, dynamic>> _productosTop = [];
-  List<Map<String, dynamic>> _productosMenos = [];
 
   Map<String, double> get _actual => _datos[_periodo]!;
 
@@ -46,7 +45,6 @@ class _ReportesScreenState extends State<ReportesScreen> {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
 
-      // Usar hora LOCAL del dispositivo (RD) para definir los rangos.
       final ahoraLocal = DateTime.now();
       final inicioHoyLocal = DateTime(ahoraLocal.year, ahoraLocal.month, ahoraLocal.day);
       final inicioSemanaLocal = inicioHoyLocal.subtract(Duration(days: ahoraLocal.weekday - 1));
@@ -56,9 +54,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
       for (final periodo in ['hoy', 'semana', 'mes']) {
         final inicioLocal = periodo == 'hoy' ? inicioHoyLocal
             : periodo == 'semana' ? inicioSemanaLocal : inicioMesLocal;
-        // El fin siempre es "ahora" excepto para hoy, que es el final del día actual
         final finLocal = periodo == 'hoy' ? finHoyLocal : ahoraLocal.add(const Duration(minutes: 1));
-
         final inicioUtc = inicioLocal.toUtc().toIso8601String();
         final finUtc = finLocal.toUtc().toIso8601String();
 
@@ -73,13 +69,14 @@ class _ReportesScreenState extends State<ReportesScreen> {
         double totalVentas = 0;
         double totalFiado = 0;
         final ventasIds = <String>[];
+
         for (final v in ventas) {
           if (v['tipo_pago'] != 'fiado') {
             totalVentas += (v['total'] as num).toDouble();
-            ventasIds.add(v['id'] as String);
           } else {
             totalFiado += (v['total'] as num).toDouble();
           }
+          ventasIds.add(v['id'] as String);
         }
 
         double gananciaReal = 0;
@@ -111,6 +108,19 @@ class _ReportesScreenState extends State<ReportesScreen> {
           totalGastos += (g['monto'] as num).toDouble();
         }
 
+        // Cobros de fiado
+        final abonosFiado = await SupabaseService.client
+            .from('abonos_fiado')
+            .select('monto')
+            .eq('empresa_id', empresaId)
+            .gte('created_at', inicioUtc)
+            .lt('created_at', finUtc);
+
+        double totalCobradoFiado = 0;
+        for (final a in abonosFiado) {
+          totalCobradoFiado += (a['monto'] as num).toDouble();
+        }
+
         final abonos = await SupabaseService.client
             .from('abonos_apartado')
             .select('monto')
@@ -128,6 +138,8 @@ class _ReportesScreenState extends State<ReportesScreen> {
           'gastos': totalGastos,
           'ganancia': gananciaReal,
           'fiado': totalFiado,
+          'cobrado_fiado': totalCobradoFiado,
+          'caja_real': totalVentas + totalCobradoFiado,
           'apartados': totalApartados,
         };
       }
@@ -160,9 +172,6 @@ class _ReportesScreenState extends State<ReportesScreen> {
         if (mounted) {
           setState(() {
             _productosTop = sorted.take(5).toList();
-            _productosMenos = sorted.length > 5
-                ? sorted.reversed.take(5).toList()
-                : sorted.reversed.toList();
             _loading = false;
           });
         }
@@ -187,51 +196,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
     if (valor >= 1000) return 'RD\$ ${(valor / 1000).toStringAsFixed(1)}k';
     return AppFormatters.moneda(valor);
   }
-Widget _buildGananciaReal() {
-    final ventas = _actual['ventas'] ?? 0;
-    final gastos = _actual['gastos'] ?? 0;
-    final neto = ventas - gastos;
-    final esPositivo = neto >= 0;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: esPositivo 
-            ? AppColors.successSurface 
-            : AppColors.dangerSurface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: esPositivo 
-              ? AppColors.success.withValues(alpha: 0.3)
-              : AppColors.danger.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Row(children: [
-        Icon(esPositivo 
-            ? Icons.trending_up_rounded 
-            : Icons.trending_down_rounded,
-            color: esPositivo ? AppColors.success : AppColors.danger,
-            size: 32),
-        const SizedBox(width: 16),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Ganancia neta real',
-              style: GoogleFonts.poppins(fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary)),
-          Text('Ventas − Gastos del período',
-              style: GoogleFonts.poppins(fontSize: 11,
-                  color: AppColors.textMuted)),
-        ])),
-        Text(AppFormatters.moneda(neto.abs()),
-            style: GoogleFonts.poppins(fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: esPositivo ? AppColors.success : AppColors.danger)),
-        if (!esPositivo)
-          Text(' 📉', style: GoogleFonts.poppins(fontSize: 16)),
-      ]),
-    );
-  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -252,9 +217,11 @@ Widget _buildGananciaReal() {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildSelectorPeriodo(),
                   const SizedBox(height: 20),
-                _buildKPIs(),
+                  _buildKPIs(),
                   const SizedBox(height: 12),
                   _buildGananciaReal(),
+                  const SizedBox(height: 12),
+                  _buildResumenFiado(),
                   const SizedBox(height: 24),
                   _buildGraficoBarras(),
                   const SizedBox(height: 24),
@@ -316,11 +283,74 @@ Widget _buildGananciaReal() {
           sub: 'total', icon: Icons.receipt_long_rounded,
           color: AppColors.colorGastos)),
       const SizedBox(width: 8),
-    Expanded(child: _KPICard(label: 'Margen',
+      Expanded(child: _KPICard(label: 'Margen',
           valor: '${_margen.toStringAsFixed(1)}%',
           sub: 'rentabilidad', icon: Icons.pie_chart_rounded,
           color: margenColor)),
     ]);
+  }
+
+  Widget _buildGananciaReal() {
+    final ventas = _actual['ventas'] ?? 0;
+    final gastos = _actual['gastos'] ?? 0;
+    final neto = ventas - gastos;
+    final esPositivo = neto >= 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: esPositivo ? AppColors.successSurface : AppColors.dangerSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: esPositivo
+              ? AppColors.success.withValues(alpha: 0.3)
+              : AppColors.danger.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(children: [
+        Icon(esPositivo ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+            color: esPositivo ? AppColors.success : AppColors.danger, size: 32),
+        const SizedBox(width: 16),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Ganancia neta real', style: GoogleFonts.poppins(
+              fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          Text('Ventas − Gastos del período', style: GoogleFonts.poppins(
+              fontSize: 11, color: AppColors.textMuted)),
+        ])),
+        Text(AppFormatters.moneda(neto.abs()), style: GoogleFonts.poppins(
+            fontSize: 20, fontWeight: FontWeight.w700,
+            color: esPositivo ? AppColors.success : AppColors.danger)),
+        if (!esPositivo) Text(' 📉', style: GoogleFonts.poppins(fontSize: 16)),
+      ]),
+    );
+  }
+
+  Widget _buildResumenFiado() {
+    final contado = _actual['ventas'] ?? 0;
+    final fiadoNuevo = _actual['fiado'] ?? 0;
+    final cobradoFiado = _actual['cobrado_fiado'] ?? 0;
+    final cajaReal = _actual['caja_real'] ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Desglose de ingresos', style: GoogleFonts.poppins(
+            fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        const SizedBox(height: 16),
+        _FilaReporte('💵 Contado', contado, AppColors.colorVentas),
+        const SizedBox(height: 8),
+        _FilaReporte('🤝 Fiado nuevo', fiadoNuevo, AppColors.colorFiado),
+        const SizedBox(height: 8),
+        _FilaReporte('💰 Cobrado fiado', cobradoFiado, AppColors.success),
+        const Divider(height: 24),
+        _FilaReporte('📊 Total en caja', cajaReal, AppColors.primary, grande: true),
+      ]),
+    );
   }
 
   Widget _buildGraficoBarras() {
@@ -340,8 +370,7 @@ Widget _buildGananciaReal() {
           border: Border.all(color: AppColors.cardBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Resumen del período', style: GoogleFonts.poppins(
-            fontSize: 14, fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary)),
+            fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         const SizedBox(height: 20),
         SizedBox(
           height: 180,
@@ -369,8 +398,7 @@ Widget _buildGananciaReal() {
                   return Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(labels[val.toInt()],
-                        style: GoogleFonts.poppins(fontSize: 9,
-                            color: AppColors.textMuted)),
+                        style: GoogleFonts.poppins(fontSize: 9, color: AppColors.textMuted)),
                   );
                 },
               )),
@@ -416,8 +444,7 @@ Widget _buildGananciaReal() {
           border: Border.all(color: AppColors.cardBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Distribución', style: GoogleFonts.poppins(
-            fontSize: 14, fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary)),
+            fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         const SizedBox(height: 16),
         Row(children: [
           SizedBox(
@@ -454,19 +481,14 @@ Widget _buildGananciaReal() {
             )),
           ),
           const SizedBox(width: 20),
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _Leyenda('Ventas', AppColors.colorVentas,
-                AppFormatters.moneda(ventas)),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _Leyenda('Ventas', AppColors.colorVentas, AppFormatters.moneda(ventas)),
             const SizedBox(height: 8),
-            _Leyenda('Fiado', AppColors.colorFiado,
-                AppFormatters.moneda(fiado)),
+            _Leyenda('Fiado', AppColors.colorFiado, AppFormatters.moneda(fiado)),
             const SizedBox(height: 8),
-            _Leyenda('Gastos', AppColors.colorGastos,
-                AppFormatters.moneda(gastos)),
+            _Leyenda('Gastos', AppColors.colorGastos, AppFormatters.moneda(gastos)),
             const SizedBox(height: 8),
-            _Leyenda('Apartados', AppColors.colorApartados,
-                AppFormatters.moneda(apartados)),
+            _Leyenda('Apartados', AppColors.colorApartados, AppFormatters.moneda(apartados)),
           ])),
         ]),
       ]),
@@ -477,8 +499,7 @@ Widget _buildGananciaReal() {
       style: GoogleFonts.poppins(fontSize: 15,
           fontWeight: FontWeight.w700, color: AppColors.textPrimary));
 
-  Widget _buildProductosList(List<Map<String, dynamic>> productos,
-      {required bool top}) {
+  Widget _buildProductosList(List<Map<String, dynamic>> productos, {required bool top}) {
     if (productos.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(20),
@@ -513,8 +534,7 @@ Widget _buildGananciaReal() {
                   style: GoogleFonts.poppins(fontSize: 13,
                       fontWeight: FontWeight.w700, color: color)))),
             const SizedBox(width: 12),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(p['nombre'] as String,
                   style: GoogleFonts.poppins(fontSize: 13,
                       fontWeight: FontWeight.w600, color: AppColors.textPrimary),
@@ -563,9 +583,33 @@ class _KPICard extends StatelessWidget {
             fontWeight: FontWeight.w700, color: color)),
         Text(label, style: GoogleFonts.poppins(fontSize: 10,
             color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
-        Text(sub, style: GoogleFonts.poppins(
-            fontSize: 9, color: AppColors.textMuted)),
+        Text(sub, style: GoogleFonts.poppins(fontSize: 9, color: AppColors.textMuted)),
       ]),
+    );
+  }
+}
+
+class _FilaReporte extends StatelessWidget {
+  final String label;
+  final double valor;
+  final Color color;
+  final bool grande;
+  const _FilaReporte(this.label, this.valor, this.color, {this.grande = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: GoogleFonts.poppins(
+            fontSize: grande ? 14 : 13,
+            fontWeight: grande ? FontWeight.w700 : FontWeight.w500,
+            color: AppColors.textPrimary)),
+        Text(AppFormatters.moneda(valor), style: GoogleFonts.poppins(
+            fontSize: grande ? 16 : 14,
+            fontWeight: FontWeight.w700,
+            color: color)),
+      ],
     );
   }
 }
@@ -580,8 +624,7 @@ class _Leyenda extends StatelessWidget {
         decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
     const SizedBox(width: 8),
     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: GoogleFonts.poppins(
-          fontSize: 10, color: AppColors.textMuted)),
+      Text(label, style: GoogleFonts.poppins(fontSize: 10, color: AppColors.textMuted)),
       Text(valor, style: GoogleFonts.poppins(fontSize: 11,
           fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
     ])),

@@ -5,17 +5,21 @@ import '../../utils/formatters.dart';
 import '../../services/supabase_service.dart';
 import 'fiado_cliente_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../ventas/pos_screen.dart';
 import '../../services/cliente_service.dart';
 import '../../services/fiado_service.dart';
+
 class _ClienteFiado {
   final ClienteModel cliente;
   final double totalPendiente;
+  final double totalPagado;
+  final double totalOriginal;
   final int cantidadFiados;
 
   _ClienteFiado({
     required this.cliente,
     required this.totalPendiente,
+    required this.totalPagado,
+    required this.totalOriginal,
     required this.cantidadFiados,
   });
 }
@@ -36,6 +40,10 @@ class _FiadoScreenState extends State<FiadoScreen> {
 
   double get _totalGeneral =>
       _clientes.fold(0, (s, c) => s + c.totalPendiente);
+  double get _totalCobrado =>
+      _clientes.fold(0, (s, c) => s + c.totalPagado);
+  double get _totalOriginal =>
+      _clientes.fold(0, (s, c) => s + c.totalOriginal);
 
   @override
   void initState() {
@@ -49,7 +57,7 @@ class _FiadoScreenState extends State<FiadoScreen> {
     super.dispose();
   }
 
- Future<void> _cargar() async {
+  Future<void> _cargar() async {
     setState(() => _loading = true);
     try {
       final empresaId = await SupabaseService.getEmpresaId();
@@ -58,7 +66,6 @@ class _FiadoScreenState extends State<FiadoScreen> {
       final fiados = await FiadoService.getFiados(
           estado: _filtro == 'todos' ? null : _filtro);
 
-      // Cargar clientes locales para obtener info
       final clientesLocal = await ClienteService.getClientes();
       final clientesMap = {for (final c in clientesLocal) c.id: c};
 
@@ -66,6 +73,8 @@ class _FiadoScreenState extends State<FiadoScreen> {
       for (final f in fiados) {
         final clienteId = f.clienteId;
         final saldo = f.saldoPendiente;
+        final original = f.montoOriginal;
+        final pagado = original - saldo;
         final cliente = clientesMap[clienteId] ?? ClienteModel(
           id: clienteId,
           empresaId: empresaId,
@@ -76,16 +85,21 @@ class _FiadoScreenState extends State<FiadoScreen> {
           mapa[clienteId] = _ClienteFiado(
             cliente: mapa[clienteId]!.cliente,
             totalPendiente: mapa[clienteId]!.totalPendiente + saldo,
+            totalPagado: mapa[clienteId]!.totalPagado + pagado,
+            totalOriginal: mapa[clienteId]!.totalOriginal + original,
             cantidadFiados: mapa[clienteId]!.cantidadFiados + 1,
           );
         } else {
           mapa[clienteId] = _ClienteFiado(
             cliente: cliente,
             totalPendiente: saldo,
+            totalPagado: pagado,
+            totalOriginal: original,
             cantidadFiados: 1,
           );
         }
       }
+
       if (mounted) {
         setState(() {
           _clientes = mapa.values.toList()
@@ -113,7 +127,6 @@ class _FiadoScreenState extends State<FiadoScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Fiado')),
-    
       body: Column(children: [
         _buildResumenTotal(),
         _buildBuscadorFiltros(),
@@ -138,22 +151,47 @@ class _FiadoScreenState extends State<FiadoScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.colorFiado.withValues(alpha: 0.2)),
       ),
-      child: Row(children: [
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Total en fiado', style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 12, color: AppColors.textMuted)),
-          const SizedBox(height: 4),
-          Text(AppFormatters.moneda(_totalGeneral),
-              style: const TextStyle(fontFamily: 'Poppins', fontSize: 22,
-                  fontWeight: FontWeight.w700, color: AppColors.colorFiado)),
-        ])),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('${_clientes.length}', style: const TextStyle(
-              fontFamily: 'Poppins', fontSize: 22,
-              fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-          const Text('clientes', style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 12, color: AppColors.textMuted)),
+      child: Column(children: [
+        Row(children: [
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Total pendiente', style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 12, color: AppColors.textMuted)),
+            const SizedBox(height: 4),
+            Text(AppFormatters.moneda(_totalGeneral),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 22,
+                    fontWeight: FontWeight.w700, color: AppColors.colorFiado)),
+          ])),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('${_clientes.length}', style: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 22,
+                fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            const Text('clientes', style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 12, color: AppColors.textMuted)),
+          ]),
+        ]),
+        const SizedBox(height: 12),
+        const Divider(height: 1, color: AppColors.cardBorder),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Total cobrado', style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 11, color: AppColors.textMuted)),
+            const SizedBox(height: 2),
+            Text(AppFormatters.moneda(_totalCobrado),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 16,
+                    fontWeight: FontWeight.w700, color: AppColors.success)),
+          ])),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end, children: [
+            const Text('Total original', style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 11, color: AppColors.textMuted)),
+            const SizedBox(height: 2),
+            Text(AppFormatters.moneda(_totalOriginal),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 16,
+                    fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          ])),
         ]),
       ]),
     );
