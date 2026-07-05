@@ -326,11 +326,16 @@ Future<void> _cargarClientes() async {
         final cantidad = _carrito
             .where((c) => c.producto.id == _filtrados[i].id)
             .fold(0, (s, c) => s + c.cantidad.toInt());
-        return _ProdCard(
+       return _ProdCard(
           producto: _filtrados[i],
           enCarrito: cantidad > 0,
           cantidadEnCarrito: cantidad,
           onTap: () => _agregar(_filtrados[i]),
+          onMas: () => _agregar(_filtrados[i]),
+          onMenos: () => _cambiarCantidad(
+            _carrito.indexWhere((c) => c.producto.id == _filtrados[i].id),
+            cantidad - 1,
+          ),
         );
       },
     );
@@ -559,7 +564,75 @@ Future<void> _cargarClientes() async {
                   final montoIngresado = double.tryParse(ctrl.text) ?? _total;
                   
                   // Si el monto es menor al total
-                  if (_tipoPago == 'efectivo' && montoIngresado < _total) {
+                  if (_tipoPago == 'efectivo' && montoIngresado <= 0) {
+                    // Monto 0 = regalo/descuento total
+                    Navigator.pop(ctx);
+                    final opcion = await showDialog<String>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        title: const Text('¿Cómo registrar esto?',
+                            style: TextStyle(fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w700)),
+                        content: Text(
+                          'El monto es RD\$0. ¿Es un regalo o va a fiado?',
+                          style: const TextStyle(fontFamily: 'Poppins')),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, 'cancelar'),
+                            child: const Text('Cancelar',
+                                style: TextStyle(color: AppColors.textMuted)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, 'descuento'),
+                            child: const Text('🎁 Regalo',
+                                style: TextStyle(color: AppColors.warning,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, 'fiado'),
+                            child: const Text('🤝 Fiado',
+                                style: TextStyle(color: AppColors.colorFiado,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (opcion == null || opcion == 'cancelar') return;
+                    _montoIngresadoTemp = 0;
+                    if (opcion == 'fiado') {
+                      if (_clienteSeleccionado == null) {
+                        // pedir cliente
+                      }
+                      setState(() => _tipoPago = 'fiado');
+                    }
+                    await VentaService.registrarVenta(
+                      items: _carrito.map((i) => {
+                        'producto': i.producto,
+                        'cantidad': i.cantidad,
+                      }).toList(),
+                      tipoPago: opcion == 'fiado' ? 'fiado' : 'efectivo',
+                      clienteId: _clienteSeleccionado,
+                      montoPagado: 0,
+                      descuento: opcion == 'descuento' ? _total : 0,
+                    );
+                    setState(() {
+                      _carrito.clear();
+                      _clienteSeleccionado = null;
+                      _tipoPago = 'efectivo';
+                    });
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(opcion == 'fiado'
+                            ? '¡Registrado en fiado!'
+                            : '¡Regalo registrado!'),
+                        backgroundColor: AppColors.success,
+                      ));
+                    }
+                    return;
+                  } else if (_tipoPago == 'efectivo' && montoIngresado < _total) {
                     Navigator.pop(ctx);
                     final faltante = _total - montoIngresado;
                     _montoIngresadoTemp = montoIngresado;
@@ -722,10 +795,14 @@ class _ProdCard extends StatelessWidget {
   final bool enCarrito;
   final int cantidadEnCarrito;
   final VoidCallback onTap;
+  final VoidCallback onMas;
+  final VoidCallback onMenos;
   const _ProdCard({required this.producto,
-      required this.enCarrito, 
+      required this.enCarrito,
       required this.cantidadEnCarrito,
-      required this.onTap});
+      required this.onTap,
+      required this.onMas,
+      required this.onMenos});
 
   @override
   Widget build(BuildContext context) {
@@ -748,15 +825,14 @@ class _ProdCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Row(children: [
-              Container(width: 28, height: 28,
+                Container(width: 28, height: 28,
                     decoration: BoxDecoration(
                       color: AppColors.colorVentas.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(7)),
                     child: producto.fotoUrl != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(7),
-                            child: Image.file(
-                                File(producto.fotoUrl!),
+                            child: Image.file(File(producto.fotoUrl!),
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => const Icon(
                                     Icons.inventory_2_rounded,
@@ -787,39 +863,63 @@ class _ProdCard extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                       color: producto.sinStock
                           ? AppColors.textMuted : AppColors.primary)),
+              if (enCarrito) ...[
+                const SizedBox(height: 8),
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  GestureDetector(
+                    onTap: onMenos,
+                    child: Container(
+                      width: 26, height: 26,
+                      decoration: BoxDecoration(
+                        color: AppColors.danger.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                      ),
+                      child: const Icon(Icons.remove_rounded,
+                          color: AppColors.danger, size: 16),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('${cantidadEnCarrito}x',
+                        style: GoogleFonts.poppins(fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary)),
+                  ),
+                  GestureDetector(
+                    onTap: onMas,
+                    child: Container(
+                      width: 26, height: 26,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      ),
+                      child: const Icon(Icons.add_rounded,
+                          color: AppColors.primary, size: 16),
+                    ),
+                  ),
+                ]),
+              ],
             ],
           ),
-        // Stock en esquina superior derecha
-            Positioned(top: 0, right: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(
-                  color: producto.sinStock 
-                      ? AppColors.danger
-                      : producto.stockBajo 
-                          ? AppColors.warning 
-                          : AppColors.textMuted,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text('${producto.stockActual.toInt()}',
-                    style: const TextStyle(fontFamily: 'Poppins',
-                        fontSize: 9, fontWeight: FontWeight.w700,
-                        color: Colors.white)),
-              )),
-            // Cantidad en carrito
-            if (enCarrito && !producto.sinStock)
-              Positioned(bottom: 0, right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text('${cantidadEnCarrito}x',
-                      style: const TextStyle(fontFamily: 'Poppins',
-                          fontSize: 11, fontWeight: FontWeight.w700,
-                          color: Colors.white)),
-                )),
+          // Stock en esquina superior derecha
+          Positioned(top: 0, right: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: producto.sinStock
+                    ? AppColors.danger
+                    : producto.stockBajo
+                        ? AppColors.warning
+                        : AppColors.textMuted,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('${producto.stockActual.toInt()}',
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 9, fontWeight: FontWeight.w700,
+                      color: Colors.white)),
+            )),
         ]),
       ),
     );
