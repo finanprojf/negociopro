@@ -561,7 +561,7 @@ Future<void> _cargarClientes() async {
             SizedBox(width: double.infinity, height: 50,
               child: ElevatedButton(
               onPressed: () async {
-                  final montoIngresado = double.tryParse(ctrl.text) ?? _total;
+                 final montoIngresado = ctrl.text.trim().isEmpty ? 0.0 : (double.tryParse(ctrl.text) ?? _total);
                   
                   // Si el monto es menor al total
                   if (_tipoPago == 'efectivo' && montoIngresado <= 0) {

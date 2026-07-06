@@ -15,6 +15,7 @@ import '../../services/supabase_service.dart';
 import 'dart:async';
 import '../../services/local_database.dart';
 import '../../services/venta_service.dart';
+import '../suscripcion/suscripcion_screen.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -324,9 +325,36 @@ DateTime _toLocal(String dateStr) {
           icon: const Icon(Icons.notifications_outlined, color: AppColors.textSecondary),
           onPressed: () {},
         ),
-        GestureDetector(
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const EmpresaScreen())),
+      GestureDetector(
+          onTap: () => showModalBottomSheet(
+            context: context,
+            backgroundColor: Colors.transparent,
+            builder: (_) => Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                ListTile(
+                  leading: const Icon(Icons.store_rounded, color: AppColors.primary),
+                  title: Text('Mi empresa', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const EmpresaScreen()));
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.workspace_premium_rounded, color: AppColors.colorVentas),
+                  title: Text('Suscripción', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const SuscripcionScreen()));
+                  },
+                ),
+              ]),
+            ),
+          ),
           child: Container(
             margin: const EdgeInsets.only(right: 12),
             child: const CircleAvatar(

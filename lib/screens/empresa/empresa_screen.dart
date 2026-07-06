@@ -4,6 +4,8 @@ import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
+import '../suscripcion/suscripcion_screen.dart';
+import 'package:google_fonts/google_fonts.dart';
 class EmpresaScreen extends StatefulWidget {
   const EmpresaScreen({super.key});
 
@@ -115,6 +117,18 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
           _seccion('Plan'),
           const SizedBox(height: 12),
           _buildPlanCard(),
+          const SizedBox(height: 16),
+SizedBox(
+  width: double.infinity,
+  height: 50,
+  child: OutlinedButton.icon(
+    onPressed: () => Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const SuscripcionScreen())),
+    icon: const Icon(Icons.workspace_premium_rounded),
+    label: Text('Ver planes de suscripción',
+        style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+  ),
+),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity, height: 54,
