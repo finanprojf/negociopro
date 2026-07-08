@@ -16,6 +16,7 @@ import 'dart:async';
 import '../../services/local_database.dart';
 import '../../services/venta_service.dart';
 import '../suscripcion/suscripcion_screen.dart';
+import '../encargos/encargos_screen.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -456,6 +457,8 @@ DateTime _toLocal(String dateStr) {
           AppColors.colorGastos, const GastosScreen()),
       _ModuleItem('Reportes', Icons.bar_chart_rounded,
           AppColors.colorReportes, const ReportesScreen()),
+       _ModuleItem('Encargos', Icons.shopping_bag_rounded,
+          AppColors.colorApartados, const EncargosScreen()),   
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Módulos', style: GoogleFonts.poppins(

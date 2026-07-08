@@ -145,10 +145,21 @@ class LocalDatabase {
         descripcion TEXT, synced INTEGER DEFAULT 0, created_at TEXT
       )
     ''');
+    
   }
 
-  static Future<void> _onUpgrade(Database db, int oldV, int newV) async {
-    // Aquí van los ALTER TABLE para futuras versiones
+ static Future<void> _onUpgrade(Database db, int oldV, int newV) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS encargos (
+        id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
+        cliente_id TEXT, descripcion TEXT NOT NULL,
+        cantidad REAL DEFAULT 1, precio_estimado REAL DEFAULT 0,
+        estado TEXT DEFAULT 'pendiente',
+        es_lista_propia INTEGER DEFAULT 0,
+        notas TEXT, synced INTEGER DEFAULT 0,
+        created_at TEXT, updated_at TEXT
+      )
+    ''');
   }
 
   // ============================================================

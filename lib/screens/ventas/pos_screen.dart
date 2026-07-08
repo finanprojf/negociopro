@@ -136,7 +136,7 @@ Future<void> _agregarClienteRapido() async {
           _tipoPago = 'efectivo';
         });
         if (context.mounted) {
-          Navigator.pop(context);
+          Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('¡Venta registrada! ${resultado['nombre']} debe RD${_total - _montoIngresadoTemp}'),
             backgroundColor: AppColors.success,
@@ -623,7 +623,7 @@ Future<void> _cargarClientes() async {
                       _tipoPago = 'efectivo';
                     });
                     if (context.mounted) {
-                      Navigator.pop(context);
+                     Navigator.pop(context, true);
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(opcion == 'fiado'
                             ? '¡Registrado en fiado!'
@@ -747,7 +747,7 @@ Future<void> _cargarClientes() async {
                             : '¡Venta con descuento registrada!'),
                         backgroundColor: AppColors.success,
                       ));
-                      Navigator.pop(context);
+                     Navigator.pop(context, true);
                     }
                     return;
                   }
@@ -772,7 +772,7 @@ Future<void> _cargarClientes() async {
                           style: GoogleFonts.poppins()),
                       backgroundColor: AppColors.success,
                     ));
-                    Navigator.pop(context);
+                    Navigator.pop(context, true);
                   }
                 },
                 child: Text('Confirmar venta', style: GoogleFonts.poppins(
