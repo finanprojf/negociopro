@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import '../suscripcion/suscripcion_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../admin/admin_screen.dart';
 class EmpresaScreen extends StatefulWidget {
   const EmpresaScreen({super.key});
 
@@ -20,12 +21,29 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
   final _direccionCtrl = TextEditingController();
   final _lemaCtrl = TextEditingController();
   bool _loading = false;
-@override
-  void initState() {
-    super.initState();
-    _cargarDatos();
-  }
 
+bool _esAdmin = false;
+
+@override
+void initState() {
+  super.initState();
+  _cargarDatos();
+  _verificarAdmin();
+}
+
+Future<void> _verificarAdmin() async {
+  try {
+    final userId = SupabaseService.userId;
+    if (userId == null) return;
+    final res = await SupabaseService.client
+        .from('usuarios')
+        .select('es_admin')
+        .eq('id', userId)
+        .single();
+    if (mounted) setState(() => _esAdmin = res['es_admin'] == true);
+    print('👑 es_admin: ${res['es_admin']}');
+  } catch (_) {}
+}
   Future<void> _cargarDatos() async {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
@@ -143,7 +161,23 @@ SizedBox(
                           fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ),
-          const SizedBox(height: 16),
+        const SizedBox(height: 16),
+          if (_esAdmin) ...[
+            SizedBox(
+              width: double.infinity, height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const AdminScreen())),
+                icon: const Icon(Icons.admin_panel_settings_rounded),
+                label: Text('Panel Admin', style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.colorFiado,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           SizedBox(
             width: double.infinity, height: 50,
             child: OutlinedButton.icon(

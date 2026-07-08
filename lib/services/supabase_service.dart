@@ -81,5 +81,19 @@ static Future<bool> get isOnlineAsync async {
       _onlineCheckedAt = DateTime.now();
       return false;
     }
+  }static Future<Map<String, dynamic>?> getSuscripcion() async {
+    final empresaId = await getEmpresaId();
+    if (empresaId == null) return null;
+    try {
+      final res = await client
+          .from('empresas')
+          .select('suscripcion_vence, plan_activo')
+          .eq('id', empresaId)
+          .single();
+      return res;
+    } catch (e) {
+      print('❌ Error suscripcion: $e');
+      return null;
+    }
   }
 }

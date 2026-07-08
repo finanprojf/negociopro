@@ -17,6 +17,8 @@ import '../../services/local_database.dart';
 import '../../services/venta_service.dart';
 import '../suscripcion/suscripcion_screen.dart';
 import '../encargos/encargos_screen.dart';
+import '../auth/login_screen.dart';
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -33,6 +35,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _productosLowStock = 0;
   int _productosSinStock = 0;
   int _apartadosActivos = 0;
+  int _diasRestantes = 999;
+  bool _suscripcionVencida = false;
   Timer? _timer;
 
   @override
@@ -87,7 +91,21 @@ DateTime _toLocal(String dateStr) {
       _empresaId = empresaId;
       // Sincronizar ventas pendientes
       await VentaService.sincronizarPendientes();
-
+// Verificar suscripción
+      if (await SupabaseService.isOnlineAsync) {
+        final sus = await SupabaseService.getSuscripcion();
+        print('📅 Suscripcion: $sus');
+        if (sus != null && sus['suscripcion_vence'] != null) {
+          final vence = DateTime.parse(sus['suscripcion_vence']);
+          final dias = vence.difference(DateTime.now()).inDays;
+          if (mounted) {
+            setState(() {
+              _diasRestantes = dias;
+              _suscripcionVencida = dias < 0;
+            });
+          }
+        }
+      }
     // Si no hay internet cargar desde SQLite
       if (!await SupabaseService.isOnlineAsync) {
         final db = await LocalDatabase.database;
@@ -246,8 +264,67 @@ DateTime _toLocal(String dateStr) {
     }
   }
 
-  @override
+ @override
   Widget build(BuildContext context) {
+    if (_suscripcionVencida) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.lock_rounded,
+                    size: 80, color: AppColors.danger),
+                const SizedBox(height: 24),
+                Text('Suscripción vencida', style: GoogleFonts.poppins(
+                    fontSize: 24, fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary)),
+                const SizedBox(height: 12),
+                Text('Tu acceso a NegocioPro ha expirado. Renueva tu plan para continuar.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                        fontSize: 14, color: AppColors.textSecondary)),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity, height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.push(context,
+                        MaterialPageRoute(
+                            builder: (_) => SuscripcionScreen())),
+                    icon: const Icon(Icons.workspace_premium_rounded),
+                    label: Text('Ver planes', style: GoogleFonts.poppins(
+                        fontSize: 16, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity, height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      await Supabase.instance.client.auth.signOut();
+                      if (context.mounted) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                              builder: (_) => const LoginScreen()),
+                          (route) => false,
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.logout_rounded,
+                        color: AppColors.textMuted),
+                    label: Text('Cerrar sesión', style: GoogleFonts.poppins(
+                        color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: _selectedIndex == 0 ? _buildDashboard() : _buildOtrasPantallas(),
       bottomNavigationBar: _buildBottomNav(),
@@ -271,7 +348,57 @@ DateTime _toLocal(String dateStr) {
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
+Widget _buildBannerVencida() {
+    return GestureDetector(
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => const SuscripcionScreen())),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        color: AppColors.danger,
+        child: Row(children: [
+          const Icon(Icons.lock_rounded, color: Colors.white, size: 20),
+          const SizedBox(width: 12),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Suscripción vencida', style: GoogleFonts.poppins(
+                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+            Text('Toca aquí para renovar tu plan',
+                style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12)),
+          ])),
+          const Icon(Icons.chevron_right_rounded, color: Colors.white),
+        ]),
+      ),
+    );
+  }
 
+  Widget _buildBannerAviso() {
+    final color = _diasRestantes <= 3 ? AppColors.danger : AppColors.warning;
+    final texto = _diasRestantes <= 0
+        ? 'Tu suscripción vence hoy'
+        : 'Tu suscripción vence en $_diasRestantes día${_diasRestantes == 1 ? '' : 's'}';
+    return GestureDetector(
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => const SuscripcionScreen())),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        color: color,
+        child: Row(children: [
+          const Icon(Icons.warning_rounded, color: Colors.white, size: 20),
+          const SizedBox(width: 12),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(texto, style: GoogleFonts.poppins(
+                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+            Text('Toca aquí para renovar tu plan',
+                style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12)),
+          ])),
+          const Icon(Icons.chevron_right_rounded, color: Colors.white),
+        ]),
+      ),
+    );
+  }
   Widget _buildDashboard() {
     return CustomScrollView(
       slivers: [
@@ -280,6 +407,9 @@ DateTime _toLocal(String dateStr) {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
           sliver: SliverList(
             delegate: SliverChildListDelegate([
+             if (_suscripcionVencida) _buildBannerVencida(),
+              if (!_suscripcionVencida && _diasRestantes <= 7)
+                _buildBannerAviso(),
               const SizedBox(height: 20),
               _buildGreeting(),
               const SizedBox(height: 20),
