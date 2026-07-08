@@ -457,8 +457,7 @@ DateTime _toLocal(String dateStr) {
           AppColors.colorGastos, const GastosScreen()),
       _ModuleItem('Reportes', Icons.bar_chart_rounded,
           AppColors.colorReportes, const ReportesScreen()),
-       _ModuleItem('Encargos', Icons.shopping_bag_rounded,
-          AppColors.colorApartados, const EncargosScreen()),   
+    
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Módulos', style: GoogleFonts.poppins(
@@ -624,17 +623,17 @@ DateTime _toLocal(String dateStr) {
     ]);
   }
 
-  Widget _buildOtrasPantallas() {
+ Widget _buildOtrasPantallas() {
     final pantallas = [
       const DashboardScreen(),
       const InventarioScreen(),
-      const ClientesScreen(),
+      const EncargosScreen(),
       const ReportesScreen(),
     ];
     return pantallas[_selectedIndex];
   }
 
-  Widget _buildBottomNav() {
+ Widget _buildBottomNav() {
     return BottomNavigationBar(
       currentIndex: _selectedIndex,
       onTap: (i) => setState(() => _selectedIndex = i),
@@ -643,8 +642,8 @@ DateTime _toLocal(String dateStr) {
             activeIcon: Icon(Icons.home_rounded), label: 'Inicio'),
         BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined),
             activeIcon: Icon(Icons.inventory_2_rounded), label: 'Inventario'),
-        BottomNavigationBarItem(icon: Icon(Icons.people_outline),
-            activeIcon: Icon(Icons.people_rounded), label: 'Clientes'),
+        BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_outlined),
+            activeIcon: Icon(Icons.shopping_bag_rounded), label: 'Encargos'),
         BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined),
             activeIcon: Icon(Icons.bar_chart_rounded), label: 'Reportes'),
       ],
