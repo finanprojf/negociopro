@@ -10,6 +10,7 @@ import '../apartados/apartados_screen.dart';
 import '../gastos/gastos_screen.dart';
 import '../reportes/reportes_screen.dart';
 import '../empresa/empresa_screen.dart';
+import '../vitrina/vitrina_config_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import 'dart:async';
@@ -17,6 +18,7 @@ import '../../services/local_database.dart';
 import '../../services/venta_service.dart';
 import '../suscripcion/suscripcion_screen.dart';
 import '../encargos/encargos_screen.dart';
+import '../reportes/cierre_dia_screen.dart';
 import '../auth/login_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -71,17 +73,23 @@ DateTime _toLocal(String dateStr) {
   Future<void> _cargarNombre() async {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
-      if (empresaId != null) {
-        final res = await SupabaseService.client
-            .from('empresas')
-            .select('nombre')
-            .eq('id', empresaId)
-            .single();
-        if (mounted) setState(() => _nombreNegocio = res['nombre'] ?? 'Mi Negocio');
+      if (empresaId == null) return;
+
+      if (await SupabaseService.isOnlineAsync) {
+        try {
+          final res = await SupabaseService.client
+              .from('empresas').select('nombre').eq('id', empresaId).single();
+          if (mounted) setState(() => _nombreNegocio = res['nombre'] ?? 'Mi Negocio');
+          return;
+        } catch (_) {}
       }
-    } catch (e) {
-      print('❌ Error nombre: $e');
-    }
+      // Offline: leer de SQLite
+      final db = await LocalDatabase.database;
+      final rows = await db.query('empresas', where: 'id = ?', whereArgs: [empresaId]);
+      if (rows.isNotEmpty && mounted) {
+        setState(() => _nombreNegocio = rows.first['nombre'] as String? ?? 'Mi Negocio');
+      }
+    } catch (_) {}
   }
 
  Future<void> _cargarResumen() async {
@@ -94,7 +102,6 @@ DateTime _toLocal(String dateStr) {
 // Verificar suscripción
       if (await SupabaseService.isOnlineAsync) {
         final sus = await SupabaseService.getSuscripcion();
-        print('📅 Suscripcion: $sus');
         if (sus != null && sus['suscripcion_vence'] != null) {
           final vence = DateTime.parse(sus['suscripcion_vence']);
           final dias = vence.difference(DateTime.now()).inDays;
@@ -143,6 +150,9 @@ DateTime _toLocal(String dateStr) {
             where: 'empresa_id = ? AND activo = ?',
             whereArgs: [empresaId, 1]);
 
+        final apartadosOffline = await db.query('apartados',
+            where: 'empresa_id = ? AND estado = ?',
+            whereArgs: [empresaId, 'activo']);
         if (mounted) {
           setState(() {
             _ventasHoy = totalVentas;
@@ -152,6 +162,7 @@ DateTime _toLocal(String dateStr) {
                 (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
             _productosSinStock = stockBajo.where((p) =>
                 (p['stock_actual'] as num) <= 0).length;
+            _apartadosActivos = apartadosOffline.length;
           });
         }
         return;
@@ -259,9 +270,7 @@ DateTime _toLocal(String dateStr) {
           _apartadosActivos = (apartados as List).length;
         });
       }
-    } catch (e) {
-      print('❌ Error resumen: $e');
-    }
+    } catch (_) {}
   }
 
  @override
@@ -476,6 +485,16 @@ Widget _buildBannerVencida() {
                   },
                 ),
                 ListTile(
+                  leading: const Icon(Icons.storefront_rounded, color: AppColors.colorApartados),
+                  title: Text('Mi Vitrina Digital', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                  subtitle: Text('Catálogo público para clientes',
+                      style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const VitrinaConfigScreen()));
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.workspace_premium_rounded, color: AppColors.colorVentas),
                   title: Text('Suscripción', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                   onTap: () {
@@ -587,7 +606,8 @@ Widget _buildBannerVencida() {
           AppColors.colorGastos, const GastosScreen()),
       _ModuleItem('Reportes', Icons.bar_chart_rounded,
           AppColors.colorReportes, const ReportesScreen()),
-    
+      _ModuleItem('Cierre de Día', Icons.lock_clock_rounded,
+          AppColors.primary, const CierreDiaScreen()),
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Módulos', style: GoogleFonts.poppins(
@@ -628,118 +648,32 @@ Widget _buildBannerVencida() {
           fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
       const SizedBox(height: 8),
       if (_empresaId != null)
-        FutureBuilder(
-          future: Future.wait([
-          SupabaseService.client
-                .from('ventas')
-                .select('id, numero_venta, total, tipo_pago, monto_pagado, created_at')
-                .eq('empresa_id', _empresaId!)
-                .eq('estado', 'completada')
-                .order('created_at', ascending: false)
-                .limit(5),
-            SupabaseService.client
-                .from('gastos')
-                .select('id, descripcion, monto, created_at')
-                .eq('empresa_id', _empresaId!)
-                .order('created_at', ascending: false)
-                .limit(5),
-            SupabaseService.client
-                .from('abonos_fiado')
-                .select('id, monto, created_at, clientes(nombre)')
-                .eq('empresa_id', _empresaId!)
-                .order('created_at', ascending: false)
-                .limit(5),
-            SupabaseService.client
-                .from('abonos_apartado')
-                .select('id, monto, created_at, apartados(descripcion)')
-                .eq('empresa_id', _empresaId!)
-                .order('created_at', ascending: false)
-                .limit(5),
-          ]),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: _fetchActividad(_empresaId!),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
-              return Center(child: Text('Sin actividad reciente',
+              return Center(child: Text('Cargando...',
                   style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textMuted)));
             }
-            final results = snapshot.data!;
-            final List<Map<String, dynamic>> actividad = [];
-
-           for (final v in results[0] as List) {
-              final esCredito = v['tipo_pago'] == 'fiado';
-              final montoMostrar = esCredito
-                  ? (v['monto_pagado'] as num).toDouble()
-                  : (v['total'] as num).toDouble();
-              final saldoFiado = esCredito
-                  ? (v['total'] as num).toDouble() - (v['monto_pagado'] as num).toDouble()
-                  : 0.0;
-              actividad.add({
-                'tipo': 'venta',
-                'titulo': saldoFiado > 0
-                    ? 'Venta #${v['numero_venta']} (+${AppFormatters.moneda(saldoFiado)} fiado)'
-                    : 'Venta #${v['numero_venta']}',
-                'monto': montoMostrar,
-                'fecha': _toLocal(v['created_at'] as String),
-                'positivo': true,
-              });
-            }
-            for (final g in results[1] as List) {
-              actividad.add({
-                'tipo': 'gasto',
-                'titulo': g['descripcion'] as String,
-                'monto': (g['monto'] as num).toDouble(),
-                'fecha': _toLocal(g['created_at'] as String),
-                'positivo': false,
-              });
-            }
-            for (final f in results[2] as List) {
-              final nombre = f['clientes'] != null
-                  ? f['clientes']['nombre'] as String : 'Cliente';
-              actividad.add({
-                'tipo': 'fiado',
-                'titulo': 'Abono fiado — $nombre',
-                'monto': (f['monto'] as num).toDouble(),
-                'fecha': _toLocal(f['created_at'] as String),
-                'positivo': true,
-              });
-            }
-            for (final a in results[3] as List) {
-              final desc = a['apartados'] != null
-                  ? a['apartados']['descripcion'] as String : 'Apartado';
-              actividad.add({
-                'tipo': 'apartado',
-                'titulo': 'Abono apartado — $desc',
-                'monto': (a['monto'] as num).toDouble(),
-                'fecha': _toLocal(a['created_at'] as String),
-                'positivo': true,
-              });
-            }
-
-        actividad.sort((a, b) =>
-    (b['fecha'] as DateTime).compareTo(a['fecha'] as DateTime));
-
+            final actividad = snapshot.data!;
             if (actividad.isEmpty) {
               return Center(child: Text('Sin actividad reciente',
                   style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textMuted)));
             }
-
             return Column(
               children: actividad.take(8).map((item) {
                 IconData icon; Color color;
                 switch (item['tipo']) {
-                  case 'venta': icon = Icons.shopping_cart_rounded;
-                      color = AppColors.colorVentas; break;
-                  case 'gasto': icon = Icons.receipt_long_rounded;
-                      color = AppColors.colorGastos; break;
-                  case 'fiado': icon = Icons.handshake_outlined;
-                      color = AppColors.colorFiado; break;
-                  case 'apartado': icon = Icons.bookmark_rounded;
-                      color = AppColors.colorApartados; break;
+                  case 'venta': icon = Icons.shopping_cart_rounded; color = AppColors.colorVentas; break;
+                  case 'gasto': icon = Icons.receipt_long_rounded; color = AppColors.colorGastos; break;
+                  case 'fiado': icon = Icons.handshake_outlined; color = AppColors.colorFiado; break;
+                  case 'apartado': icon = Icons.bookmark_rounded; color = AppColors.colorApartados; break;
                   default: icon = Icons.circle; color = AppColors.primary;
                 }
                 return _ActivityTile(
                   icon: icon, color: color,
                   title: item['titulo'] as String,
-             subtitle: AppFormatters.tiempoRelativo(item['fecha'] as DateTime),
+                  subtitle: AppFormatters.tiempoRelativo(item['fecha'] as DateTime),
                   amount: '${item['positivo'] ? '+' : '-'}${AppFormatters.moneda(item['monto'] as double)}',
                   positive: item['positivo'] as bool,
                 );
@@ -751,6 +685,139 @@ Widget _buildBannerVencida() {
         Center(child: Text('Sin actividad reciente',
             style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textMuted))),
     ]);
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchActividad(String empresaId) async {
+    final List<Map<String, dynamic>> actividad = [];
+
+    // Obtener fecha del último cierre — solo mostrar actividad posterior
+    String? desdeCierre;
+    try {
+      final db = await LocalDatabase.database;
+      final cierres = await db.query('cierres_dia',
+          where: 'empresa_id = ?', whereArgs: [empresaId],
+          orderBy: 'created_at DESC', limit: 1);
+      if (cierres.isNotEmpty) {
+        desdeCierre = cierres.first['created_at'] as String?;
+      }
+    } catch (_) {}
+
+    if (await SupabaseService.isOnlineAsync) {
+      try {
+        var qVentas   = SupabaseService.client.from('ventas')
+            .select('id, numero_venta, total, tipo_pago, monto_pagado, created_at')
+            .eq('empresa_id', empresaId).eq('estado', 'completada');
+        var qGastos   = SupabaseService.client.from('gastos')
+            .select('id, descripcion, monto, created_at')
+            .eq('empresa_id', empresaId);
+        var qFiado    = SupabaseService.client.from('abonos_fiado')
+            .select('id, monto, created_at, clientes(nombre)')
+            .eq('empresa_id', empresaId);
+        var qApartado = SupabaseService.client.from('abonos_apartado')
+            .select('id, monto, created_at, apartados(descripcion)')
+            .eq('empresa_id', empresaId);
+
+        if (desdeCierre != null) {
+          qVentas   = qVentas.gte('created_at', desdeCierre);
+          qGastos   = qGastos.gte('created_at', desdeCierre);
+          qFiado    = qFiado.gte('created_at', desdeCierre);
+          qApartado = qApartado.gte('created_at', desdeCierre);
+        }
+
+        final results = await Future.wait([
+          qVentas.order('created_at', ascending: false).limit(10),
+          qGastos.order('created_at', ascending: false).limit(10),
+          qFiado.order('created_at', ascending: false).limit(10),
+          qApartado.order('created_at', ascending: false).limit(10),
+        ]);
+        for (final v in results[0] as List) {
+          final esCredito = v['tipo_pago'] == 'fiado';
+          final montoMostrar = esCredito
+              ? (v['monto_pagado'] as num).toDouble()
+              : (v['total'] as num).toDouble();
+          final saldoFiado = esCredito
+              ? (v['total'] as num).toDouble() - (v['monto_pagado'] as num).toDouble()
+              : 0.0;
+          actividad.add({
+            'tipo': 'venta',
+            'titulo': saldoFiado > 0
+                ? 'Venta #${v['numero_venta']} (+${AppFormatters.moneda(saldoFiado)} fiado)'
+                : 'Venta #${v['numero_venta']}',
+            'monto': montoMostrar, 'fecha': _toLocal(v['created_at'] as String), 'positivo': true,
+          });
+        }
+        for (final g in results[1] as List) {
+          actividad.add({'tipo': 'gasto', 'titulo': g['descripcion'] as String,
+              'monto': (g['monto'] as num).toDouble(),
+              'fecha': _toLocal(g['created_at'] as String), 'positivo': false});
+        }
+        for (final f in results[2] as List) {
+          actividad.add({'tipo': 'fiado',
+              'titulo': 'Abono fiado — ${f['clientes']?['nombre'] ?? 'Cliente'}',
+              'monto': (f['monto'] as num).toDouble(),
+              'fecha': _toLocal(f['created_at'] as String), 'positivo': true});
+        }
+        for (final a in results[3] as List) {
+          actividad.add({'tipo': 'apartado',
+              'titulo': 'Abono apartado — ${a['apartados']?['descripcion'] ?? 'Apartado'}',
+              'monto': (a['monto'] as num).toDouble(),
+              'fecha': _toLocal(a['created_at'] as String), 'positivo': true});
+        }
+        actividad.sort((a, b) => (b['fecha'] as DateTime).compareTo(a['fecha'] as DateTime));
+        return actividad;
+      } catch (_) {}
+    }
+
+    // Offline: leer de SQLite
+    final db = await LocalDatabase.database;
+    final whereVentas = desdeCierre != null
+        ? 'empresa_id = ? AND estado = ? AND created_at > ?'
+        : 'empresa_id = ? AND estado = ?';
+    final argsVentas = desdeCierre != null
+        ? [empresaId, 'completada', desdeCierre]
+        : [empresaId, 'completada'];
+    final ventas = await db.query('ventas',
+        where: whereVentas, whereArgs: argsVentas,
+        orderBy: 'created_at DESC', limit: 10);
+    for (final v in ventas) {
+      final esCredito = v['tipo_pago'] == 'fiado';
+      final total = (v['total'] as num).toDouble();
+      final pagado = (v['monto_pagado'] as num? ?? total).toDouble();
+      actividad.add({'tipo': 'venta',
+          'titulo': 'Venta #${v['numero_venta']}',
+          'monto': esCredito ? pagado : total,
+          'fecha': _toLocal(v['created_at'] as String), 'positivo': true});
+    }
+    final whereOtros = desdeCierre != null
+        ? 'empresa_id = ? AND created_at > ?' : 'empresa_id = ?';
+    final argsOtros = desdeCierre != null ? [empresaId, desdeCierre] : [empresaId];
+
+    final gastos = await db.query('gastos',
+        where: whereOtros, whereArgs: argsOtros,
+        orderBy: 'created_at DESC', limit: 10);
+    for (final g in gastos) {
+      actividad.add({'tipo': 'gasto', 'titulo': g['descripcion'] as String,
+          'monto': (g['monto'] as num).toDouble(),
+          'fecha': _toLocal(g['created_at'] as String), 'positivo': false});
+    }
+    final abonosFiado = await db.query('abonos_fiado',
+        where: whereOtros, whereArgs: argsOtros,
+        orderBy: 'created_at DESC', limit: 10);
+    for (final f in abonosFiado) {
+      actividad.add({'tipo': 'fiado', 'titulo': 'Abono fiado',
+          'monto': (f['monto'] as num).toDouble(),
+          'fecha': _toLocal(f['created_at'] as String), 'positivo': true});
+    }
+    final abonosApartado = await db.query('abonos_apartado',
+        where: whereOtros, whereArgs: argsOtros,
+        orderBy: 'created_at DESC', limit: 10);
+    for (final a in abonosApartado) {
+      actividad.add({'tipo': 'apartado', 'titulo': 'Abono apartado',
+          'monto': (a['monto'] as num).toDouble(),
+          'fecha': _toLocal(a['created_at'] as String), 'positivo': true});
+    }
+    actividad.sort((a, b) => (b['fecha'] as DateTime).compareTo(a['fecha'] as DateTime));
+    return actividad;
   }
 
  Widget _buildOtrasPantallas() {

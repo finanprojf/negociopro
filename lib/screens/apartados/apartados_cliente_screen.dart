@@ -4,6 +4,7 @@ import '../../models/cliente_model.dart';
 import '../../models/apartado_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/supabase_service.dart';
+import '../../services/local_database.dart';
 import '../../services/apartado_service.dart';
 import 'abono_apartado_screen.dart';
 import 'apartado_form_screen.dart';
@@ -31,11 +32,27 @@ class _ApartadosClienteScreenState extends State<ApartadosClienteScreen> {
   }
 void _mostrarHistorial() async {
     try {
-      final res = await SupabaseService.client
-          .from('abonos_apartado')
-          .select('*, apartados(descripcion)')
-          .eq('cliente_id', widget.cliente.id)
-          .order('created_at', ascending: false);
+      List<Map<String, dynamic>> res = [];
+
+      if (await SupabaseService.isOnlineAsync) {
+        try {
+          final data = await SupabaseService.client
+              .from('abonos_apartado')
+              .select('*, apartados(descripcion)')
+              .eq('cliente_id', widget.cliente.id)
+              .order('created_at', ascending: false);
+          res = List<Map<String, dynamic>>.from(data);
+        } catch (_) {}
+      }
+
+      if (res.isEmpty) {
+        final db = await LocalDatabase.database;
+        final local = await db.query('abonos_apartado',
+            where: 'cliente_id = ?',
+            whereArgs: [widget.cliente.id],
+            orderBy: 'created_at DESC');
+        res = local;
+      }
 
       if (!mounted) return;
       showModalBottomSheet(
@@ -116,25 +133,40 @@ void _mostrarHistorial() async {
           ]),
         ),
       );
-    } catch (e) {
-      print('❌ Error historial apartados: $e');
-    }
+    } catch (_) {}
   }
   Future<void> _cargar() async {
     setState(() => _loading = true);
     try {
-      final res = await SupabaseService.client
-          .from('apartados')
-          .select()
-          .eq('cliente_id', widget.cliente.id)
-          .order('created_at', ascending: false);
-      if (mounted) {
-        setState(() {
-          _apartados = res.map((m) => ApartadoModel.fromMap(m)).toList();
-          _loading = false;
-        });
+      // Local primero
+      final db = await LocalDatabase.database;
+      final local = await db.query('apartados',
+          where: 'cliente_id = ?',
+          whereArgs: [widget.cliente.id],
+          orderBy: 'created_at DESC');
+      var lista = local.map((m) => ApartadoModel.fromMap(m)).toList();
+
+      if (await SupabaseService.isOnlineAsync) {
+        try {
+          final res = await SupabaseService.client
+              .from('apartados')
+              .select()
+              .eq('cliente_id', widget.cliente.id)
+              .order('created_at', ascending: false);
+          // Guardar en local
+          for (final m in res) {
+            final map = Map<String, dynamic>.from(m);
+            map['synced'] = 1;
+            try { await LocalDatabase.insertar('apartados', map); } catch (_) {}
+          }
+          final idsOnline = res.map((m) => m['id'] as String).toSet();
+          final pendientes = lista.where((a) => !idsOnline.contains(a.id)).toList();
+          lista = [...res.map((m) => ApartadoModel.fromMap(m)), ...pendientes];
+        } catch (_) {}
       }
-    } catch (e) {
+
+      if (mounted) setState(() { _apartados = lista; _loading = false; });
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }

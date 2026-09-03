@@ -3,8 +3,8 @@ import '../../theme/app_colors.dart';
 import '../../models/cliente_model.dart';
 import '../../utils/formatters.dart';
 import 'cliente_form_screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
+import '../../services/local_database.dart';
 import '../fiado/fiado_cliente_screen.dart';
 import '../apartados/apartados_cliente_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -46,11 +46,21 @@ class ClienteDetalleScreen extends StatelessWidget {
                 ),
               );
               if (confirm == true && context.mounted) {
-                await SupabaseService.client
-                    .from('clientes')
-                    .update({'activo': false})
-                    .eq('id', cliente.id);
-                Navigator.pop(context, true);
+                // Desactivar local primero (funciona offline)
+                await LocalDatabase.actualizar(
+                  'clientes',
+                  {'activo': 0, 'synced': 0, 'updated_at': DateTime.now().toIso8601String()},
+                  'id', cliente.id,
+                );
+                // Sincronizar si hay internet
+                if (await SupabaseService.isOnlineAsync) {
+                  await SupabaseService.client
+                      .from('clientes')
+                      .update({'activo': false})
+                      .eq('id', cliente.id);
+                  await LocalDatabase.marcarSynced('clientes', cliente.id);
+                }
+                if (context.mounted) Navigator.pop(context, true);
               }
             },
           ),
@@ -103,11 +113,95 @@ class ClienteDetalleScreen extends StatelessWidget {
             // Acciones rápidas
             Row(children: [
             Expanded(child: _AccionBtn(Icons.phone_rounded,
-                  'Llamar', AppColors.colorVentas, () async {
-                    if (cliente.telefono != null) {
-                      final uri = Uri.parse('tel:${cliente.telefono}');
-                      if (await canLaunchUrl(uri)) await launchUrl(uri);
+                  'Contactar', AppColors.colorVentas, () async {
+                    if (cliente.telefono == null || cliente.telefono!.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Este cliente no tiene teléfono registrado'),
+                        backgroundColor: Colors.orange,
+                      ));
+                      return;
                     }
+                    final telefono = cliente.telefono!.replaceAll(RegExp(r'[^0-9]'), '');
+                    // Formato internacional RD: +1 + número
+                    final telInt = telefono.startsWith('1') ? telefono : '1$telefono';
+
+                    await showModalBottomSheet(
+                      context: context,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => Container(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                        decoration: const BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                        ),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Container(width: 40, height: 4,
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(color: AppColors.cardBorder,
+                                  borderRadius: BorderRadius.circular(2))),
+                          Text('Contactar a ${cliente.nombre}',
+                              style: const TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 15, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 4),
+                          Text(cliente.telefono!,
+                              style: const TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 13, color: AppColors.textMuted)),
+                          const SizedBox(height: 16),
+                          ListTile(
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            tileColor: const Color(0xFF25D366).withValues(alpha: 0.08),
+                            leading: const CircleAvatar(
+                              backgroundColor: Color(0xFF25D366),
+                              child: Icon(Icons.chat_rounded,
+                                  color: Colors.white, size: 20),
+                            ),
+                            title: const Text('Abrir en WhatsApp',
+                                style: TextStyle(fontFamily: 'Poppins',
+                                    fontWeight: FontWeight.w600)),
+                            subtitle: const Text('Lleva al chat — tú decides si llamar o escribir',
+                                style: TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                            onTap: () async {
+                              Navigator.pop(context);
+                              try {
+                                // Intentar abrir WhatsApp directo
+                                final uriApp = Uri.parse('whatsapp://send?phone=$telInt');
+                                await launchUrl(uriApp, mode: LaunchMode.externalApplication);
+                              } catch (_) {
+                                try {
+                                  // Fallback: wa.me en navegador
+                                  final uriWeb = Uri.parse('https://wa.me/$telInt');
+                                  await launchUrl(uriWeb, mode: LaunchMode.externalApplication);
+                                } catch (_) {}
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          ListTile(
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            tileColor: AppColors.colorVentas.withValues(alpha: 0.08),
+                            leading: CircleAvatar(
+                              backgroundColor: AppColors.colorVentas,
+                              child: const Icon(Icons.call_rounded,
+                                  color: Colors.white, size: 20),
+                            ),
+                            title: const Text('Llamar directo',
+                                style: TextStyle(fontFamily: 'Poppins',
+                                    fontWeight: FontWeight.w600)),
+                            subtitle: const Text('Abre el marcador del teléfono',
+                                style: TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                            onTap: () async {
+                              Navigator.pop(context);
+                              try {
+                                final uri = Uri.parse('tel:${cliente.telefono}');
+                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                              } catch (_) {}
+                            },
+                          ),
+                        ]),
+                      ),
+                    );
                   })),
               const SizedBox(width: 10),
             Expanded(child: _AccionBtn(Icons.handshake_outlined,

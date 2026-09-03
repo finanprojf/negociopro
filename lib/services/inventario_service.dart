@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:uuid/uuid.dart';
 import '../models/producto_model.dart';
 import '../models/categoria_model.dart';
+import '../utils/constants.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
 import 'local_database.dart';
 
@@ -36,11 +39,8 @@ class InventarioService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
- final local = await LocalDatabase.consultar('productos', empresaId, 
+    final local = await LocalDatabase.consultar('productos', empresaId,
         orderBy: 'nombre ASC');
-    print('📦 Productos en SQLite: ${local.length}');
-    print('🌐 Online: ${await SupabaseService.isOnlineAsync}');
-   print('📋 Primer producto local: ${local.isNotEmpty ? local.first : 'vacío'}');
     final productosLocal = local
         .where((m) => !soloActivos || m['activo'] == 1)
         .map((m) => ProductoModel.fromMap(m))
@@ -66,9 +66,7 @@ class InventarioService {
           map['synced'] = 1;
           try {
             await LocalDatabase.insertar('productos', map);
-          } catch (e) {
-            print('❌ Error guardando producto local: $e');
-          }
+          } catch (_) {}
         }
         
         return res.map((m) {
@@ -85,11 +83,9 @@ class InventarioService {
     return productosLocal;
   }
 
- static Future<bool> guardarProducto(ProductoModel producto,
+  static Future<bool> guardarProducto(ProductoModel producto,
       {bool esNuevo = true}) async {
     final empresaId = await SupabaseService.getEmpresaId();
-    print('💾 guardarProducto empresaId: $empresaId');
-    print('👤 userId: ${SupabaseService.userId}');
     if (empresaId == null) return false;
 
     final id = esNuevo ? _uuid.v4() : producto.id;
@@ -124,10 +120,7 @@ class InventarioService {
               .update(dataOnline).eq('id', id);
         }
         await LocalDatabase.marcarSynced('productos', id);
-        print('✅ Producto guardado en Supabase');
-      } catch (e) {
-        print('❌ Error guardando producto: ${e.toString()}');
-      }
+      } catch (_) {}
     }
 
     return true;
@@ -152,5 +145,29 @@ class InventarioService {
     }
 
     return true;
+  }
+
+  /// Sube la foto a Supabase Storage y devuelve la URL pública.
+  /// Si falla, devuelve null (se sigue guardando sin foto pública).
+  static Future<String?> uploadFoto(String archivoPath, String productoId) async {
+    try {
+      final file   = File(archivoPath);
+      final ext    = archivoPath.split('.').last.toLowerCase();
+      final bucket = AppConstants.bucketProductos;
+      final key    = 'productos/$productoId.$ext';
+
+      await SupabaseService.client.storage
+          .from(bucket)
+          .upload(key, file,
+              fileOptions: const FileOptions(upsert: true));
+
+      final url = SupabaseService.client.storage
+          .from(bucket)
+          .getPublicUrl(key);
+
+      return url;
+    } catch (_) {
+      return null;
+    }
   }
 }

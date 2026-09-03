@@ -37,9 +37,7 @@ class _ApartadoFormScreenState extends State<ApartadoFormScreen> {
           'nombre': c.nombre,
         }).toList();
       });
-    } catch (e) {
-      print('❌ Error clientes apartado: $e');
-    }
+    } catch (_) {}
   }
  List<Map<String, String>> _clientes = [];
 

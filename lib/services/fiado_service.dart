@@ -53,6 +53,46 @@ class FiadoService {
     return fiadosLocal;
   }
 
+  static Future<bool> cancelarAbono(String abonoId, String fiadoId, double monto) async {
+    final db = await LocalDatabase.database;
+
+    // Restaurar saldo en SQLite
+    final fiados = await db.query('fiados', where: 'id = ?', whereArgs: [fiadoId]);
+    if (fiados.isNotEmpty) {
+      final saldoActual = (fiados.first['saldo_pendiente'] as num).toDouble();
+      final montoOriginal = (fiados.first['monto_original'] as num).toDouble();
+      final nuevoSaldo = (saldoActual + monto).clamp(0.0, montoOriginal);
+
+      await LocalDatabase.actualizar('fiados', {
+        'saldo_pendiente': nuevoSaldo,
+        'estado': nuevoSaldo > 0 ? 'activo' : 'pagado',
+        'updated_at': DateTime.now().toIso8601String(),
+        'synced': 0,
+      }, 'id', fiadoId);
+    }
+
+    await LocalDatabase.eliminar('abonos_fiado', 'id', abonoId);
+
+    if (await SupabaseService.isOnlineAsync) {
+      try {
+        await SupabaseService.client.from('abonos_fiado').delete().eq('id', abonoId);
+        if (fiados.isNotEmpty) {
+          final saldoActual = (fiados.first['saldo_pendiente'] as num).toDouble();
+          final montoOriginal = (fiados.first['monto_original'] as num).toDouble();
+          final nuevoSaldo = (saldoActual + monto).clamp(0.0, montoOriginal);
+          await SupabaseService.client.from('fiados').update({
+            'saldo_pendiente': nuevoSaldo,
+            'estado': nuevoSaldo > 0 ? 'activo' : 'pagado',
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', fiadoId);
+          await LocalDatabase.marcarSynced('fiados', fiadoId);
+        }
+      } catch (_) {}
+    }
+
+    return true;
+  }
+
   static Future<bool> registrarAbono(
     String fiadoId,
     String clienteId,
@@ -105,20 +145,17 @@ class FiadoService {
           'usuario_id': SupabaseService.userId,
         });
 
-        final fiado = await SupabaseService.client
-            .from('fiados')
-            .select('saldo_pendiente')
-            .eq('id', fiadoId)
-            .single();
-
-        final saldo = (fiado['saldo_pendiente'] as num).toDouble();
-        final nuevoSaldo = (saldo - monto).clamp(0.0, double.infinity);
-
-        await SupabaseService.client.from('fiados').update({
-          'saldo_pendiente': nuevoSaldo,
-          'estado': nuevoSaldo <= 0 ? 'pagado' : 'activo',
-          'updated_at': ahora,
-        }).eq('id', fiadoId);
+        // Usar el saldo ya leído de SQLite para evitar race condition
+        // (no volver a leer de Supabase, que puede no estar actualizado aún)
+        if (fiados.isNotEmpty) {
+          final saldoAntes = (fiados.first['saldo_pendiente'] as num).toDouble();
+          final nuevoSaldo = (saldoAntes - monto).clamp(0.0, double.infinity);
+          await SupabaseService.client.from('fiados').update({
+            'saldo_pendiente': nuevoSaldo,
+            'estado': nuevoSaldo <= 0 ? 'pagado' : 'activo',
+            'updated_at': ahora,
+          }).eq('id', fiadoId);
+        }
 
         await LocalDatabase.marcarSynced('abonos_fiado', abonoId);
       } catch (_) {}

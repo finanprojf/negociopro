@@ -19,9 +19,12 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
   bool _loading = false;
 
   double get _monto => double.tryParse(_montoCtrl.text) ?? 0;
+  double get _montoReal => _monto.clamp(0, widget.fiado.saldoPendiente);
   double get _nuevoSaldo =>
-      (widget.fiado.saldoPendiente - _monto).clamp(0, double.infinity);
+      (widget.fiado.saldoPendiente - _montoReal).clamp(0, double.infinity);
   bool get _completaElPago => _monto >= widget.fiado.saldoPendiente;
+  double get _vuelto =>
+      _monto > widget.fiado.saldoPendiente ? _monto - widget.fiado.saldoPendiente : 0;
 
   @override
   void dispose() {
@@ -36,17 +39,11 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
           backgroundColor: AppColors.danger));
       return;
     }
-    if (_monto > widget.fiado.saldoPendiente) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('El monto no puede ser mayor al saldo pendiente'),
-          backgroundColor: AppColors.danger));
-      return;
-    }
     setState(() => _loading = true);
     final ok = await FiadoService.registrarAbono(
       widget.fiado.id,
       widget.fiado.clienteId,
-      _monto,
+      _montoReal,
       _metodoPago,
     );
     if (mounted) {
@@ -55,7 +52,7 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(_completaElPago
               ? '¡Fiado pagado completamente!'
-              : 'Abono de ${AppFormatters.moneda(_monto)} registrado'),
+              : 'Abono de ${AppFormatters.moneda(_montoReal)} registrado'),
           backgroundColor: AppColors.success,
         ));
       } else {
@@ -148,36 +145,72 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
           ]),
           const SizedBox(height: 16),
 
-          // Preview resultado
-          if (_monto > 0)
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
+          // Preview en tiempo real
+          if (_monto > 0) ...[
+            Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: _completaElPago
-                    ? AppColors.successSurface : AppColors.primarySurface,
+                color: AppColors.primarySurface,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: _completaElPago
-                  ? const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Icon(Icons.check_circle_rounded,
-                          color: AppColors.success, size: 22),
-                      SizedBox(width: 10),
-                      Text('¡Este abono cancela la deuda!',
-                          style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
-                              fontWeight: FontWeight.w700, color: AppColors.success)),
-                    ])
-                  : Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      const Text('Nuevo saldo',
-                          style: TextStyle(fontFamily: 'Poppins',
-                              fontSize: 13, color: AppColors.primary)),
-                      Text(AppFormatters.moneda(_nuevoSaldo),
-                          style: const TextStyle(fontFamily: 'Poppins',
-                              fontSize: 20, fontWeight: FontWeight.w700,
-                              color: AppColors.primary)),
-                    ]),
+              child: Column(children: [
+                // Monto que se aplica a la deuda
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  const Text('Se aplica a deuda',
+                      style: TextStyle(fontFamily: 'Poppins',
+                          fontSize: 13, color: AppColors.primary)),
+                  Text(AppFormatters.moneda(_montoReal),
+                      style: const TextStyle(fontFamily: 'Poppins',
+                          fontSize: 18, fontWeight: FontWeight.w700,
+                          color: AppColors.primary)),
+                ]),
+                const SizedBox(height: 10),
+                const Divider(height: 1, color: AppColors.cardBorder),
+                const SizedBox(height: 10),
+                // Saldo que queda
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  const Text('Le quedan al cliente',
+                      style: TextStyle(fontFamily: 'Poppins',
+                          fontSize: 13, color: AppColors.textSecondary)),
+                  Text(
+                    _nuevoSaldo <= 0 ? 'Deuda saldada ✓' : AppFormatters.moneda(_nuevoSaldo),
+                    style: TextStyle(fontFamily: 'Poppins',
+                        fontSize: 18, fontWeight: FontWeight.w700,
+                        color: _nuevoSaldo <= 0 ? AppColors.success : AppColors.colorFiado),
+                  ),
+                ]),
+              ]),
             ),
+            // Vuelto — visible en tiempo real cuando paga de más
+            if (_vuelto > 0) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.successSurface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.success.withValues(alpha: 0.5)),
+                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  const Row(children: [
+                    Icon(Icons.currency_exchange_rounded,
+                        color: AppColors.success, size: 22),
+                    SizedBox(width: 10),
+                    Text('Vuelto al cliente',
+                        style: TextStyle(fontFamily: 'Poppins',
+                            fontSize: 15, fontWeight: FontWeight.w600,
+                            color: AppColors.success)),
+                  ]),
+                  Text(AppFormatters.moneda(_vuelto),
+                      style: const TextStyle(fontFamily: 'Poppins',
+                          fontSize: 24, fontWeight: FontWeight.w800,
+                          color: AppColors.success)),
+                ]),
+              ),
+            ],
+          ],
           const SizedBox(height: 20),
 
           // Método de pago

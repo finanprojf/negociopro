@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.negociopro2"
+    namespace = "com.finanprosolutions.negociopro"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.negociopro2"
+        applicationId = "com.finanprosolutions.negociopro"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

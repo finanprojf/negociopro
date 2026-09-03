@@ -5,11 +5,7 @@ import 'dart:async';
 class SupabaseService {
   static SupabaseClient get client => Supabase.instance.client;
 
- static String? get userId {
-    final id = client.auth.currentUser?.id;
-    print('👤 userId: $id');
-    return id;
-  }
+ static String? get userId => client.auth.currentUser?.id;
 
 static String? _empresaIdCache;
 static bool? _onlineCache;
@@ -41,8 +37,7 @@ static DateTime? _onlineCheckedAt;
         await prefs.setString('empresa_id', id);
       }
       return id;
-    } catch (e) {
-      print('❌ getEmpresaId error: ${e.toString()}');
+    } catch (_) {
       return null;
     }
   }
@@ -91,8 +86,7 @@ static Future<bool> get isOnlineAsync async {
           .eq('id', empresaId)
           .single();
       return res;
-    } catch (e) {
-      print('❌ Error suscripcion: $e');
+    } catch (_) {
       return null;
     }
   }

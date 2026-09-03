@@ -41,7 +41,6 @@ Future<void> _verificarAdmin() async {
         .eq('id', userId)
         .single();
     if (mounted) setState(() => _esAdmin = res['es_admin'] == true);
-    print('👑 es_admin: ${res['es_admin']}');
   } catch (_) {}
 }
   Future<void> _cargarDatos() async {
@@ -63,9 +62,7 @@ Future<void> _verificarAdmin() async {
           });
         }
       }
-    } catch (e) {
-      print('❌ Error cargar empresa: $e');
-    }
+    } catch (_) {}
   }
   @override
   void dispose() {
@@ -95,8 +92,7 @@ Future<void> _verificarAdmin() async {
           backgroundColor: AppColors.success,
         ));
       }
-    } catch (e) {
-      print('❌ Error guardar empresa: $e');
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }

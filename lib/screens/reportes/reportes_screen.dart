@@ -4,10 +4,10 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
 import '../../services/supabase_service.dart';
+import '../../services/local_database.dart';
 
 class ReportesScreen extends StatefulWidget {
   const ReportesScreen({super.key});
-
   @override
   State<ReportesScreen> createState() => _ReportesScreenState();
 }
@@ -16,22 +16,16 @@ class _ReportesScreenState extends State<ReportesScreen> {
   String _periodo = 'hoy';
   bool _loading = false;
 
-  Map<String, Map<String, double>> _datos = {
-    'hoy':    {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0, 'cobrado_fiado': 0, 'caja_real': 0},
-    'semana': {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0, 'cobrado_fiado': 0, 'caja_real': 0},
-    'mes':    {'ventas': 0, 'gastos': 0, 'ganancia': 0, 'fiado': 0, 'apartados': 0, 'cobrado_fiado': 0, 'caja_real': 0},
+  // Estructura de datos por período
+  Map<String, _DatosPeriodo> _datos = {
+    'hoy':    _DatosPeriodo(),
+    'semana': _DatosPeriodo(),
+    'mes':    _DatosPeriodo(),
   };
 
   List<Map<String, dynamic>> _productosTop = [];
 
-  Map<String, double> get _actual => _datos[_periodo]!;
-
-  double get _margen {
-    final ventas = _actual['ventas'] ?? 0;
-    final ganancia = _actual['ganancia'] ?? 0;
-    if (ventas == 0) return 0;
-    return (ganancia / ventas) * 100;
-  }
+  _DatosPeriodo get _d => _datos[_periodo]!;
 
   @override
   void initState() {
@@ -44,157 +38,200 @@ class _ReportesScreenState extends State<ReportesScreen> {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
+      if (await SupabaseService.isOnlineAsync) {
+        await _cargarOnline(empresaId);
+      } else {
+        await _cargarOffline(empresaId);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
-      final ahoraLocal = DateTime.now();
-      final inicioHoyLocal = DateTime(ahoraLocal.year, ahoraLocal.month, ahoraLocal.day);
-      final inicioSemanaLocal = inicioHoyLocal.subtract(Duration(days: ahoraLocal.weekday - 1));
-      final inicioMesLocal = DateTime(ahoraLocal.year, ahoraLocal.month, 1);
-      final finHoyLocal = inicioHoyLocal.add(const Duration(days: 1));
+  Future<void> _cargarOnline(String empresaId) async {
+    try {
+      final ahora = DateTime.now();
+      final inicioHoy    = DateTime(ahora.year, ahora.month, ahora.day);
+      final inicioSemana = inicioHoy.subtract(Duration(days: ahora.weekday - 1));
+      final inicioMes    = DateTime(ahora.year, ahora.month, 1);
 
       for (final periodo in ['hoy', 'semana', 'mes']) {
-        final inicioLocal = periodo == 'hoy' ? inicioHoyLocal
-            : periodo == 'semana' ? inicioSemanaLocal : inicioMesLocal;
-        final finLocal = periodo == 'hoy' ? finHoyLocal : ahoraLocal.add(const Duration(minutes: 1));
-        final inicioUtc = inicioLocal.toUtc().toIso8601String();
-        final finUtc = finLocal.toUtc().toIso8601String();
+        final inicio = periodo == 'hoy' ? inicioHoy
+            : periodo == 'semana' ? inicioSemana : inicioMes;
+        final inicioUtc = inicio.toUtc().toIso8601String();
+        final finUtc    = ahora.add(const Duration(minutes: 1)).toUtc().toIso8601String();
 
+        // 1. Ventas
         final ventas = await SupabaseService.client
-            .from('ventas')
-            .select('id, total, tipo_pago')
-            .eq('empresa_id', empresaId)
-            .eq('estado', 'completada')
-            .gte('created_at', inicioUtc)
-            .lt('created_at', finUtc);
+            .from('ventas').select('id, total, tipo_pago')
+            .eq('empresa_id', empresaId).eq('estado', 'completada')
+            .gte('created_at', inicioUtc).lt('created_at', finUtc);
 
-        double totalVentas = 0;
-        double totalFiado = 0;
+        double ventasContado = 0, ventasFiado = 0;
         final ventasIds = <String>[];
-
         for (final v in ventas) {
-          if (v['tipo_pago'] != 'fiado') {
-            totalVentas += (v['total'] as num).toDouble();
-          } else {
-            totalFiado += (v['total'] as num).toDouble();
-          }
+          final t = (v['total'] as num).toDouble();
+          if (v['tipo_pago'] == 'fiado') { ventasFiado += t; }
+          else { ventasContado += t; }
           ventasIds.add(v['id'] as String);
         }
 
-        double gananciaReal = 0;
+        // 2. Ganancia bruta real (precio_venta - precio_compra) × cantidad
+        double gananciaBruta = 0;
         if (ventasIds.isNotEmpty) {
           final detalles = await SupabaseService.client
               .from('detalle_ventas')
               .select('cantidad, precio_unitario, productos(precio_compra)')
               .inFilter('venta_id', ventasIds);
-
           for (final d in detalles) {
-            final precioVenta = (d['precio_unitario'] as num).toDouble();
-            final precioCompra = d['productos'] != null
-                ? (d['productos']['precio_compra'] as num).toDouble()
+            final pv = (d['precio_unitario'] as num).toDouble();
+            final pc = d['productos'] != null
+                ? (d['productos']['precio_compra'] as num? ?? 0).toDouble()
                 : 0.0;
-            final cantidad = (d['cantidad'] as num).toDouble();
-            gananciaReal += (precioVenta - precioCompra) * cantidad;
+            gananciaBruta += (pv - pc) * (d['cantidad'] as num).toDouble();
           }
         }
 
-        final gastos = await SupabaseService.client
-            .from('gastos')
-            .select('monto')
+        // 3. Gastos
+        final gastosRes = await SupabaseService.client
+            .from('gastos').select('monto')
             .eq('empresa_id', empresaId)
-            .gte('created_at', inicioUtc)
-            .lt('created_at', finUtc);
+            .gte('created_at', inicioUtc).lt('created_at', finUtc);
+        double gastos = 0;
+        for (final g in gastosRes) gastos += (g['monto'] as num).toDouble();
 
-        double totalGastos = 0;
-        for (final g in gastos) {
-          totalGastos += (g['monto'] as num).toDouble();
-        }
-
-        // Cobros de fiado
+        // 4. Cobros de fiado
         final abonosFiado = await SupabaseService.client
-            .from('abonos_fiado')
-            .select('monto')
+            .from('abonos_fiado').select('monto')
             .eq('empresa_id', empresaId)
-            .gte('created_at', inicioUtc)
-            .lt('created_at', finUtc);
+            .gte('created_at', inicioUtc).lt('created_at', finUtc);
+        double cobradoFiado = 0;
+        for (final a in abonosFiado) cobradoFiado += (a['monto'] as num).toDouble();
 
-        double totalCobradoFiado = 0;
-        for (final a in abonosFiado) {
-          totalCobradoFiado += (a['monto'] as num).toDouble();
-        }
-
-        final abonos = await SupabaseService.client
-            .from('abonos_apartado')
-            .select('monto')
+        // 5. Cobros de apartado
+        final abonosApartado = await SupabaseService.client
+            .from('abonos_apartado').select('monto')
             .eq('empresa_id', empresaId)
-            .gte('created_at', inicioUtc)
-            .lt('created_at', finUtc);
+            .gte('created_at', inicioUtc).lt('created_at', finUtc);
+        double cobradoApartado = 0;
+        for (final a in abonosApartado) cobradoApartado += (a['monto'] as num).toDouble();
 
-        double totalApartados = 0;
-        for (final a in abonos) {
-          totalApartados += (a['monto'] as num).toDouble();
-        }
-
-        _datos[periodo] = {
-          'ventas': totalVentas,
-          'gastos': totalGastos,
-          'ganancia': gananciaReal,
-          'fiado': totalFiado,
-          'cobrado_fiado': totalCobradoFiado,
-          'caja_real': totalVentas + totalCobradoFiado,
-          'apartados': totalApartados,
-        };
+        _datos[periodo] = _DatosPeriodo(
+          ventasContado:    ventasContado,
+          ventasFiado:      ventasFiado,
+          gananciaBruta:    gananciaBruta,
+          gastos:           gastos,
+          cobradoFiado:     cobradoFiado,
+          cobradoApartado:  cobradoApartado,
+        );
       }
 
-      // Productos
-      final allVentasIds = await _getVentasIds(empresaId);
-      if (allVentasIds.isNotEmpty) {
+      // Productos más vendidos (del período seleccionado)
+      final inicio = _periodo == 'hoy' ? DateTime(ahora.year, ahora.month, ahora.day)
+          : _periodo == 'semana'
+              ? DateTime(ahora.year, ahora.month, ahora.day)
+                  .subtract(Duration(days: ahora.weekday - 1))
+              : DateTime(ahora.year, ahora.month, 1);
+      final allVentas = await SupabaseService.client
+          .from('ventas').select('id')
+          .eq('empresa_id', empresaId).eq('estado', 'completada')
+          .gte('created_at', inicio.toUtc().toIso8601String());
+      final allIds = (allVentas as List).map((v) => v['id'] as String).toList();
+      if (allIds.isNotEmpty) {
         final detallesAll = await SupabaseService.client
             .from('detalle_ventas')
             .select('nombre_producto, cantidad, precio_unitario')
-            .inFilter('venta_id', allVentasIds);
-
-        final Map<String, Map<String, dynamic>> prodMap = {};
-        for (final d in detallesAll) {
-          final nombre = d['nombre_producto'] as String;
-          final cantidad = (d['cantidad'] as num).toDouble();
-          final monto = (d['precio_unitario'] as num).toDouble() * cantidad;
-
-          if (prodMap.containsKey(nombre)) {
-            prodMap[nombre]!['cantidad'] += cantidad;
-            prodMap[nombre]!['monto'] += monto;
-          } else {
-            prodMap[nombre] = {'nombre': nombre, 'cantidad': cantidad, 'monto': monto};
-          }
-        }
-
-        final sorted = prodMap.values.toList()
-          ..sort((a, b) => (b['cantidad'] as double).compareTo(a['cantidad'] as double));
-
-        if (mounted) {
-          setState(() {
-            _productosTop = sorted.take(5).toList();
-            _loading = false;
-          });
-        }
+            .inFilter('venta_id', allIds);
+        _productosTop = _calcularTop(detallesAll);
       } else {
-        if (mounted) setState(() => _loading = false);
+        _productosTop = [];
       }
-    } catch (e) {
-      print('❌ Error reportes: $e');
-      if (mounted) setState(() => _loading = false);
+    } catch (_) {
+      await _cargarOffline(empresaId);
+      return;
     }
+    if (mounted) setState(() => _loading = false);
   }
 
-  Future<List<String>> _getVentasIds(String empresaId) async {
-    final ventas = await SupabaseService.client
-        .from('ventas').select('id')
-        .eq('empresa_id', empresaId).eq('estado', 'completada');
-    return (ventas as List).map((v) => v['id'] as String).toList();
+  Future<void> _cargarOffline(String empresaId) async {
+    final db = await LocalDatabase.database;
+    final ahora = DateTime.now();
+    final inicioHoy    = DateTime(ahora.year, ahora.month, ahora.day);
+    final inicioSemana = inicioHoy.subtract(Duration(days: ahora.weekday - 1));
+    final inicioMes    = DateTime(ahora.year, ahora.month, 1);
+
+    for (final periodo in ['hoy', 'semana', 'mes']) {
+      final inicio    = periodo == 'hoy' ? inicioHoy
+          : periodo == 'semana' ? inicioSemana : inicioMes;
+      final inicioStr = inicio.toIso8601String();
+
+      final ventas = await db.query('ventas',
+          where: 'empresa_id = ? AND estado = ? AND created_at >= ?',
+          whereArgs: [empresaId, 'completada', inicioStr]);
+
+      double ventasContado = 0, ventasFiado = 0, gananciaBruta = 0;
+      for (final v in ventas) {
+        final total = (v['total'] as num).toDouble();
+        if (v['tipo_pago'] == 'fiado') { ventasFiado += total; }
+        else { ventasContado += total; }
+        final detalles = await db.query('detalle_ventas',
+            where: 'venta_id = ?', whereArgs: [v['id']]);
+        for (final d in detalles) {
+          final pv = (d['precio_unitario'] as num).toDouble();
+          final pc = (d['precio_compra'] as num? ?? 0).toDouble();
+          gananciaBruta += (pv - pc) * (d['cantidad'] as num).toDouble();
+        }
+      }
+
+      final gastosRes = await db.query('gastos',
+          where: 'empresa_id = ? AND created_at >= ?',
+          whereArgs: [empresaId, inicioStr]);
+      double gastos = 0;
+      for (final g in gastosRes) gastos += (g['monto'] as num).toDouble();
+
+      final abonosFiado = await db.query('abonos_fiado',
+          where: 'empresa_id = ? AND created_at >= ?',
+          whereArgs: [empresaId, inicioStr]);
+      double cobradoFiado = 0;
+      for (final a in abonosFiado) cobradoFiado += (a['monto'] as num).toDouble();
+
+      final abonosApartado = await db.query('abonos_apartado',
+          where: 'empresa_id = ? AND created_at >= ?',
+          whereArgs: [empresaId, inicioStr]);
+      double cobradoApartado = 0;
+      for (final a in abonosApartado) cobradoApartado += (a['monto'] as num).toDouble();
+
+      _datos[periodo] = _DatosPeriodo(
+        ventasContado:   ventasContado,
+        ventasFiado:     ventasFiado,
+        gananciaBruta:   gananciaBruta,
+        gastos:          gastos,
+        cobradoFiado:    cobradoFiado,
+        cobradoApartado: cobradoApartado,
+      );
+    }
+
+    final todosDetalles = await db.query('detalle_ventas');
+    _productosTop = _calcularTop(todosDetalles);
+    if (mounted) setState(() => _loading = false);
   }
 
-  String _corto(double valor) {
-    if (valor >= 1000000) return 'RD\$ ${(valor / 1000000).toStringAsFixed(1)}M';
-    if (valor >= 1000) return 'RD\$ ${(valor / 1000).toStringAsFixed(1)}k';
-    return AppFormatters.moneda(valor);
+  List<Map<String, dynamic>> _calcularTop(List<dynamic> detalles) {
+    final Map<String, Map<String, dynamic>> map = {};
+    for (final d in detalles) {
+      final nombre  = d['nombre_producto'] as String;
+      final cantidad = (d['cantidad'] as num).toDouble();
+      final monto   = (d['precio_unitario'] as num).toDouble() * cantidad;
+      if (map.containsKey(nombre)) {
+        map[nombre]!['cantidad'] += cantidad;
+        map[nombre]!['monto']   += monto;
+      } else {
+        map[nombre] = {'nombre': nombre, 'cantidad': cantidad, 'monto': monto};
+      }
+    }
+    return (map.values.toList()
+      ..sort((a, b) => (b['cantidad'] as double).compareTo(a['cantidad'] as double)))
+        .take(5).toList();
   }
 
   @override
@@ -219,17 +256,17 @@ class _ReportesScreenState extends State<ReportesScreen> {
                   const SizedBox(height: 20),
                   _buildKPIs(),
                   const SizedBox(height: 12),
-                  _buildGananciaReal(),
+                  _buildCajaCard(),
                   const SizedBox(height: 12),
-                  _buildResumenFiado(),
+                  _buildGananciaCard(),
                   const SizedBox(height: 24),
-                  _buildGraficoBarras(),
+                  _buildGrafico(),
                   const SizedBox(height: 24),
-                  _buildGraficoPie(),
-                  const SizedBox(height: 24),
-                  _buildSeccion('📈 Más vendidos'),
+                  Text('📈 Más vendidos',
+                      style: GoogleFonts.poppins(fontSize: 15,
+                          fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                   const SizedBox(height: 12),
-                  _buildProductosList(_productosTop, top: true),
+                  _buildProductosTop(),
                 ]),
               ),
             ),
@@ -237,12 +274,12 @@ class _ReportesScreenState extends State<ReportesScreen> {
   }
 
   Widget _buildSelectorPeriodo() {
-    final periodos = {'hoy': 'Hoy', 'semana': 'Semana', 'mes': 'Mes'};
+    final opciones = {'hoy': 'Hoy', 'semana': 'Semana', 'mes': 'Mes'};
     return Container(
       decoration: BoxDecoration(color: AppColors.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.cardBorder)),
-      child: Row(children: periodos.entries.map((e) {
+      child: Row(children: opciones.entries.map((e) {
         final sel = _periodo == e.key;
         return Expanded(child: GestureDetector(
           onTap: () => setState(() => _periodo = e.key),
@@ -264,102 +301,134 @@ class _ReportesScreenState extends State<ReportesScreen> {
   }
 
   Widget _buildKPIs() {
-    final margenColor = _margen >= 20 ? AppColors.success
-        : _margen >= 10 ? AppColors.warning : AppColors.danger;
+    final ganancia   = _d.gananciaNeta;
+    final margen     = _d.ventasContado > 0
+        ? (_d.gananciaBruta / _d.ventasContado * 100) : 0.0;
+    final margenColor = margen >= 20 ? AppColors.success
+        : margen >= 10 ? AppColors.warning : AppColors.danger;
 
     return Row(children: [
-      Expanded(child: _KPICard(label: 'Ventas',
-          valor: _corto(_actual['ventas'] ?? 0),
-          sub: 'contado', icon: Icons.trending_up_rounded,
+      Expanded(child: _KPICard(
+          label: 'Vendido', valor: _corto(_d.totalVendido),
+          sub: 'contado + fiado', icon: Icons.shopping_bag_rounded,
           color: AppColors.colorVentas)),
       const SizedBox(width: 8),
-      Expanded(child: _KPICard(label: 'Ganancia',
-          valor: _corto(_actual['ganancia'] ?? 0),
-          sub: 'neta', icon: Icons.account_balance_wallet_rounded,
-          color: AppColors.success)),
+      Expanded(child: _KPICard(
+          label: 'Ganancia', valor: _corto(ganancia),
+          sub: 'neta del período', icon: Icons.account_balance_wallet_rounded,
+          color: ganancia >= 0 ? AppColors.success : AppColors.danger)),
       const SizedBox(width: 8),
-      Expanded(child: _KPICard(label: 'Gastos',
-          valor: _corto(_actual['gastos'] ?? 0),
-          sub: 'total', icon: Icons.receipt_long_rounded,
+      Expanded(child: _KPICard(
+          label: 'Gastos', valor: _corto(_d.gastos),
+          sub: 'del período', icon: Icons.receipt_long_rounded,
           color: AppColors.colorGastos)),
       const SizedBox(width: 8),
-      Expanded(child: _KPICard(label: 'Margen',
-          valor: '${_margen.toStringAsFixed(1)}%',
+      Expanded(child: _KPICard(
+          label: 'Margen', valor: '${margen.toStringAsFixed(1)}%',
           sub: 'rentabilidad', icon: Icons.pie_chart_rounded,
           color: margenColor)),
     ]);
   }
 
-  Widget _buildGananciaReal() {
-    final ventas = _actual['ventas'] ?? 0;
-    final gastos = _actual['gastos'] ?? 0;
-    final neto = ventas - gastos;
-    final esPositivo = neto >= 0;
+  /// Cuadre de caja: lo que físicamente debe haber de efectivo
+  Widget _buildCajaCard() {
+    final contado   = _d.ventasContado;
+    final cobFiado  = _d.cobradoFiado;
+    final cobApart  = _d.cobradoApartado;
+    final gastos    = _d.gastos;
+    final enCaja    = contado + cobFiado + cobApart - gastos;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: esPositivo ? AppColors.successSurface : AppColors.dangerSurface,
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.cardBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.savings_rounded, color: AppColors.primary, size: 20),
+          const SizedBox(width: 8),
+          Text('Lo que debe haber en caja',
+              style: GoogleFonts.poppins(fontSize: 14,
+                  fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        ]),
+        const SizedBox(height: 16),
+        _Fila('💵 Ventas contado', contado, AppColors.colorVentas),
+        if (cobFiado > 0) ...[
+          const SizedBox(height: 8),
+          _Fila('🤝 Cobros de fiado', cobFiado, AppColors.success),
+        ],
+        if (cobApart > 0) ...[
+          const SizedBox(height: 8),
+          _Fila('📦 Cobros de apartado', cobApart, AppColors.colorApartados),
+        ],
+        if (gastos > 0) ...[
+          const SizedBox(height: 8),
+          _Fila('💸 Gastos pagados', -gastos, AppColors.colorGastos),
+        ],
+        if (_d.ventasFiado > 0) ...[
+          const SizedBox(height: 8),
+          _Fila('🤲 Fiado dado (no entra)', _d.ventasFiado, AppColors.textMuted,
+              nota: 'pendiente de cobro'),
+        ],
+        const Divider(height: 24),
+        _Fila('💰 Total esperado en caja', enCaja, AppColors.primary, grande: true),
+      ]),
+    );
+  }
+
+  /// Ganancia real = margen bruto − gastos
+  Widget _buildGananciaCard() {
+    final bruta  = _d.gananciaBruta;
+    final gastos = _d.gastos;
+    final neta   = _d.gananciaNeta;
+    final esPos  = neta >= 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: esPos ? AppColors.successSurface : AppColors.dangerSurface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: esPositivo
-              ? AppColors.success.withValues(alpha: 0.3)
-              : AppColors.danger.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Row(children: [
-        Icon(esPositivo ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-            color: esPositivo ? AppColors.success : AppColors.danger, size: 32),
-        const SizedBox(width: 16),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Ganancia neta real', style: GoogleFonts.poppins(
-              fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-          Text('Ventas − Gastos del período', style: GoogleFonts.poppins(
-              fontSize: 11, color: AppColors.textMuted)),
-        ])),
-        Text(AppFormatters.moneda(neto.abs()), style: GoogleFonts.poppins(
-            fontSize: 20, fontWeight: FontWeight.w700,
-            color: esPositivo ? AppColors.success : AppColors.danger)),
-        if (!esPositivo) Text(' 📉', style: GoogleFonts.poppins(fontSize: 16)),
-      ]),
-    );
-  }
-
-  Widget _buildResumenFiado() {
-    final contado = _actual['ventas'] ?? 0;
-    final fiadoNuevo = _actual['fiado'] ?? 0;
-    final cobradoFiado = _actual['cobrado_fiado'] ?? 0;
-    final cajaReal = _actual['caja_real'] ?? 0;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.cardBorder),
+            color: (esPos ? AppColors.success : AppColors.danger)
+                .withValues(alpha: 0.3)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Desglose de ingresos', style: GoogleFonts.poppins(
-            fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        Row(children: [
+          Icon(esPos ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+              color: esPos ? AppColors.success : AppColors.danger, size: 20),
+          const SizedBox(width: 8),
+          Text('Ganancia real del período',
+              style: GoogleFonts.poppins(fontSize: 14,
+                  fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        ]),
         const SizedBox(height: 16),
-        _FilaReporte('💵 Contado', contado, AppColors.colorVentas),
-        const SizedBox(height: 8),
-        _FilaReporte('🤝 Fiado nuevo', fiadoNuevo, AppColors.colorFiado),
-        const SizedBox(height: 8),
-        _FilaReporte('💰 Cobrado fiado', cobradoFiado, AppColors.success),
+        _Fila('📊 Margen bruto', bruta, AppColors.success,
+            nota: 'precio venta − costo por unidad'),
+        if (gastos > 0) ...[
+          const SizedBox(height: 8),
+          _Fila('💸 Gastos', -gastos, AppColors.colorGastos),
+        ],
         const Divider(height: 24),
-        _FilaReporte('📊 Total en caja', cajaReal, AppColors.primary, grande: true),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('✅ Ganancia neta',
+              style: GoogleFonts.poppins(fontSize: 15,
+                  fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          Text(AppFormatters.moneda(neta.abs()),
+              style: GoogleFonts.poppins(fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: esPos ? AppColors.success : AppColors.danger)),
+        ]),
       ]),
     );
   }
 
-  Widget _buildGraficoBarras() {
-    final ventas = _actual['ventas'] ?? 0;
-    final gastos = _actual['gastos'] ?? 0;
-    final ganancia = _actual['ganancia'] ?? 0;
-    final fiado = _actual['fiado'] ?? 0;
-    final apartados = _actual['apartados'] ?? 0;
-    final maxVal = [ventas, gastos, ganancia, fiado, apartados]
+  Widget _buildGrafico() {
+    final ventas   = _d.ventasContado;
+    final gastos   = _d.gastos;
+    final ganancia = _d.gananciaNeta;
+    final fiado    = _d.ventasFiado;
+    final maxVal   = [ventas, gastos, ganancia.abs(), fiado]
         .reduce((a, b) => a > b ? a : b);
     if (maxVal == 0) return const SizedBox.shrink();
 
@@ -369,172 +438,97 @@ class _ReportesScreenState extends State<ReportesScreen> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.cardBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Resumen del período', style: GoogleFonts.poppins(
-            fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        Text('Resumen visual',
+            style: GoogleFonts.poppins(fontSize: 14,
+                fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         const SizedBox(height: 20),
-        SizedBox(
-          height: 180,
-          child: BarChart(BarChartData(
-            alignment: BarChartAlignment.spaceAround,
-            maxY: maxVal * 1.2,
-            barTouchData: BarTouchData(
-              touchTooltipData: BarTouchTooltipData(
-                getTooltipColor: (_) => AppColors.textPrimary,
-                getTooltipItem: (group, groupIndex, rod, rodIndex) =>
-                    BarTooltipItem(AppFormatters.moneda(rod.toY),
-                        GoogleFonts.poppins(color: Colors.white,
-                            fontSize: 11, fontWeight: FontWeight.w600)),
-              ),
+        SizedBox(height: 160, child: BarChart(BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          maxY: maxVal * 1.25,
+          barTouchData: BarTouchData(
+            touchTooltipData: BarTouchTooltipData(
+              getTooltipColor: (_) => AppColors.textPrimary,
+              getTooltipItem: (g, gi, rod, ri) => BarTooltipItem(
+                  AppFormatters.moneda(rod.toY),
+                  GoogleFonts.poppins(color: Colors.white,
+                      fontSize: 11, fontWeight: FontWeight.w600)),
             ),
-            titlesData: FlTitlesData(
-              leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              bottomTitles: AxisTitles(sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (val, meta) {
-                  final labels = ['Ventas', 'Gastos', 'Ganancia', 'Fiado', 'Apartados'];
-                  if (val.toInt() >= labels.length) return const SizedBox();
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(labels[val.toInt()],
-                        style: GoogleFonts.poppins(fontSize: 9, color: AppColors.textMuted)),
-                  );
-                },
-              )),
-            ),
-            gridData: FlGridData(
-              show: true, drawVerticalLine: false,
-              getDrawingHorizontalLine: (_) => const FlLine(
-                  color: AppColors.cardBorder, strokeWidth: 1),
-            ),
-            borderData: FlBorderData(show: false),
-            barGroups: [
-              _bar(0, ventas, AppColors.colorVentas),
-              _bar(1, gastos, AppColors.colorGastos),
-              _bar(2, ganancia, AppColors.success),
-              _bar(3, fiado, AppColors.colorFiado),
-              _bar(4, apartados, AppColors.colorApartados),
-            ],
-          )),
-        ),
-      ]),
-    );
-  }
-
-  BarChartGroupData _bar(int x, double y, Color color) {
-    return BarChartGroupData(x: x, barRods: [
-      BarChartRodData(toY: y, color: color, width: 26,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(6))),
-    ]);
-  }
-
-  Widget _buildGraficoPie() {
-    final ventas = _actual['ventas'] ?? 0;
-    final fiado = _actual['fiado'] ?? 0;
-    final gastos = _actual['gastos'] ?? 0;
-    final apartados = _actual['apartados'] ?? 0;
-    final total = ventas + fiado + gastos + apartados;
-    if (total == 0) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.cardBorder)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Distribución', style: GoogleFonts.poppins(
-            fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-        const SizedBox(height: 16),
-        Row(children: [
-          SizedBox(
-            width: 140, height: 140,
-            child: PieChart(PieChartData(
-              sectionsSpace: 2,
-              centerSpaceRadius: 40,
-              sections: [
-                if (ventas > 0) PieChartSectionData(
-                    value: ventas, color: AppColors.colorVentas,
-                    title: '${(ventas / total * 100).toStringAsFixed(0)}%',
-                    titleStyle: GoogleFonts.poppins(fontSize: 10,
-                        fontWeight: FontWeight.w700, color: Colors.white),
-                    radius: 50),
-                if (fiado > 0) PieChartSectionData(
-                    value: fiado, color: AppColors.colorFiado,
-                    title: '${(fiado / total * 100).toStringAsFixed(0)}%',
-                    titleStyle: GoogleFonts.poppins(fontSize: 10,
-                        fontWeight: FontWeight.w700, color: Colors.white),
-                    radius: 50),
-                if (gastos > 0) PieChartSectionData(
-                    value: gastos, color: AppColors.colorGastos,
-                    title: '${(gastos / total * 100).toStringAsFixed(0)}%',
-                    titleStyle: GoogleFonts.poppins(fontSize: 10,
-                        fontWeight: FontWeight.w700, color: Colors.white),
-                    radius: 50),
-                if (apartados > 0) PieChartSectionData(
-                    value: apartados, color: AppColors.colorApartados,
-                    title: '${(apartados / total * 100).toStringAsFixed(0)}%',
-                    titleStyle: GoogleFonts.poppins(fontSize: 10,
-                        fontWeight: FontWeight.w700, color: Colors.white),
-                    radius: 50),
-              ],
+          ),
+          titlesData: FlTitlesData(
+            leftTitles:   const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles:  const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles:    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            bottomTitles: AxisTitles(sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (val, _) {
+                final labels = ['Contado', 'Fiado', 'Gastos', 'Ganancia'];
+                if (val.toInt() >= labels.length) return const SizedBox();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(labels[val.toInt()],
+                      style: GoogleFonts.poppins(fontSize: 9,
+                          color: AppColors.textMuted)),
+                );
+              },
             )),
           ),
-          const SizedBox(width: 20),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _Leyenda('Ventas', AppColors.colorVentas, AppFormatters.moneda(ventas)),
-            const SizedBox(height: 8),
-            _Leyenda('Fiado', AppColors.colorFiado, AppFormatters.moneda(fiado)),
-            const SizedBox(height: 8),
-            _Leyenda('Gastos', AppColors.colorGastos, AppFormatters.moneda(gastos)),
-            const SizedBox(height: 8),
-            _Leyenda('Apartados', AppColors.colorApartados, AppFormatters.moneda(apartados)),
-          ])),
-        ]),
+          gridData: FlGridData(
+            show: true, drawVerticalLine: false,
+            getDrawingHorizontalLine: (_) =>
+                const FlLine(color: AppColors.cardBorder, strokeWidth: 1),
+          ),
+          borderData: FlBorderData(show: false),
+          barGroups: [
+            _bar(0, ventas,           AppColors.colorVentas),
+            _bar(1, fiado,            AppColors.colorFiado),
+            _bar(2, gastos,           AppColors.colorGastos),
+            _bar(3, ganancia.abs(),   ganancia >= 0 ? AppColors.success : AppColors.danger),
+          ],
+        ))),
       ]),
     );
   }
 
-  Widget _buildSeccion(String titulo) => Text(titulo,
-      style: GoogleFonts.poppins(fontSize: 15,
-          fontWeight: FontWeight.w700, color: AppColors.textPrimary));
+  BarChartGroupData _bar(int x, double y, Color color) => BarChartGroupData(
+    x: x,
+    barRods: [BarChartRodData(toY: y, color: color, width: 26,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)))],
+  );
 
-  Widget _buildProductosList(List<Map<String, dynamic>> productos, {required bool top}) {
-    if (productos.isEmpty) {
+  Widget _buildProductosTop() {
+    if (_productosTop.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(color: AppColors.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.cardBorder)),
-        child: Center(child: Text('Sin datos disponibles',
+        child: Center(child: Text('Sin ventas en este período',
             style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textMuted))),
       );
     }
-    final color = top ? AppColors.primary : AppColors.colorGastos;
-    final maxCantidad = (productos.first['cantidad'] as double);
-
+    final max = (_productosTop.first['cantidad'] as double);
     return Container(
       decoration: BoxDecoration(color: AppColors.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.cardBorder)),
-      child: Column(children: productos.asMap().entries.map((e) {
+      child: Column(children: _productosTop.asMap().entries.map((e) {
         final i = e.key; final p = e.value;
-        final pct = maxCantidad > 0 ? (p['cantidad'] as double) / maxCantidad : 0.0;
+        final pct = max > 0 ? (p['cantidad'] as double) / max : 0.0;
         return Container(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(border: i < productos.length - 1
-              ? const Border(bottom: BorderSide(color: AppColors.cardBorder))
-              : null),
+          decoration: BoxDecoration(border: i < _productosTop.length - 1
+              ? const Border(bottom: BorderSide(color: AppColors.cardBorder)) : null),
           child: Row(children: [
-            Container(
-              width: 28, height: 28,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Center(child: Text('${i + 1}',
-                  style: GoogleFonts.poppins(fontSize: 13,
-                      fontWeight: FontWeight.w700, color: color)))),
+            Container(width: 28, height: 28,
+                decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Center(child: Text('${i + 1}',
+                    style: GoogleFonts.poppins(fontSize: 13,
+                        fontWeight: FontWeight.w700, color: AppColors.primary)))),
             const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               Text(p['nombre'] as String,
                   style: GoogleFonts.poppins(fontSize: 13,
                       fontWeight: FontWeight.w600, color: AppColors.textPrimary),
@@ -543,7 +537,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
               ClipRRect(borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(value: pct,
                       backgroundColor: AppColors.cardBorder,
-                      color: color, minHeight: 5)),
+                      color: AppColors.primary, minHeight: 5)),
               const SizedBox(height: 2),
               Text('${(p['cantidad'] as double).toStringAsFixed(0)} unidades',
                   style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted)),
@@ -557,76 +551,97 @@ class _ReportesScreenState extends State<ReportesScreen> {
       }).toList()),
     );
   }
+
+  String _corto(double v) {
+    if (v >= 1000000) return 'RD\$ ${(v / 1000000).toStringAsFixed(1)}M';
+    if (v >= 1000)    return 'RD\$ ${(v / 1000).toStringAsFixed(1)}k';
+    return AppFormatters.moneda(v);
+  }
 }
 
+// ─── Modelo de datos por período ──────────────────────────────────────────────
+class _DatosPeriodo {
+  final double ventasContado;
+  final double ventasFiado;
+  final double gananciaBruta;   // (precio_venta − precio_compra) × cantidad
+  final double gastos;
+  final double cobradoFiado;
+  final double cobradoApartado;
+
+  _DatosPeriodo({
+    this.ventasContado   = 0,
+    this.ventasFiado     = 0,
+    this.gananciaBruta   = 0,
+    this.gastos          = 0,
+    this.cobradoFiado    = 0,
+    this.cobradoApartado = 0,
+  });
+
+  double get totalVendido  => ventasContado + ventasFiado;
+  /// Ganancia neta = margen real de los productos − gastos del período
+  double get gananciaNeta  => gananciaBruta - gastos;
+  /// Efectivo esperado en caja = contado + cobros − gastos
+  double get cajaEsperada  => ventasContado + cobradoFiado + cobradoApartado - gastos;
+}
+
+// ─── Widgets auxiliares ───────────────────────────────────────────────────────
 class _KPICard extends StatelessWidget {
   final String label, valor, sub;
   final IconData icon;
   final Color color;
   const _KPICard({required this.label, required this.valor,
       required this.sub, required this.icon, required this.color});
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.cardBorder)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(width: 32, height: 32,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, color: color, size: 18)),
-        const SizedBox(height: 8),
-        Text(valor, style: GoogleFonts.poppins(fontSize: 13,
-            fontWeight: FontWeight.w700, color: color)),
-        Text(label, style: GoogleFonts.poppins(fontSize: 10,
-            color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
-        Text(sub, style: GoogleFonts.poppins(fontSize: 9, color: AppColors.textMuted)),
-      ]),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.cardBorder)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(width: 32, height: 32,
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8)),
+          child: Icon(icon, color: color, size: 18)),
+      const SizedBox(height: 8),
+      Text(valor, style: GoogleFonts.poppins(fontSize: 13,
+          fontWeight: FontWeight.w700, color: color)),
+      Text(label, style: GoogleFonts.poppins(fontSize: 10,
+          color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+      Text(sub, style: GoogleFonts.poppins(fontSize: 9, color: AppColors.textMuted)),
+    ]),
+  );
 }
 
-class _FilaReporte extends StatelessWidget {
+class _Fila extends StatelessWidget {
   final String label;
   final double valor;
   final Color color;
   final bool grande;
-  const _FilaReporte(this.label, this.valor, this.color, {this.grande = false});
-
+  final String? nota;
+  const _Fila(this.label, this.valor, this.color,
+      {this.grande = false, this.nota});
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
         Text(label, style: GoogleFonts.poppins(
             fontSize: grande ? 14 : 13,
             fontWeight: grande ? FontWeight.w700 : FontWeight.w500,
             color: AppColors.textPrimary)),
-        Text(AppFormatters.moneda(valor), style: GoogleFonts.poppins(
-            fontSize: grande ? 16 : 14,
-            fontWeight: FontWeight.w700,
-            color: color)),
-      ],
-    );
-  }
-}
-
-class _Leyenda extends StatelessWidget {
-  final String label; final Color color; final String valor;
-  const _Leyenda(this.label, this.color, this.valor);
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-    Container(width: 10, height: 10,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-    const SizedBox(width: 8),
-    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: GoogleFonts.poppins(fontSize: 10, color: AppColors.textMuted)),
-      Text(valor, style: GoogleFonts.poppins(fontSize: 11,
-          fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-    ])),
-  ]);
+        if (nota != null)
+          Text(nota!, style: GoogleFonts.poppins(
+              fontSize: 10, color: AppColors.textMuted)),
+      ])),
+      Text(valor < 0
+              ? '−${AppFormatters.moneda(valor.abs())}'
+              : AppFormatters.moneda(valor),
+          style: GoogleFonts.poppins(
+              fontSize: grande ? 16 : 14,
+              fontWeight: FontWeight.w700,
+              color: color)),
+    ],
+  );
 }

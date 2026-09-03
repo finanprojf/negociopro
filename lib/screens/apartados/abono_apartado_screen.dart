@@ -18,9 +18,12 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
   bool _loading = false;
 
   double get _monto => double.tryParse(_montoCtrl.text) ?? 0;
+  double get _montoReal => _monto.clamp(0, widget.apartado.saldoPendiente);
   double get _nuevoSaldo =>
-      (widget.apartado.saldoPendiente - _monto).clamp(0, double.infinity);
+      (widget.apartado.saldoPendiente - _montoReal).clamp(0, double.infinity);
   bool get _completaElPago => _monto >= widget.apartado.saldoPendiente;
+  double get _vuelto =>
+      _monto > widget.apartado.saldoPendiente ? _monto - widget.apartado.saldoPendiente : 0;
 
   @override
   void dispose() { _montoCtrl.dispose(); super.dispose(); }
@@ -36,7 +39,7 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
     await ApartadoService.registrarAbono(
       widget.apartado.id,
       widget.apartado.clienteId,
-      _monto,
+      _montoReal,
       _metodoPago,
     );
     if (mounted) {
@@ -44,7 +47,7 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(_completaElPago
             ? '¡Apartado completado! El cliente puede retirar su producto.'
-            : 'Abono de ${AppFormatters.moneda(_monto)} registrado'),
+            : 'Abono de ${AppFormatters.moneda(_montoReal)} registrado'),
         backgroundColor: AppColors.success,
       ));
     }
@@ -128,32 +131,69 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
           ].map((w) => Expanded(child: w)).toList()),
           const SizedBox(height: 16),
 
-          // Preview resultado
-          if (_monto > 0) AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: _completaElPago ? AppColors.successSurface : AppColors.primarySurface,
-              borderRadius: BorderRadius.circular(12),
+          // Preview en tiempo real
+          if (_monto > 0) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primarySurface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  const Text('Se aplica al apartado',
+                      style: TextStyle(fontFamily: 'Poppins',
+                          fontSize: 13, color: AppColors.primary)),
+                  Text(AppFormatters.moneda(_montoReal),
+                      style: const TextStyle(fontFamily: 'Poppins',
+                          fontSize: 18, fontWeight: FontWeight.w700,
+                          color: AppColors.primary)),
+                ]),
+                const SizedBox(height: 10),
+                const Divider(height: 1, color: AppColors.cardBorder),
+                const SizedBox(height: 10),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  const Text('Le quedan al cliente',
+                      style: TextStyle(fontFamily: 'Poppins',
+                          fontSize: 13, color: AppColors.textSecondary)),
+                  Text(
+                    _nuevoSaldo <= 0 ? 'Apartado completo ✓' : AppFormatters.moneda(_nuevoSaldo),
+                    style: TextStyle(fontFamily: 'Poppins',
+                        fontSize: 18, fontWeight: FontWeight.w700,
+                        color: _nuevoSaldo <= 0 ? AppColors.success : AppColors.colorApartados),
+                  ),
+                ]),
+              ]),
             ),
-            child: _completaElPago
-                ? const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(Icons.check_circle_rounded, color: AppColors.success, size: 22),
+            if (_vuelto > 0) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.successSurface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.success.withValues(alpha: 0.5)),
+                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  const Row(children: [
+                    Icon(Icons.currency_exchange_rounded,
+                        color: AppColors.success, size: 22),
                     SizedBox(width: 10),
-                    Text('¡Este abono completa el apartado!',
-                        style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
-                            fontWeight: FontWeight.w700, color: AppColors.success)),
-                  ])
-                : Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Nuevo saldo pendiente',
+                    Text('Vuelto al cliente',
                         style: TextStyle(fontFamily: 'Poppins',
-                            fontSize: 13, color: AppColors.primary)),
-                    Text(AppFormatters.moneda(_nuevoSaldo),
-                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 18,
-                            fontWeight: FontWeight.w700, color: AppColors.primary)),
+                            fontSize: 15, fontWeight: FontWeight.w600,
+                            color: AppColors.success)),
                   ]),
-          ),
+                  Text(AppFormatters.moneda(_vuelto),
+                      style: const TextStyle(fontFamily: 'Poppins',
+                          fontSize: 24, fontWeight: FontWeight.w800,
+                          color: AppColors.success)),
+                ]),
+              ),
+            ],
+          ],
           const SizedBox(height: 20),
 
           // Método de pago

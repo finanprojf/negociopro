@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../models/cliente_model.dart';
 import '../../services/cliente_service.dart';
-import '../../models/cliente_model.dart';
 class ClienteFormScreen extends StatefulWidget {
   final ClienteModel? cliente;
   const ClienteFormScreen({super.key, this.cliente});
@@ -47,30 +46,33 @@ Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      await ClienteService.guardarCliente(ClienteModel(
-        id: '',
-        empresaId: '',
-        nombre: _nombreCtrl.text.trim(),
-        telefono: _telefonoCtrl.text.trim().isEmpty ? null : _telefonoCtrl.text.trim(),
-        cedula: _cedulaCtrl.text.trim().isEmpty ? null : _cedulaCtrl.text.trim(),
-        correo: _correoCtrl.text.trim().isEmpty ? null : _correoCtrl.text.trim(),
-        direccion: _direccionCtrl.text.trim().isEmpty ? null : _direccionCtrl.text.trim(),
-        notas: _notasCtrl.text.trim().isEmpty ? null : _notasCtrl.text.trim(),
-      ));
+      await ClienteService.guardarCliente(
+        ClienteModel(
+          id: _esEdicion ? widget.cliente!.id : '',
+          empresaId: _esEdicion ? widget.cliente!.empresaId : '',
+          nombre: _nombreCtrl.text.trim(),
+          telefono: _telefonoCtrl.text.trim().isEmpty ? null : _telefonoCtrl.text.trim(),
+          cedula: _cedulaCtrl.text.trim().isEmpty ? null : _cedulaCtrl.text.trim(),
+          correo: _correoCtrl.text.trim().isEmpty ? null : _correoCtrl.text.trim(),
+          direccion: _direccionCtrl.text.trim().isEmpty ? null : _direccionCtrl.text.trim(),
+          notas: _notasCtrl.text.trim().isEmpty ? null : _notasCtrl.text.trim(),
+          puntosFidelidad: _esEdicion ? widget.cliente!.puntosFidelidad : 0,
+        ),
+        esNuevo: !_esEdicion,
+      );
       if (mounted) {
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Cliente registrado'),
-          backgroundColor: Color(0xFF16A34A),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(_esEdicion ? 'Cliente actualizado' : 'Cliente registrado'),
+          backgroundColor: const Color(0xFF16A34A),
         ));
       }
     } catch (e) {
-      print('❌ ERROR CLIENTE: ${e.toString()}');
       if (mounted) {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Error: ${e.toString()}'),
-          backgroundColor: Color(0xFFDC2626),
+          backgroundColor: const Color(0xFFDC2626),
         ));
       }
     }

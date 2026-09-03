@@ -37,8 +37,7 @@ class _AdminScreenState extends State<AdminScreen> {
           _loading = false;
         });
       }
-    } catch (e) {
-      print('❌ Error admin: $e');
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -79,9 +78,7 @@ class _AdminScreenState extends State<AdminScreen> {
     final uri = Uri.parse(url);
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      print('❌ Error WA: $e');
-    }
+    } catch (_) {}
   }
 
   String _planLabel(int dias) {
@@ -328,9 +325,7 @@ class _AdminScreenState extends State<AdminScreen> {
           _ofrecerEnviarRecibo(empresa, dias, nuevaFechaStr, telefono);
         }
       }
-    } catch (e) {
-      print('❌ Error activar: $e');
-    }
+    } catch (_) {}
   }
 
   void _ofrecerEnviarRecibo(Map<String, dynamic> empresa, int dias,

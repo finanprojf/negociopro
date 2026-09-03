@@ -35,8 +35,7 @@ Future<void> _cargar() async {
         _aplicarFiltros();
         _loading = false;
       });
-    } catch (e) {
-      print('❌ Error apartados: $e');
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }

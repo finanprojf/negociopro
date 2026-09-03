@@ -128,7 +128,7 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
         });
       }
     } catch (e) {
-      print('❌ Error fiados cliente: $e');
+      // Error cargando fiados
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -159,8 +159,11 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
     if (confirm != true) return;
 
     try {
-    await SupabaseService.client.from('fiados').delete().eq('id', fiado['id']);
+      // Local primero (funciona offline)
       await LocalDatabase.eliminar('fiados', 'id', fiado['id'] as String);
+      if (await SupabaseService.isOnlineAsync) {
+        await SupabaseService.client.from('fiados').delete().eq('id', fiado['id']);
+      }
       _cargar();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -434,75 +437,141 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModal) => Container(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-            top: 24, left: 24, right: 24,
-          ),
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(monto != null ? 'Saldar todo' : 'Registrar abono',
-                style: const TextStyle(fontFamily: 'Poppins',
-                    fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Text('Total pendiente: ${AppFormatters.moneda(_totalPendiente)}',
-                style: const TextStyle(fontFamily: 'Poppins',
-                    fontSize: 13, color: AppColors.textSecondary)),
-            const SizedBox(height: 20),
-            TextField(
-              controller: ctrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
-              autofocus: monto == null,
-              style: const TextStyle(fontFamily: 'Poppins', fontSize: 24,
-                  fontWeight: FontWeight.w700),
-              textAlign: TextAlign.center,
-              decoration: const InputDecoration(labelText: 'Monto', prefixText: 'RD\$ '),
+        builder: (ctx, setModal) {
+          final ingresado = double.tryParse(ctrl.text) ?? 0;
+          final montoReal = ingresado.clamp(0.0, _totalPendiente);
+          final quedan = (_totalPendiente - montoReal).clamp(0.0, double.infinity);
+          final vuelto = ingresado > _totalPendiente ? ingresado - _totalPendiente : 0.0;
+
+          return Container(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              top: 24, left: 24, right: 24,
             ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity, height: 52,
-              child: ElevatedButton(
-                onPressed: () async {
-                  final montoAbono = double.tryParse(ctrl.text) ?? 0;
-                  if (montoAbono <= 0) return;
-                  Navigator.pop(ctx);
-
-                  double restante = montoAbono;
-                  final fiadosActivos = _fiados
-                      .where((f) => f['estado'] == 'activo')
-                      .toList();
-
-                  for (final f in fiadosActivos) {
-                    if (restante <= 0) break;
-                    final saldo = (f['saldo_pendiente'] as num).toDouble();
-                    final abonoEste = restante >= saldo ? saldo : restante;
-                    await FiadoService.registrarAbono(
-                        f['id'], f['cliente_id'], abonoEste, 'efectivo');
-                    restante -= abonoEste;
-                  }
-
-                  _cargar();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(monto != null
-                          ? '¡Deuda saldada!' : 'Abono registrado'),
-                      backgroundColor: AppColors.success,
-                    ));
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.colorFiado),
-                child: Text(monto != null ? 'Confirmar — saldar todo' : 'Confirmar abono',
-                    style: const TextStyle(fontFamily: 'Poppins',
-                        fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(monto != null ? 'Saldar todo' : 'Registrar abono',
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text('Total pendiente: ${AppFormatters.moneda(_totalPendiente)}',
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 13, color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
+                autofocus: monto == null,
+                onChanged: (_) => setModal(() {}),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 28,
+                    fontWeight: FontWeight.w700),
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(labelText: 'Monto', prefixText: 'RD\$ '),
               ),
-            ),
-          ]),
-        ),
+              const SizedBox(height: 14),
+              // Preview en tiempo real
+              if (ingresado > 0) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySurface,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(children: [
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      const Text('Se aplica a deuda',
+                          style: TextStyle(fontFamily: 'Poppins',
+                              fontSize: 13, color: AppColors.primary)),
+                      Text(AppFormatters.moneda(montoReal),
+                          style: const TextStyle(fontFamily: 'Poppins',
+                              fontSize: 16, fontWeight: FontWeight.w700,
+                              color: AppColors.primary)),
+                    ]),
+                    const SizedBox(height: 8),
+                    const Divider(height: 1, color: AppColors.cardBorder),
+                    const SizedBox(height: 8),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      const Text('Le quedan al cliente',
+                          style: TextStyle(fontFamily: 'Poppins',
+                              fontSize: 13, color: AppColors.textSecondary)),
+                      Text(
+                        quedan <= 0 ? 'Deuda saldada ✓' : AppFormatters.moneda(quedan),
+                        style: TextStyle(fontFamily: 'Poppins',
+                            fontSize: 16, fontWeight: FontWeight.w700,
+                            color: quedan <= 0 ? AppColors.success : AppColors.colorFiado),
+                      ),
+                    ]),
+                  ]),
+                ),
+                if (vuelto > 0) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.successSurface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.success.withValues(alpha: 0.5)),
+                    ),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      const Row(children: [
+                        Icon(Icons.currency_exchange_rounded,
+                            color: AppColors.success, size: 20),
+                        SizedBox(width: 8),
+                        Text('Vuelto al cliente',
+                            style: TextStyle(fontFamily: 'Poppins',
+                                fontSize: 14, fontWeight: FontWeight.w600,
+                                color: AppColors.success)),
+                      ]),
+                      Text(AppFormatters.moneda(vuelto),
+                          style: const TextStyle(fontFamily: 'Poppins',
+                              fontSize: 22, fontWeight: FontWeight.w800,
+                              color: AppColors.success)),
+                    ]),
+                  ),
+                ],
+                const SizedBox(height: 14),
+              ],
+              SizedBox(
+                width: double.infinity, height: 52,
+                child: ElevatedButton(
+                  onPressed: ingresado <= 0 ? null : () async {
+                    Navigator.pop(ctx);
+                    double restante = montoReal;
+                    final fiadosActivos = _fiados
+                        .where((f) => f['estado'] == 'activo')
+                        .toList();
+                    for (final f in fiadosActivos) {
+                      if (restante <= 0) break;
+                      final saldo = (f['saldo_pendiente'] as num).toDouble();
+                      final abonoEste = restante >= saldo ? saldo : restante;
+                      await FiadoService.registrarAbono(
+                          f['id'], f['cliente_id'], abonoEste, 'efectivo');
+                      restante -= abonoEste;
+                    }
+                    _cargar();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(quedan <= 0 ? '¡Deuda saldada!' : 'Abono registrado'),
+                        backgroundColor: AppColors.success,
+                      ));
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.colorFiado),
+                  child: Text(quedan <= 0 ? 'Confirmar — saldar todo' : 'Confirmar abono',
+                      style: const TextStyle(fontFamily: 'Poppins',
+                          fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                ),
+              ),
+            ]),
+          );
+        },
       ),
     );
   }
@@ -510,98 +579,190 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
   void _mostrarAbonoFiado(Map<String, dynamic> fiado) {
     final ctrl = TextEditingController();
     final saldo = (fiado['saldo_pendiente'] as num).toDouble();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-          top: 24, left: 24, right: 24,
-        ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Abonar a este fiado',
-              style: TextStyle(fontFamily: 'Poppins',
-                  fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text('Pendiente: ${AppFormatters.moneda(saldo)}',
-              style: const TextStyle(fontFamily: 'Poppins',
-                  fontSize: 13, color: AppColors.textSecondary)),
-          const SizedBox(height: 20),
-          TextField(
-            controller: ctrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
-            autofocus: true,
-            style: const TextStyle(fontFamily: 'Poppins', fontSize: 20,
-                fontWeight: FontWeight.w700),
-            textAlign: TextAlign.center,
-            decoration: const InputDecoration(
-                labelText: 'Monto del abono', prefixText: 'RD\$ '),
-          ),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: GestureDetector(
-              onTap: () => ctrl.text = (saldo * 0.5).toStringAsFixed(2),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(color: AppColors.surfaceAlt,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.cardBorder)),
-                child: const Center(child: Text('50%',
-                    style: TextStyle(fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
-              ),
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: GestureDetector(
-              onTap: () => ctrl.text = saldo.toStringAsFixed(2),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(color: AppColors.surfaceAlt,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.cardBorder)),
-                child: const Center(child: Text('Todo',
-                    style: TextStyle(fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
-              ),
-            )),
-          ]),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity, height: 50,
-            child: ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                await FiadoService.registrarAbono(
-                  fiado['id'], fiado['cliente_id'],
-                  double.tryParse(ctrl.text) ?? 0, 'efectivo',
-                );
-                _cargar();
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.colorFiado),
-              child: const Text('Confirmar abono',
-                  style: TextStyle(fontFamily: 'Poppins',
-                      fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModal) {
+          final ingresado = double.tryParse(ctrl.text) ?? 0;
+          final montoReal = ingresado.clamp(0.0, saldo) as double;
+          final quedan = (saldo - montoReal).clamp(0.0, double.infinity);
+          final vuelto = ingresado > saldo ? ingresado - saldo : 0.0;
+
+          return Container(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              top: 24, left: 24, right: 24,
             ),
-          ),
-        ]),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Abonar a este fiado',
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text('Pendiente: ${AppFormatters.moneda(saldo)}',
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 13, color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
+                autofocus: true,
+                onChanged: (_) => setModal(() {}),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 28,
+                    fontWeight: FontWeight.w700),
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(
+                    labelText: 'Monto del abono', prefixText: 'RD\$ '),
+              ),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(child: GestureDetector(
+                  onTap: () { ctrl.text = (saldo * 0.5).toStringAsFixed(2); setModal(() {}); },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(color: AppColors.surfaceAlt,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.cardBorder)),
+                    child: const Center(child: Text('50%',
+                        style: TextStyle(fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
+                  ),
+                )),
+                const SizedBox(width: 8),
+                Expanded(child: GestureDetector(
+                  onTap: () { ctrl.text = saldo.toStringAsFixed(2); setModal(() {}); },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(color: AppColors.surfaceAlt,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.cardBorder)),
+                    child: const Center(child: Text('Todo',
+                        style: TextStyle(fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
+                  ),
+                )),
+              ]),
+              const SizedBox(height: 12),
+              // Preview en tiempo real
+              if (ingresado > 0) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySurface,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(children: [
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      const Text('Se aplica a deuda',
+                          style: TextStyle(fontFamily: 'Poppins',
+                              fontSize: 13, color: AppColors.primary)),
+                      Text(AppFormatters.moneda(montoReal),
+                          style: const TextStyle(fontFamily: 'Poppins',
+                              fontSize: 16, fontWeight: FontWeight.w700,
+                              color: AppColors.primary)),
+                    ]),
+                    const SizedBox(height: 8),
+                    const Divider(height: 1, color: AppColors.cardBorder),
+                    const SizedBox(height: 8),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      const Text('Le quedan al cliente',
+                          style: TextStyle(fontFamily: 'Poppins',
+                              fontSize: 13, color: AppColors.textSecondary)),
+                      Text(
+                        quedan <= 0 ? 'Deuda saldada ✓' : AppFormatters.moneda(quedan),
+                        style: TextStyle(fontFamily: 'Poppins',
+                            fontSize: 16, fontWeight: FontWeight.w700,
+                            color: quedan <= 0 ? AppColors.success : AppColors.colorFiado),
+                      ),
+                    ]),
+                  ]),
+                ),
+                if (vuelto > 0) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.successSurface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.success.withValues(alpha: 0.5)),
+                    ),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      const Row(children: [
+                        Icon(Icons.currency_exchange_rounded,
+                            color: AppColors.success, size: 20),
+                        SizedBox(width: 8),
+                        Text('Vuelto al cliente',
+                            style: TextStyle(fontFamily: 'Poppins',
+                                fontSize: 14, fontWeight: FontWeight.w600,
+                                color: AppColors.success)),
+                      ]),
+                      Text(AppFormatters.moneda(vuelto),
+                          style: const TextStyle(fontFamily: 'Poppins',
+                              fontSize: 22, fontWeight: FontWeight.w800,
+                              color: AppColors.success)),
+                    ]),
+                  ),
+                ],
+                const SizedBox(height: 14),
+              ],
+              SizedBox(
+                width: double.infinity, height: 50,
+                child: ElevatedButton(
+                  onPressed: ingresado <= 0 ? null : () async {
+                    Navigator.pop(ctx);
+                    await FiadoService.registrarAbono(
+                      fiado['id'], fiado['cliente_id'], montoReal, 'efectivo',
+                    );
+                    _cargar();
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.colorFiado),
+                  child: const Text('Confirmar abono',
+                      style: TextStyle(fontFamily: 'Poppins',
+                          fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                ),
+              ),
+            ]),
+          );
+        },
       ),
     );
   }
 
   void _mostrarHistorial() async {
     try {
-      final res = await SupabaseService.client
-          .from('abonos_fiado')
-          .select()
-          .eq('cliente_id', widget.cliente.id)
-          .order('created_at', ascending: false);
+      List<Map<String, dynamic>> res = [];
+
+      if (await SupabaseService.isOnlineAsync) {
+        try {
+          final data = await SupabaseService.client
+              .from('abonos_fiado')
+              .select()
+              .eq('cliente_id', widget.cliente.id)
+              .order('created_at', ascending: false);
+          res = List<Map<String, dynamic>>.from(data);
+        } catch (_) {}
+      }
+
+      // Fallback SQLite
+      if (res.isEmpty) {
+        final empresaId = await SupabaseService.getEmpresaId();
+        if (empresaId != null) {
+          final local = await LocalDatabase.consultar('abonos_fiado', empresaId);
+          res = local
+              .where((m) => m['cliente_id'] == widget.cliente.id)
+              .toList();
+        }
+      }
 
       if (!mounted) return;
       showModalBottomSheet(
@@ -641,6 +802,7 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
                       separatorBuilder: (_, __) => const Divider(),
                       itemBuilder: (_, i) {
                         final p = res[i];
+                        final monto = (p['monto'] as num).toDouble();
                         return Row(children: [
                           Container(width: 40, height: 40,
                               decoration: BoxDecoration(
@@ -660,11 +822,56 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
                                 style: const TextStyle(fontFamily: 'Poppins',
                                     fontSize: 12, color: AppColors.textSecondary)),
                           ])),
-                          Text(AppFormatters.moneda(
-                              (p['monto'] as num).toDouble()),
+                          Text(AppFormatters.moneda(monto),
                               style: const TextStyle(fontFamily: 'Poppins',
                                   fontSize: 15, fontWeight: FontWeight.w700,
                                   color: AppColors.success)),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16)),
+                                  title: const Text('Cancelar abono',
+                                      style: TextStyle(fontFamily: 'Poppins',
+                                          fontWeight: FontWeight.w700)),
+                                  content: Text(
+                                    '¿Cancelar el abono de ${AppFormatters.moneda(monto)}? La deuda volverá a su estado anterior.',
+                                    style: const TextStyle(fontFamily: 'Poppins')),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, false),
+                                      child: const Text('No')),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, true),
+                                      child: const Text('Sí, cancelar',
+                                          style: TextStyle(color: AppColors.danger,
+                                              fontWeight: FontWeight.w700))),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                await FiadoService.cancelarAbono(
+                                  p['id'] as String,
+                                  p['fiado_id'] as String,
+                                  monto,
+                                );
+                                Navigator.pop(context);
+                                _cargar();
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppColors.dangerSurface,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.undo_rounded,
+                                  color: AppColors.danger, size: 16),
+                            ),
+                          ),
                         ]);
                       },
                     ),
@@ -672,9 +879,7 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
           ]),
         ),
       );
-    } catch (e) {
-      print('❌ Error historial: $e');
-    }
+    } catch (_) {}
   }
 }
 

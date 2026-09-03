@@ -5,6 +5,7 @@ import '../../utils/formatters.dart';
 import '../../services/venta_service.dart';
 import 'detalle_venta_screen.dart';
 import '../../services/supabase_service.dart';
+import '../../services/local_database.dart';
 class HistorialVentasScreen extends StatefulWidget {
   const HistorialVentasScreen({super.key});
 
@@ -31,7 +32,15 @@ class _HistorialVentasScreenState extends State<HistorialVentasScreen> {
     setState(() => _loading = true);
     DateTime? fecha;
     if (_filtro == 'hoy') fecha = DateTime.now();
-    final ventas = await VentaService.getVentas(fecha: fecha);
+    var ventas = await VentaService.getVentas(fecha: fecha);
+
+    // Filtro semana: últimos 7 días
+    if (_filtro == 'semana') {
+      final inicio = DateTime.now().subtract(const Duration(days: 7));
+      ventas = ventas.where((v) =>
+          v.createdAt != null && v.createdAt!.isAfter(inicio)).toList();
+    }
+
     if (mounted) setState(() { _ventas = ventas; _loading = false; });
   }
 
@@ -242,10 +251,20 @@ class _VentaTile extends StatelessWidget {
                     ),
                   );
                   if (confirm == true) {
-                   await SupabaseService.client
-                        .from('ventas')
-                        .update({'estado': 'anulada'})
-                        .eq('id', venta.id);
+                    // Actualizar local primero (funciona offline)
+                    await LocalDatabase.actualizar(
+                      'ventas',
+                      {'estado': 'anulada', 'synced': 0},
+                      'id', venta.id,
+                    );
+                    // Sincronizar si hay internet
+                    if (await SupabaseService.isOnlineAsync) {
+                      await SupabaseService.client
+                          .from('ventas')
+                          .update({'estado': 'anulada'})
+                          .eq('id', venta.id);
+                      await LocalDatabase.marcarSynced('ventas', venta.id);
+                    }
                     onEliminar();
                   }
                 },

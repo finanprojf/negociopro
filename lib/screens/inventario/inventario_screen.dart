@@ -5,6 +5,7 @@ import '../../utils/formatters.dart';
 import 'producto_form_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/inventario_service.dart';
+import 'ajuste_stock_screen.dart';
 import 'dart:io';
 class InventarioScreen extends StatefulWidget {
   const InventarioScreen({super.key});
@@ -192,6 +193,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
       itemBuilder: (_, i) => _ProductoTile(
         producto: _filtrados[i],
         onTap: () => _irAFormulario(producto: _filtrados[i]),
+        onAjusteStock: () => _irAjusteStock(_filtrados[i]),
       ),
     );
   }
@@ -229,6 +231,14 @@ class _InventarioScreenState extends State<InventarioScreen> {
     final resultado = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => ProductoFormScreen(producto: producto)),
+    );
+    if (resultado == true) _cargarProductos();
+  }
+
+  void _irAjusteStock(ProductoModel producto) async {
+    final resultado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => AjusteStockScreen(producto: producto)),
     );
     if (resultado == true) _cargarProductos();
   }
@@ -306,7 +316,8 @@ class _ResumenItem extends StatelessWidget {
 class _ProductoTile extends StatelessWidget {
   final ProductoModel producto;
   final VoidCallback onTap;
-  const _ProductoTile({required this.producto, required this.onTap});
+  final VoidCallback onAjusteStock;
+  const _ProductoTile({required this.producto, required this.onTap, required this.onAjusteStock});
 
   @override
   Widget build(BuildContext context) {
@@ -350,11 +361,17 @@ class _ProductoTile extends StatelessWidget {
              child: producto.fotoUrl != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.file(File(producto.fotoUrl!), 
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
-                              Icons.inventory_2_rounded,
-                              color: AppColors.colorInventario, size: 26)),
+                      child: producto.fotoUrl!.startsWith('http')
+                          ? Image.network(producto.fotoUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.inventory_2_rounded,
+                                  color: AppColors.colorInventario, size: 26))
+                          : Image.file(File(producto.fotoUrl!),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.inventory_2_rounded,
+                                  color: AppColors.colorInventario, size: 26)),
                     )
                   : const Icon(Icons.inventory_2_rounded,
                       color: AppColors.colorInventario, size: 26),
@@ -371,14 +388,18 @@ class _ProductoTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Text(
-                        AppFormatters.stock(producto.stockActual, producto.unidad),
-                        style: const TextStyle(fontFamily: 'Poppins',
-                            fontSize: 12, color: AppColors.textMuted),
+                      Flexible(
+                        child: Text(
+                          AppFormatters.stock(producto.stockActual, producto.unidad),
+                          style: const TextStyle(fontFamily: 'Poppins',
+                              fontSize: 12, color: AppColors.textMuted),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: estadoBg,
                           borderRadius: BorderRadius.circular(20),
@@ -393,24 +414,45 @@ class _ProductoTile extends StatelessWidget {
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  AppFormatters.moneda(producto.precioVenta),
-                  style: const TextStyle(fontFamily: 'Poppins',
-                      fontSize: 14, fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Costo: ${AppFormatters.moneda(producto.precioCompra)}',
-                  style: const TextStyle(fontFamily: 'Poppins',
-                      fontSize: 10, color: AppColors.textMuted),
-                ),
-              ],
+            SizedBox(
+              width: 88,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    AppFormatters.moneda(producto.precioVenta),
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 13, fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Costo: ${AppFormatters.moneda(producto.precioCompra)}',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 10, color: AppColors.textMuted),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(width: 4),
+            GestureDetector(
+              onTap: onAjusteStock,
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.colorInventario.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.tune_rounded,
+                    color: AppColors.colorInventario, size: 18),
+              ),
+            ),
+            const SizedBox(width: 6),
             const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 20),
           ],
         ),

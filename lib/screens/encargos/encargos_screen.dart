@@ -117,9 +117,7 @@ class _EncargosScreenState extends State<EncargosScreen>
             (c) => c.nombre == resultado['nombre'],
             orElse: () => clientes.last);
         setModal(() => onCreado(nuevo.id, nuevo.nombre));
-      } catch (e) {
-        print('❌ Error: $e');
-      }
+      } catch (_) {}
     }
   }
 

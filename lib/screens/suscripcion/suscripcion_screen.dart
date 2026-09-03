@@ -10,9 +10,7 @@ class SuscripcionScreen extends StatelessWidget {
     try {
       final uri = Uri.parse(url);
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      print('❌ Error abriendo URL: $e');
-    }
+    } catch (_) {}
   }
 
   @override

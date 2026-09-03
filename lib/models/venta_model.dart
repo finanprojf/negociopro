@@ -76,6 +76,7 @@ class VentaModel {
     return {
       'empresa_id': empresaId,
       'cliente_id': clienteId,
+      'numero_venta': numeroVenta,
       'tipo_pago': tipoPago,
       'subtotal': subtotal,
       'descuento': descuento,

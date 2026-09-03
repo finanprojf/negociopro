@@ -47,6 +47,9 @@ class LocalDatabase {
         precio_compra REAL DEFAULT 0, precio_venta REAL NOT NULL,
         stock_actual REAL DEFAULT 0, stock_minimo REAL DEFAULT 5,
         unidad TEXT DEFAULT 'unidad', activo INTEGER DEFAULT 1,
+        es_elaborado INTEGER DEFAULT 0,
+        costo_produccion REAL DEFAULT 0,
+        unidades_producidas REAL DEFAULT 1,
         synced INTEGER DEFAULT 0, created_at TEXT, updated_at TEXT
       )
     ''');
@@ -138,18 +141,6 @@ class LocalDatabase {
     ''');
 
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS movimientos_puntos (
-        id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
-        cliente_id TEXT NOT NULL, venta_id TEXT,
-        tipo TEXT NOT NULL, puntos INTEGER NOT NULL,
-        descripcion TEXT, synced INTEGER DEFAULT 0, created_at TEXT
-      )
-    ''');
-    
-  }
-
- static Future<void> _onUpgrade(Database db, int oldV, int newV) async {
-    await db.execute('''
       CREATE TABLE IF NOT EXISTS encargos (
         id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
         cliente_id TEXT, descripcion TEXT NOT NULL,
@@ -160,7 +151,56 @@ class LocalDatabase {
         created_at TEXT, updated_at TEXT
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS movimientos_puntos (
+        id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
+        cliente_id TEXT NOT NULL, venta_id TEXT,
+        tipo TEXT NOT NULL, puntos INTEGER NOT NULL,
+        descripcion TEXT, synced INTEGER DEFAULT 0, created_at TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cierres_dia (
+        id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
+        fecha TEXT NOT NULL,
+        total_ventas REAL DEFAULT 0, cantidad_ventas INTEGER DEFAULT 0,
+        total_gastos REAL DEFAULT 0, ganancia REAL DEFAULT 0,
+        ganancia_real REAL DEFAULT 0,
+        efectivo_esperado REAL DEFAULT 0, efectivo_contado REAL DEFAULT 0,
+        diferencia REAL DEFAULT 0,
+        notas TEXT, synced INTEGER DEFAULT 0, created_at TEXT
+      )
+    ''');
   }
+
+  // Migraciones por versión — agregar aquí cuando suba dbVersion
+  static Future<void> _onUpgrade(Database db, int oldV, int newV) async {
+    // v1 → v2: encargos ya está en _onCreate desde v2
+    if (oldV < 5) {
+      try { await db.execute('ALTER TABLE cierres_dia ADD COLUMN ganancia_real REAL DEFAULT 0'); } catch (_) {}
+    }
+    if (oldV < 4) {
+      try { await db.execute('ALTER TABLE productos ADD COLUMN es_elaborado INTEGER DEFAULT 0'); } catch (_) {}
+      try { await db.execute('ALTER TABLE productos ADD COLUMN costo_produccion REAL DEFAULT 0'); } catch (_) {}
+      try { await db.execute('ALTER TABLE productos ADD COLUMN unidades_producidas REAL DEFAULT 1'); } catch (_) {}
+    }
+    if (oldV < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS cierres_dia (
+          id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
+          fecha TEXT NOT NULL,
+          total_ventas REAL DEFAULT 0, cantidad_ventas INTEGER DEFAULT 0,
+          total_gastos REAL DEFAULT 0, ganancia REAL DEFAULT 0,
+          efectivo_esperado REAL DEFAULT 0, efectivo_contado REAL DEFAULT 0,
+          diferencia REAL DEFAULT 0,
+          notas TEXT, synced INTEGER DEFAULT 0, created_at TEXT
+        )
+      ''');
+    }
+  }
+
 
   // ============================================================
   // HELPERS GENÉRICOS
@@ -174,17 +214,19 @@ class LocalDatabase {
   static Future<int> actualizar(String tabla, Map<String, dynamic> data,
       String whereCol, String whereVal) async {
     final db = await database;
-    return db.update(tabla, data, where: '$whereCol = ?', whereArgs: [whereVal]);
+    return db.update(tabla, data,
+        where: '$whereCol = ?', whereArgs: [whereVal]);
   }
 
-  static Future<int> eliminar(String tabla,
-      String whereCol, String whereVal) async {
+  static Future<int> eliminar(
+      String tabla, String whereCol, String whereVal) async {
     final db = await database;
     return db.delete(tabla, where: '$whereCol = ?', whereArgs: [whereVal]);
   }
 
   static Future<List<Map<String, dynamic>>> consultar(
-      String tabla, String empresaId, {String? orderBy}) async {
+      String tabla, String empresaId,
+      {String? orderBy}) async {
     final db = await database;
     return db.query(tabla,
         where: 'empresa_id = ?',
@@ -200,8 +242,7 @@ class LocalDatabase {
 
   static Future<void> marcarSynced(String tabla, String id) async {
     final db = await database;
-    await db.update(tabla, {'synced': 1},
-        where: 'id = ?', whereArgs: [id]);
+    await db.update(tabla, {'synced': 1}, where: 'id = ?', whereArgs: [id]);
   }
 
   static Future<void> cerrar() async {

@@ -92,9 +92,7 @@ class EncargoService {
               .update(dataOnline).eq('id', id);
         }
         await LocalDatabase.marcarSynced('encargos', id);
-      } catch (e) {
-        print('❌ Error guardando encargo: $e');
-      }
+      } catch (_) {}
     }
 
     return true;

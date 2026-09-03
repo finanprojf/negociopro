@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catálogo — NegocioPro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'Poppins', sans-serif; }
+    .badge-sin-stock { background: #fee2e2; color: #dc2626; }
+    .badge-stock-bajo { background: #fef3c7; color: #d97706; }
+    .badge-disponible { background: #dcfce7; color: #16a34a; }
+    .qty-btn { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; cursor: pointer; user-select: none; }
+    .carrito-fab { position: fixed; bottom: 24px; right: 24px; z-index: 50; }
+    .slide-up { animation: slideUp 0.3s ease; }
+    @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- HEADER -->
+<div id="header" class="bg-white shadow-sm sticky top-0 z-40">
+  <div class="max-w-xl mx-auto px-4 py-3 flex items-center gap-3">
+    <div id="logoContainer" class="hidden">
+      <img id="logoImg" class="w-12 h-12 rounded-xl object-cover" />
+    </div>
+    <div>
+      <h1 id="nombreNegocio" class="text-lg font-bold text-gray-900">Cargando...</h1>
+      <p id="lemaText" class="text-xs text-gray-500 hidden"></p>
+    </div>
+  </div>
+</div>
+
+<!-- INFO BAR -->
+<div id="infoBar" class="hidden bg-indigo-600 text-white">
+  <div class="max-w-xl mx-auto px-4 py-2 flex flex-wrap gap-4 text-xs">
+    <span id="horarioInfo" class="hidden flex items-center gap-1">⏰ <span id="horarioText"></span></span>
+    <span id="deliveryInfo" class="hidden flex items-center gap-1">🛵 <span id="deliveryText"></span></span>
+    <span id="zonaInfo" class="hidden flex items-center gap-1">📍 <span id="zonaText"></span></span>
+  </div>
+</div>
+
+<!-- MENSAJE BIENVENIDA -->
+<div id="mensajeBienvenida" class="hidden max-w-xl mx-auto px-4 pt-3">
+  <div class="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-sm text-indigo-800" id="mensajeText"></div>
+</div>
+
+<!-- BUSCADOR -->
+<div class="max-w-xl mx-auto px-4 pt-4">
+  <input id="buscador" type="text" placeholder="🔍 Buscar producto..."
+    class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white shadow-sm"
+    oninput="filtrar()" />
+</div>
+
+<!-- CATEGORÍAS -->
+<div id="categoriasBar" class="max-w-xl mx-auto px-4 pt-3 overflow-x-auto flex gap-2 pb-1 hidden">
+</div>
+
+<!-- PRODUCTOS -->
+<div class="max-w-xl mx-auto px-4 pt-4 pb-32">
+  <div id="loadingState" class="text-center py-16 text-gray-400">
+    <div class="text-4xl mb-3">🛍️</div>
+    <p class="text-sm">Cargando catálogo...</p>
+  </div>
+  <div id="errorState" class="hidden text-center py-16 text-gray-400">
+    <div class="text-4xl mb-3">😕</div>
+    <p class="text-sm font-semibold">Vitrina no encontrada</p>
+    <p class="text-xs mt-1">Este negocio no tiene vitrina activa.</p>
+  </div>
+  <div id="productosGrid" class="grid grid-cols-2 gap-3 hidden"></div>
+</div>
+
+<!-- CARRITO FAB -->
+<div id="carritoFab" class="carrito-fab hidden" onclick="abrirCarrito()">
+  <button class="bg-indigo-600 text-white rounded-2xl px-5 py-3.5 shadow-xl flex items-center gap-2 font-semibold text-sm">
+    🛒 Ver pedido
+    <span id="carritoCount" class="bg-white text-indigo-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">0</span>
+  </button>
+</div>
+
+<!-- MODAL CARRITO -->
+<div id="modalCarrito" class="fixed inset-0 bg-black/50 z-50 hidden" onclick="cerrarCarritoFuera(event)">
+  <div class="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[90vh] overflow-y-auto slide-up" onclick="event.stopPropagation()">
+    <div class="px-4 py-3 border-b flex items-center justify-between">
+      <h2 class="font-bold text-lg">Tu pedido</h2>
+      <button onclick="cerrarCarrito()" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+
+    <div id="carritoItems" class="px-4 py-3 space-y-3 min-h-[100px]"></div>
+
+    <div class="px-4 pb-2 border-t pt-3 space-y-3">
+      <!-- Tipo de entrega -->
+      <div>
+        <p class="text-sm font-semibold text-gray-700 mb-2">¿Cómo lo recibes?</p>
+        <div class="flex gap-2">
+          <button id="btnRecoger" onclick="setEntrega('recoger')"
+            class="flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all border-indigo-500 bg-indigo-50 text-indigo-700">
+            🏪 Recoger
+          </button>
+          <button id="btnDelivery" onclick="setEntrega('delivery')"
+            class="flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all border-gray-200 text-gray-500 hidden">
+            🛵 Delivery
+          </button>
+        </div>
+      </div>
+
+      <!-- Dirección delivery -->
+      <div id="camposDireccion" class="hidden space-y-2">
+        <input id="inputDireccion" type="text" placeholder="Tu dirección de entrega"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
+        <p id="costoDeliveryText" class="text-xs text-gray-500"></p>
+      </div>
+
+      <!-- Nombre cliente -->
+      <input id="inputNombre" type="text" placeholder="Tu nombre (opcional)"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
+
+      <!-- ¿Con cuánto pagas? -->
+      <div class="bg-amber-50 border border-amber-100 rounded-xl p-3">
+        <p class="text-xs font-semibold text-amber-800 mb-1">💵 ¿Con cuánto vas a pagar?</p>
+        <input id="inputPago" type="number" placeholder="RD$ 0"
+          class="w-full border border-amber-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-400 bg-white"
+          oninput="calcularVuelto()" />
+        <div id="vueltoBox" class="hidden mt-2 text-sm font-semibold text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+          🔄 Vuelto: <span id="vueltoTexto">RD$0</span>
+        </div>
+      </div>
+
+      <!-- Resumen -->
+      <div class="bg-gray-50 rounded-xl p-3 space-y-1">
+        <div class="flex justify-between text-sm">
+          <span class="text-gray-600">Subtotal</span>
+          <span id="subtotalText" class="font-semibold">RD$0</span>
+        </div>
+        <div id="filaDelivery" class="hidden flex justify-between text-sm">
+          <span class="text-gray-600">Delivery</span>
+          <span id="deliveryCostoText" class="font-semibold text-indigo-600">RD$0</span>
+        </div>
+        <div class="flex justify-between text-base border-t pt-1 mt-1">
+          <span class="font-bold text-gray-800">Total</span>
+          <span id="totalText" class="font-bold text-indigo-700 text-lg">RD$0</span>
+        </div>
+      </div>
+
+      <!-- Botón enviar -->
+      <button onclick="enviarPorWhatsApp()"
+        class="w-full bg-green-500 hover:bg-green-600 text-white rounded-xl py-3.5 font-bold text-base shadow-md transition-colors">
+        📲 Enviar pedido por WhatsApp
+      </button>
+      <p class="text-center text-xs text-gray-400 pb-2">Se abrirá WhatsApp con tu pedido listo</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── CONFIG ────────────────────────────────────────────────────────────────
+  const SUPABASE_URL = 'https://ljsjysphifhbyhhfxbyb.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxqc2p5c3BoaWZoYnloaGZ4YnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MDA1NzQsImV4cCI6MjA5ODE3NjU3NH0.RP9mpDSAiqSakBRvFY5AGYqFEo68JioUyvnvmlL6bV0';
+
+  // ─── ESTADO ────────────────────────────────────────────────────────────────
+  let empresa = null;
+  let config = null;
+  let productos = [];
+  let carrito = {}; // { productoId: { producto, cantidad } }
+  let tipoEntrega = 'recoger';
+  let categoriaActiva = 'todas';
+
+  // ─── INIT ──────────────────────────────────────────────────────────────────
+  async function init() {
+    const slug = location.pathname.split('/t/')[1]?.split('/')[0];
+    if (!slug) { mostrarError(); return; }
+
+    try {
+      // Buscar config por slug o por empresa_id
+      const cfgRes = await fetchSB(`vitrina_config?slug=eq.${encodeURIComponent(slug)}&activa=eq.true&select=*`);
+      let cfgData = cfgRes;
+      if (!cfgData.length) {
+        // intento por empresa_id (si usaron el UUID directo)
+        const cfgRes2 = await fetchSB(`vitrina_config?empresa_id=eq.${encodeURIComponent(slug)}&activa=eq.true&select=*`);
+        cfgData = cfgRes2;
+      }
+      if (!cfgData.length) { mostrarError(); return; }
+      config = cfgData[0];
+
+      // Cargar empresa
+      const empRes = await fetchSB(`empresas?id=eq.${config.empresa_id}&select=nombre,whatsapp,telefono,direccion,logo_url,lema`);
+      if (!empRes.length) { mostrarError(); return; }
+      empresa = empRes[0];
+
+      // Cargar productos visibles en vitrina
+      const vpRes = await fetchSB(`vitrina_productos?empresa_id=eq.${config.empresa_id}&visible=eq.true&select=producto_id`);
+      const ids = vpRes.map(v => v.producto_id);
+
+      let prodRes = [];
+      if (ids.length) {
+        prodRes = await fetchSB(`productos?id=in.(${ids.join(',')})&activo=eq.true&select=id,nombre,descripcion,precio_venta,stock_actual,foto_url,categoria_id`);
+      } else {
+        // Si no hay registro en vitrina_productos, mostrar todos los activos
+        prodRes = await fetchSB(`productos?empresa_id=eq.${config.empresa_id}&activo=eq.true&select=id,nombre,descripcion,precio_venta,stock_actual,foto_url,categoria_id`);
+      }
+      productos = prodRes;
+
+      renderHeader();
+      renderInfoBar();
+      renderProductos(productos);
+      document.getElementById('loadingState').classList.add('hidden');
+      document.getElementById('productosGrid').classList.remove('hidden');
+      document.title = `${empresa.nombre} — Catálogo`;
+
+    } catch (e) {
+      mostrarError();
+    }
+  }
+
+  async function fetchSB(path) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      }
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  // ─── RENDER ────────────────────────────────────────────────────────────────
+  function renderHeader() {
+    document.getElementById('nombreNegocio').textContent = empresa.nombre;
+    if (empresa.lema) {
+      const lema = document.getElementById('lemaText');
+      lema.textContent = empresa.lema;
+      lema.classList.remove('hidden');
+    }
+    if (empresa.logo_url) {
+      document.getElementById('logoImg').src = empresa.logo_url;
+      document.getElementById('logoContainer').classList.remove('hidden');
+    }
+  }
+
+  function renderInfoBar() {
+    let tieneInfo = false;
+    if (config.horario) {
+      document.getElementById('horarioText').textContent = config.horario;
+      document.getElementById('horarioInfo').classList.remove('hidden');
+      tieneInfo = true;
+    }
+    if (config.delivery_disponible) {
+      const precio = config.precio_delivery > 0 ? `Delivery RD$${config.precio_delivery}` : 'Delivery disponible';
+      document.getElementById('deliveryText').textContent = precio;
+      document.getElementById('deliveryInfo').classList.remove('hidden');
+      document.getElementById('btnDelivery').classList.remove('hidden');
+      tieneInfo = true;
+    }
+    if (config.zona_delivery) {
+      document.getElementById('zonaText').textContent = config.zona_delivery;
+      document.getElementById('zonaInfo').classList.remove('hidden');
+      tieneInfo = true;
+    }
+    if (tieneInfo) document.getElementById('infoBar').classList.remove('hidden');
+
+    if (config.mensaje_bienvenida) {
+      document.getElementById('mensajeText').textContent = config.mensaje_bienvenida;
+      document.getElementById('mensajeBienvenida').classList.remove('hidden');
+    }
+  }
+
+  function renderProductos(lista) {
+    const grid = document.getElementById('productosGrid');
+    grid.innerHTML = '';
+    if (!lista.length) {
+      grid.innerHTML = '<p class="col-span-2 text-center text-gray-400 py-12 text-sm">No hay productos disponibles</p>';
+      return;
+    }
+    lista.forEach(p => {
+      const sinStock = p.stock_actual <= 0;
+      const stockBajo = !sinStock && p.stock_actual <= 3;
+      const enCarrito = carrito[p.id]?.cantidad || 0;
+
+      const card = document.createElement('div');
+      card.className = 'bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col';
+      card.innerHTML = `
+        <div class="relative">
+          ${p.foto_url
+            ? `<img src="${p.foto_url}" class="w-full h-36 object-cover" onerror="this.style.display='none'" />`
+            : `<div class="w-full h-36 bg-gray-100 flex items-center justify-center text-4xl">🛍️</div>`
+          }
+          ${sinStock ? '<span class="absolute top-2 right-2 badge-sin-stock text-xs font-semibold px-2 py-0.5 rounded-full">Sin stock</span>' : ''}
+          ${stockBajo && !sinStock ? `<span class="absolute top-2 right-2 badge-stock-bajo text-xs font-semibold px-2 py-0.5 rounded-full">¡Últimos!</span>` : ''}
+        </div>
+        <div class="p-3 flex flex-col flex-1">
+          <p class="text-sm font-semibold text-gray-900 leading-tight">${p.nombre}</p>
+          ${p.descripcion ? `<p class="text-xs text-gray-400 mt-0.5 line-clamp-1">${p.descripcion}</p>` : ''}
+          <p class="text-indigo-700 font-bold text-base mt-1">RD$${Number(p.precio_venta).toLocaleString()}</p>
+          <p class="text-xs text-gray-400 mt-0.5">Stock: ${Math.floor(p.stock_actual)} disponibles</p>
+          <div class="mt-auto pt-2">
+            ${sinStock
+              ? `<p class="text-xs text-red-400 font-medium text-center">No disponible</p>`
+              : enCarrito === 0
+                ? `<button onclick="agregarAlCarrito('${p.id}')" class="w-full bg-indigo-600 text-white rounded-xl py-2 text-sm font-semibold">+ Agregar</button>`
+                : `<div class="flex items-center justify-between bg-indigo-50 rounded-xl px-2 py-1">
+                    <button class="qty-btn text-indigo-600" onclick="cambiarCantidad('${p.id}', -1)">−</button>
+                    <span class="font-bold text-indigo-700">${enCarrito}</span>
+                    <button class="qty-btn text-indigo-600" onclick="cambiarCantidad('${p.id}', 1)">+</button>
+                  </div>`
+            }
+          </div>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  // ─── BUSCADOR / FILTRO ─────────────────────────────────────────────────────
+  function filtrar() {
+    const q = document.getElementById('buscador').value.toLowerCase();
+    const filtrados = productos.filter(p => p.nombre.toLowerCase().includes(q));
+    renderProductos(filtrados);
+  }
+
+  // ─── CARRITO ───────────────────────────────────────────────────────────────
+  function agregarAlCarrito(id) {
+    const p = productos.find(x => x.id === id);
+    if (!p) return;
+    if (!carrito[id]) carrito[id] = { producto: p, cantidad: 0 };
+    carrito[id].cantidad++;
+    actualizarCarritoUI();
+    renderProductos(filtrar_actual());
+  }
+
+  function cambiarCantidad(id, delta) {
+    if (!carrito[id]) return;
+    carrito[id].cantidad += delta;
+    if (carrito[id].cantidad <= 0) delete carrito[id];
+    actualizarCarritoUI();
+    renderProductos(filtrar_actual());
+  }
+
+  function filtrar_actual() {
+    const q = document.getElementById('buscador').value.toLowerCase();
+    return q ? productos.filter(p => p.nombre.toLowerCase().includes(q)) : productos;
+  }
+
+  function actualizarCarritoUI() {
+    const total = Object.keys(carrito).length;
+    document.getElementById('carritoCount').textContent = total;
+    const fab = document.getElementById('carritoFab');
+    total > 0 ? fab.classList.remove('hidden') : fab.classList.add('hidden');
+  }
+
+  function abrirCarrito() {
+    renderCarritoModal();
+    document.getElementById('modalCarrito').classList.remove('hidden');
+  }
+
+  function cerrarCarrito() {
+    document.getElementById('modalCarrito').classList.add('hidden');
+  }
+
+  function cerrarCarritoFuera(e) {
+    if (e.target === document.getElementById('modalCarrito')) cerrarCarrito();
+  }
+
+  function renderCarritoModal() {
+    const items = document.getElementById('carritoItems');
+    items.innerHTML = '';
+    if (!Object.keys(carrito).length) {
+      items.innerHTML = '<p class="text-center text-gray-400 text-sm py-6">Tu carrito está vacío</p>';
+      return;
+    }
+    Object.values(carrito).forEach(({ producto, cantidad }) => {
+      const subtotal = producto.precio_venta * cantidad;
+      const div = document.createElement('div');
+      div.className = 'flex items-center gap-3';
+      div.innerHTML = `
+        <div class="flex-1">
+          <p class="text-sm font-semibold text-gray-800">${producto.nombre}</p>
+          <p class="text-xs text-gray-500">RD$${Number(producto.precio_venta).toLocaleString()} c/u</p>
+        </div>
+        <div class="flex items-center gap-2 bg-indigo-50 rounded-xl px-2 py-1">
+          <button class="qty-btn text-indigo-600 text-lg" onclick="cambiarCantidad('${producto.id}', -1); renderCarritoModal()">−</button>
+          <span class="font-bold text-indigo-700 w-5 text-center">${cantidad}</span>
+          <button class="qty-btn text-indigo-600 text-lg" onclick="cambiarCantidad('${producto.id}', 1); renderCarritoModal()">+</button>
+        </div>
+        <p class="text-sm font-bold text-indigo-700 w-16 text-right">RD$${Number(subtotal).toLocaleString()}</p>
+      `;
+      items.appendChild(div);
+    });
+    actualizarTotales();
+    calcularVuelto();
+  }
+
+  function actualizarTotales() {
+    const subtotal = Object.values(carrito).reduce((s, { producto, cantidad }) => s + producto.precio_venta * cantidad, 0);
+    const costoDelivery = tipoEntrega === 'delivery' ? (config.precio_delivery || 0) : 0;
+    const total = subtotal + costoDelivery;
+
+    document.getElementById('subtotalText').textContent = `RD$${Number(subtotal).toLocaleString()}`;
+    document.getElementById('totalText').textContent = `RD$${Number(total).toLocaleString()}`;
+
+    const filaD = document.getElementById('filaDelivery');
+    if (tipoEntrega === 'delivery' && costoDelivery > 0) {
+      document.getElementById('deliveryCostoText').textContent = `RD$${costoDelivery}`;
+      filaD.classList.remove('hidden');
+    } else {
+      filaD.classList.add('hidden');
+    }
+  }
+
+  function setEntrega(tipo) {
+    tipoEntrega = tipo;
+    document.getElementById('btnRecoger').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${tipo === 'recoger' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500'}`;
+    document.getElementById('btnDelivery').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${tipo === 'delivery' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500'}`;
+    const campos = document.getElementById('camposDireccion');
+    tipo === 'delivery' ? campos.classList.remove('hidden') : campos.classList.add('hidden');
+    actualizarTotales();
+    calcularVuelto();
+  }
+
+  function calcularVuelto() {
+    const subtotal = Object.values(carrito).reduce((s, { producto, cantidad }) => s + producto.precio_venta * cantidad, 0);
+    const costoDelivery = tipoEntrega === 'delivery' ? (config?.precio_delivery || 0) : 0;
+    const total = subtotal + costoDelivery;
+    const pago = parseFloat(document.getElementById('inputPago')?.value || 0);
+    const box = document.getElementById('vueltoBox');
+    if (pago >= total && pago > 0) {
+      const vuelto = pago - total;
+      document.getElementById('vueltoTexto').textContent = `RD$${Number(vuelto).toLocaleString()}`;
+      box.classList.remove('hidden');
+    } else {
+      box.classList.add('hidden');
+    }
+  }
+
+  // ─── WHATSAPP ──────────────────────────────────────────────────────────────
+  function enviarPorWhatsApp() {
+    if (!Object.keys(carrito).length) {
+      alert('Agrega productos a tu pedido primero.');
+      return;
+    }
+    const nombre = document.getElementById('inputNombre').value.trim();
+    const direccion = document.getElementById('inputDireccion').value.trim();
+    const pago = parseFloat(document.getElementById('inputPago').value || 0);
+
+    const subtotal = Object.values(carrito).reduce((s, { producto, cantidad }) => s + producto.precio_venta * cantidad, 0);
+    const costoDelivery = tipoEntrega === 'delivery' ? (config.precio_delivery || 0) : 0;
+    const total = subtotal + costoDelivery;
+    const vuelto = pago >= total ? pago - total : null;
+
+    let msg = `🛍️ *Pedido — ${empresa.nombre}*\n\n`;
+    if (nombre) msg += `👤 *Cliente:* ${nombre}\n`;
+    msg += `📦 *Productos:*\n`;
+    Object.values(carrito).forEach(({ producto, cantidad }) => {
+      msg += `  • ${producto.nombre} x${cantidad} — RD$${Number(producto.precio_venta * cantidad).toLocaleString()}\n`;
+    });
+    msg += `\n💰 *Subtotal:* RD$${Number(subtotal).toLocaleString()}`;
+    if (costoDelivery > 0) msg += `\n🛵 *Delivery:* RD$${costoDelivery}`;
+    msg += `\n✅ *TOTAL: RD$${Number(total).toLocaleString()}*`;
+    if (tipoEntrega === 'delivery') {
+      msg += `\n\n🛵 *Entrega:* Delivery`;
+      if (direccion) msg += `\n📍 *Dirección:* ${direccion}`;
+    } else {
+      msg += `\n\n🏪 *Entrega:* Recoger en tienda`;
+    }
+    if (pago > 0) {
+      msg += `\n💵 *Paga con:* RD$${Number(pago).toLocaleString()}`;
+      if (vuelto !== null) msg += `\n🔄 *Vuelto necesario:* RD$${Number(vuelto).toLocaleString()}`;
+    }
+    msg += `\n\n_Pedido enviado desde NegocioPro Vitrina_`;
+
+    let numero = (empresa.whatsapp || empresa.telefono || '').replace(/[^0-9]/g, '');
+    if (!numero) { alert('Este negocio no tiene número de WhatsApp configurado.'); return; }
+    // Si el número tiene 10 dígitos y empieza con 8 o 9, es dominicano → agregar 1
+    if (numero.length === 10 && (numero.startsWith('8') || numero.startsWith('9'))) {
+      numero = '1' + numero;
+    }
+    // Si tiene 7 dígitos, agregar 1809
+    if (numero.length === 7) numero = '1809' + numero;
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+
+  function mostrarError() {
+    document.getElementById('loadingState').classList.add('hidden');
+    document.getElementById('errorState').classList.remove('hidden');
+  }
+
+  init();
+</script>
+</body>
+</html>

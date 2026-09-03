@@ -108,8 +108,7 @@ class _FiadoScreenState extends State<FiadoScreen> {
           _loading = false;
         });
       }
-    } catch (e) {
-      print('❌ Error fiados: $e');
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }

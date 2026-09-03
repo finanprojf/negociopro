@@ -112,14 +112,15 @@ Future<void> _agregarClienteRapido() async {
         ));
        await _cargarClientes();
         // Seleccionar el cliente recién creado y continuar con la venta
+        // Recargar lista y encontrar el nuevo cliente
+        await _cargarClientes();
         final clienteNuevo = _clientesDemo.firstWhere(
             (c) => c['nombre'] == resultado['nombre'],
-            orElse: () => _clientesDemo.last);
-       setState(() {
-          _clienteSeleccionado = clienteNuevo['id'];
-          _tipoPago = 'fiado';
-        });
-        // Registrar la venta automáticamente con el cliente nuevo
+            orElse: () => _clientesDemo.isNotEmpty ? _clientesDemo.last : {'id': '', 'nombre': ''});
+
+        if (clienteNuevo['id']!.isEmpty) return;
+
+        final totalAntes = _total; // guardar antes de limpiar
         await VentaService.registrarVenta(
           items: _carrito.map((i) => {
             'producto': i.producto,
@@ -134,18 +135,15 @@ Future<void> _agregarClienteRapido() async {
           _carrito.clear();
           _clienteSeleccionado = null;
           _tipoPago = 'efectivo';
+          _montoIngresadoTemp = 0;
         });
         if (context.mounted) {
-          Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('¡Venta registrada! ${resultado['nombre']} debe RD${_total - _montoIngresadoTemp}'),
+            content: Text('¡Venta registrada! ${resultado['nombre']} debe ${AppFormatters.moneda(totalAntes - _montoIngresadoTemp)}'),
             backgroundColor: AppColors.success,
           ));
         }
-    
-      } catch (e) {
-        print('❌ Error agregar cliente: $e');
-      }
+      } catch (_) {}
     }
   }
  Future<void> _cargarProductos() async {
@@ -198,9 +196,7 @@ Future<void> _cargarClientes() async {
         }).toList();
         _clientesFiltrados = _clientesDemo;
       });
-    } catch (e) {
-      print('❌ Error clientes POS: $e');
-    }
+    } catch (_) {}
   }
   @override
   Widget build(BuildContext context) {
@@ -524,9 +520,17 @@ Future<void> _cargarClientes() async {
                 inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
                 onChanged: (_) => setModal(() {}),
                 style: GoogleFonts.poppins(fontSize: 16),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Monto recibido',
                   prefixText: 'RD\$ ',
+                  suffixIcon: ctrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.cancel_rounded,
+                              color: AppColors.textMuted, size: 20),
+                          onPressed: () => setModal(() => ctrl.clear()),
+                          splashRadius: 18,
+                        )
+                      : null,
                 ),
               ),
               const SizedBox(height: 10),
@@ -832,11 +836,17 @@ class _ProdCard extends StatelessWidget {
                     child: producto.fotoUrl != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(7),
-                            child: Image.file(File(producto.fotoUrl!),
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(
-                                    Icons.inventory_2_rounded,
-                                    color: AppColors.colorVentas, size: 16)))
+                            child: producto.fotoUrl!.startsWith('http')
+                                ? Image.network(producto.fotoUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.inventory_2_rounded,
+                                        color: AppColors.colorVentas, size: 16))
+                                : Image.file(File(producto.fotoUrl!),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.inventory_2_rounded,
+                                        color: AppColors.colorVentas, size: 16)))
                         : const Icon(Icons.inventory_2_rounded,
                             color: AppColors.colorVentas, size: 16)),
                 const Spacer(),

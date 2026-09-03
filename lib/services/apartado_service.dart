@@ -97,6 +97,51 @@ class ApartadoService {
     return true;
   }
 
+  static Future<bool> cancelarAbono(String abonoId, String apartadoId, double monto) async {
+    final db = await LocalDatabase.database;
+
+    final rows = await db.query('apartados', where: 'id = ?', whereArgs: [apartadoId]);
+    if (rows.isNotEmpty) {
+      final saldoActual = (rows.first['saldo_pendiente'] as num).toDouble();
+      final montoTotal = (rows.first['monto_total'] as num).toDouble();
+      final pagadoActual = (rows.first['monto_pagado'] as num).toDouble();
+      final nuevoSaldo = (saldoActual + monto).clamp(0.0, montoTotal);
+      final nuevoPagado = (pagadoActual - monto).clamp(0.0, montoTotal);
+
+      await LocalDatabase.actualizar('apartados', {
+        'saldo_pendiente': nuevoSaldo,
+        'monto_pagado': nuevoPagado,
+        'estado': nuevoSaldo > 0 ? 'activo' : 'completado',
+        'updated_at': DateTime.now().toIso8601String(),
+        'synced': 0,
+      }, 'id', apartadoId);
+    }
+
+    await LocalDatabase.eliminar('abonos_apartado', 'id', abonoId);
+
+    if (await SupabaseService.isOnlineAsync) {
+      try {
+        await SupabaseService.client.from('abonos_apartado').delete().eq('id', abonoId);
+        if (rows.isNotEmpty) {
+          final saldoActual = (rows.first['saldo_pendiente'] as num).toDouble();
+          final montoTotal = (rows.first['monto_total'] as num).toDouble();
+          final pagadoActual = (rows.first['monto_pagado'] as num).toDouble();
+          final nuevoSaldo = (saldoActual + monto).clamp(0.0, montoTotal);
+          final nuevoPagado = (pagadoActual - monto).clamp(0.0, montoTotal);
+          await SupabaseService.client.from('apartados').update({
+            'saldo_pendiente': nuevoSaldo,
+            'monto_pagado': nuevoPagado,
+            'estado': nuevoSaldo > 0 ? 'activo' : 'completado',
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', apartadoId);
+          await LocalDatabase.marcarSynced('apartados', apartadoId);
+        }
+      } catch (_) {}
+    }
+
+    return true;
+  }
+
   static Future<bool> registrarAbono(
     String apartadoId,
     String clienteId,
@@ -150,31 +195,23 @@ class ApartadoService {
           'metodo_pago': metodoPago,
         });
 
-        // Actualizar saldo en Supabase
-        final apartado = await SupabaseService.client
-            .from('apartados')
-            .select('saldo_pendiente, monto_pagado')
-            .eq('id', apartadoId)
-            .single();
-
-        final saldoActual = (apartado['saldo_pendiente'] as num).toDouble();
-        final pagadoActual = (apartado['monto_pagado'] as num).toDouble();
-        final nuevoSaldo = (saldoActual - monto).clamp(0.0, double.infinity);
-        final nuevoPagado = pagadoActual + monto;
-        final nuevoEstado = nuevoSaldo <= 0 ? 'completado' : 'activo';
-
-        await SupabaseService.client.from('apartados').update({
-          'saldo_pendiente': nuevoSaldo,
-          'monto_pagado': nuevoPagado,
-          'estado': nuevoEstado,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', apartadoId);
+        // Usar el saldo ya leído de SQLite para evitar race condition
+        if (rows.isNotEmpty) {
+          final saldoAntes = (rows.first['saldo_pendiente'] as num).toDouble();
+          final pagadoAntes = (rows.first['monto_pagado'] as num).toDouble();
+          final nuevoSaldo = (saldoAntes - monto).clamp(0.0, double.infinity);
+          final nuevoPagado = pagadoAntes + monto;
+          final nuevoEstado = nuevoSaldo <= 0 ? 'completado' : 'activo';
+          await SupabaseService.client.from('apartados').update({
+            'saldo_pendiente': nuevoSaldo,
+            'monto_pagado': nuevoPagado,
+            'estado': nuevoEstado,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', apartadoId);
+        }
 
         await LocalDatabase.marcarSynced('abonos_apartado', abonoId);
-        print('✅ Abono apartado sincronizado');
-      } catch (e) {
-        print('❌ Error sync abono apartado: $e');
-      }
+      } catch (_) {}
     }
     return true;
   }

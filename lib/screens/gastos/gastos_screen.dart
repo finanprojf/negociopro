@@ -6,6 +6,7 @@ import '../../utils/formatters.dart';
 import '../../services/gasto_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/supabase_service.dart';
+import '../../services/local_database.dart';
 class GastosScreen extends StatefulWidget {
   const GastosScreen({super.key});
 
@@ -42,8 +43,7 @@ class _GastosScreenState extends State<GastosScreen> {
         _gastos = gastos;
         _loading = false;
       });
-    } catch (e) {
-      print('❌ Error gastos: $e');
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -123,10 +123,15 @@ class _GastosScreenState extends State<GastosScreen> {
             ),
           );
           if (confirm == true) {
-            await SupabaseService.client
-                .from('gastos')
-                .delete()
-                .eq('id', _gastos[i].id);
+            await LocalDatabase.eliminar('gastos', 'id', _gastos[i].id);
+            if (await SupabaseService.isOnlineAsync) {
+              try {
+                await SupabaseService.client
+                    .from('gastos')
+                    .delete()
+                    .eq('id', _gastos[i].id);
+              } catch (_) {}
+            }
             _cargar();
           }
         },
