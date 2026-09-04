@@ -11,16 +11,22 @@ class CierreDiaService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return {};
 
-    final hoy     = DateTime.now();
-    final inicio  = DateTime(hoy.year, hoy.month, hoy.day).toUtc().toIso8601String();
-    final fin     = DateTime(hoy.year, hoy.month, hoy.day + 1).toUtc().toIso8601String();
-    final db      = await LocalDatabase.database;
+    final db = await LocalDatabase.database;
 
-    // ── 1. VENTAS DEL DÍA ──────────────────────────────────────
+    // Filtrar desde el último cuadre, no desde medianoche
+    String inicio = '2000-01-01T00:00:00.000Z';
+    final cierres = await db.query('cierres_dia',
+        where: 'empresa_id = ?', whereArgs: [empresaId],
+        orderBy: 'created_at DESC', limit: 1);
+    if (cierres.isNotEmpty && cierres.first['created_at'] != null) {
+      inicio = cierres.first['created_at'] as String;
+    }
+
+    // ── 1. VENTAS DEL PERÍODO ──────────────────────────────────
     final ventasRows = await db.query(
       'ventas',
-      where: "empresa_id = ? AND estado = 'completada' AND created_at >= ? AND created_at < ?",
-      whereArgs: [empresaId, inicio, fin],
+      where: "empresa_id = ? AND estado = 'completada' AND created_at >= ?",
+      whereArgs: [empresaId, inicio],
     );
 
     double ventasEfectivo      = 0;
@@ -46,8 +52,8 @@ class CierreDiaService {
     // Solo los que entran en efectivo a la caja
     final abonosFiadoRows = await db.query(
       'abonos_fiado',
-      where: "empresa_id = ? AND created_at >= ? AND created_at < ?",
-      whereArgs: [empresaId, inicio, fin],
+      where: "empresa_id = ? AND created_at >= ?",
+      whereArgs: [empresaId, inicio],
     );
 
     double abonosFiadoEfectivo      = 0;
@@ -70,8 +76,8 @@ class CierreDiaService {
     // ── 3. ABONOS DE APARTADO COBRADOS HOY ────────────────────
     final abonosApartadoRows = await db.query(
       'abonos_apartado',
-      where: "empresa_id = ? AND created_at >= ? AND created_at < ?",
-      whereArgs: [empresaId, inicio, fin],
+      where: "empresa_id = ? AND created_at >= ?",
+      whereArgs: [empresaId, inicio],
     );
 
     double abonosApartadoEfectivo      = 0;
@@ -94,8 +100,8 @@ class CierreDiaService {
     // ── 4. GASTOS DEL DÍA ─────────────────────────────────────
     final gastosRows = await db.query(
       'gastos',
-      where: "empresa_id = ? AND created_at >= ? AND created_at < ?",
-      whereArgs: [empresaId, inicio, fin],
+      where: "empresa_id = ? AND created_at >= ?",
+      whereArgs: [empresaId, inicio],
     );
 
     double gastosEfectivo      = 0;

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
 import '../../services/cierre_dia_service.dart';
+import '../../services/cuadre_automatico_service.dart';
 import '../../models/cierre_dia_model.dart';
 
 class CierreDiaScreen extends StatefulWidget {
@@ -24,6 +25,12 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
   final _notasCtrl    = TextEditingController();
   final _formKey      = GlobalKey<FormState>();
 
+  // Auto-cuadre
+  bool _autoActivo    = false;
+  int  _autoHora      = 22;
+  int  _autoMinuto    = 0;
+  int  _autoIntervalo = 0; // 0=hora fija, 8/12/24=cada X horas
+
   // Tiempo real
   double _efectivoContado  = 0;
   double _diferencia       = 0;
@@ -32,7 +39,7 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _efectivoCtrl.addListener(_actualizarCuadre);
     _cargar();
   }
@@ -56,6 +63,10 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
 
   Future<void> _cargar() async {
     setState(() => _cargando = true);
+    final activo    = await CuadreAutomaticoService.isActivo();
+    final hora      = await CuadreAutomaticoService.getHora();
+    final minuto    = await CuadreAutomaticoService.getMinuto();
+    final intervalo = await CuadreAutomaticoService.getIntervalo();
     final r = await CierreDiaService.calcularResumenHoy();
     final h = await CierreDiaService.getHistorial();
     if (!mounted) return;
@@ -64,6 +75,10 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
       _historial        = h;
       _efectivoEsperado = _d('efectivo_esperado');
       _diferencia       = _efectivoContado - _efectivoEsperado;
+      _autoActivo       = activo;
+      _autoHora         = hora;
+      _autoMinuto       = minuto;
+      _autoIntervalo    = intervalo;
       _cargando         = false;
     });
   }
@@ -103,7 +118,7 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
           Icon(sobra ? Icons.check_circle : Icons.warning_amber_rounded,
               color: sobra ? AppColors.success : AppColors.warning),
           const SizedBox(width: 8),
-          const Text('Cierre registrado'),
+          const Text('Cuadre registrado'),
         ]),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           _cr('Ventas del día',     AppFormatters.moneda(c.totalVentas)),
@@ -133,7 +148,7 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
     appBar: AppBar(
       backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
-      title: Text('Cierre de Día',
+      title: Text('Cuadre de Caja',
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
       bottom: TabBar(
         controller: _tabs,
@@ -141,15 +156,16 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
         labelColor: Colors.white,
         unselectedLabelColor: Colors.white60,
         tabs: const [
-          Tab(icon: Icon(Icons.lock_clock), text: 'Nuevo Cierre'),
+          Tab(icon: Icon(Icons.lock_clock), text: 'Nuevo Cuadre'),
           Tab(icon: Icon(Icons.history),    text: 'Historial'),
+          Tab(icon: Icon(Icons.alarm),      text: 'Automático'),
         ],
       ),
     ),
     body: _cargando
         ? const Center(child: CircularProgressIndicator())
         : TabBarView(controller: _tabs,
-            children: [_tabNuevo(), _tabHistorial()]),
+            children: [_tabNuevo(), _tabHistorial(), _tabAutomatico()]),
   );
 
   // ══════════════════════ TAB 1 ════════════════════════════════
@@ -380,7 +396,7 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
                           color: Colors.white, strokeWidth: 2))
                   : const Icon(Icons.lock_clock, color: Colors.white),
               label: Text(
-                _guardando ? 'Guardando...' : 'Confirmar Cierre de Día',
+                _guardando ? 'Guardando...' : 'Confirmar Cuadre de Caja',
                 style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
@@ -397,6 +413,173 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
         ]),
       ),
     );
+  }
+
+
+  // ══════════════════════ TAB 3: AUTO ════════════════════════
+  Widget _tabAutomatico() {
+    final intervalOpts = [
+      {'label': 'Hora fija del día', 'val': 0},
+      {'label': 'Cada 8 horas',      'val': 8},
+      {'label': 'Cada 12 horas',     'val': 12},
+      {'label': 'Cada 24 horas',     'val': 24},
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _titulo('Cuadre Automático', Icons.alarm_rounded, AppColors.primary),
+
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+            // Toggle
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Activar recordatorio',
+                    style: TextStyle(fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary, fontSize: 14)),
+                const SizedBox(height: 2),
+                Text('Recibirás una notificación para hacer el cuadre',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+              ])),
+              Switch(
+                value: _autoActivo,
+                activeColor: AppColors.primary,
+                onChanged: (v) => setState(() => _autoActivo = v),
+              ),
+            ]),
+
+            if (_autoActivo) ...[
+              const Divider(height: 24),
+
+              // Tipo de intervalo
+              Text('¿Cuándo recordar?',
+                  style: TextStyle(color: AppColors.textSecondary,
+                      fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int>(
+                value: _autoIntervalo,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                ),
+                items: intervalOpts.map((o) => DropdownMenuItem<int>(
+                  value: o['val'] as int,
+                  child: Text(o['label'] as String),
+                )).toList(),
+                onChanged: (v) => setState(() => _autoIntervalo = v ?? 0),
+              ),
+
+              // Hora fija picker
+              if (_autoIntervalo == 0) ...[
+                const SizedBox(height: 16),
+                Text('Hora del recordatorio',
+                    style: TextStyle(color: AppColors.textSecondary,
+                        fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () async {
+                    final t = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay(
+                          hour: _autoHora, minute: _autoMinuto),
+                    );
+                    if (t != null) setState(() {
+                      _autoHora   = t.hour;
+                      _autoMinuto = t.minute;
+                    });
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 14),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.cardBorder),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.access_time, color: AppColors.primary),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${_autoHora.toString().padLeft(2, '0')}:'
+                        '${_autoMinuto.toString().padLeft(2, '0')}',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary),
+                      ),
+                      const Spacer(),
+                      Text('Toca para cambiar',
+                          style: TextStyle(color: AppColors.textMuted,
+                              fontSize: 12)),
+                    ]),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 8),
+              if (_autoIntervalo > 0)
+                Text(
+                  '⏱ La notificación se enviará cada $_autoIntervalo horas '
+                  'mientras la app esté instalada.',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+              if (_autoIntervalo == 0)
+                Text(
+                  '🕐 Recibirás la notificación todos los días a las '
+                  '${_autoHora.toString().padLeft(2, '0')}:'
+                  '${_autoMinuto.toString().padLeft(2, '0')}.',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+            ],
+          ]),
+        ),
+
+        const SizedBox(height: 24),
+
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _guardarAutoConfig,
+            icon: const Icon(Icons.save_rounded, color: Colors.white),
+            label: Text('Guardar configuración',
+                style: TextStyle(color: Colors.white,
+                    fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Future<void> _guardarAutoConfig() async {
+    await CuadreAutomaticoService.guardar(
+      activo:         _autoActivo,
+      hora:           _autoHora,
+      minuto:         _autoMinuto,
+      intervaloHoras: _autoIntervalo,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(_autoActivo
+          ? '✅ Recordatorio activado'
+          : '🔕 Recordatorio desactivado'),
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
   // ══════════════════════ TAB 2 ════════════════════════════════

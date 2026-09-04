@@ -7,6 +7,7 @@ import 'theme/app_theme.dart';
 import 'utils/constants.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
+import 'services/cuadre_automatico_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +24,9 @@ Future<void> main() async {
     url: AppConstants.supabaseUrl,
     anonKey: AppConstants.supabaseAnonKey,
   );
+
+  await CuadreAutomaticoService.init();
+  await CuadreAutomaticoService.reprogramarSiIntervalo();
 
   runApp(const NegocioProApp());
 }

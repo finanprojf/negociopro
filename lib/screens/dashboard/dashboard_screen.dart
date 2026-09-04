@@ -116,15 +116,20 @@ DateTime _toLocal(String dateStr) {
     // Si no hay internet cargar desde SQLite
       if (!await SupabaseService.isOnlineAsync) {
         final db = await LocalDatabase.database;
-        final ahoraLocal = DateTime.now();
-        final inicioLocal = DateTime(ahoraLocal.year, ahoraLocal.month, ahoraLocal.day);
-        final finLocal = inicioLocal.add(const Duration(days: 1));
-        final inicioUtc = inicioLocal.toUtc().toIso8601String();
-        final finUtc = finLocal.toUtc().toIso8601String();
+
+        // Filtrar desde el último cierre (no desde medianoche)
+        String? desdeCierre;
+        final cierresOff = await db.query('cierres_dia',
+            where: 'empresa_id = ?', whereArgs: [empresaId],
+            orderBy: 'created_at DESC', limit: 1);
+        if (cierresOff.isNotEmpty) {
+          desdeCierre = cierresOff.first['created_at'] as String?;
+        }
+        final desdeStr = desdeCierre ?? '2000-01-01T00:00:00.000Z';
 
         final ventasHoy = await db.query('ventas',
-            where: 'empresa_id = ? AND created_at >= ? AND created_at < ? AND estado = ? AND tipo_pago != ?',
-            whereArgs: [empresaId, inicioUtc, finUtc, 'completada', 'fiado']);
+            where: 'empresa_id = ? AND created_at >= ? AND estado = ? AND tipo_pago != ?',
+            whereArgs: [empresaId, desdeStr, 'completada', 'fiado']);
 
         double totalVentas = 0;
         double gananciaReal = 0;
@@ -168,27 +173,31 @@ DateTime _toLocal(String dateStr) {
         return;
       }
 
-      final ahoraLocal = DateTime.now();
-      final inicioLocal = DateTime(ahoraLocal.year, ahoraLocal.month, ahoraLocal.day);
-      final finLocal = inicioLocal.add(const Duration(days: 1));
-      final inicioUtc = inicioLocal.toUtc().toIso8601String();
-      final finUtc = finLocal.toUtc().toIso8601String();
+      // Filtrar desde el último cierre (no desde medianoche)
+      final db = await LocalDatabase.database;
+      String? desdeCierre;
+      final cierresOn = await db.query('cierres_dia',
+          where: 'empresa_id = ?', whereArgs: [empresaId],
+          orderBy: 'created_at DESC', limit: 1);
+      if (cierresOn.isNotEmpty) {
+        desdeCierre = cierresOn.first['created_at'] as String?;
+      }
+      final desdeStr = desdeCierre ?? '2000-01-01T00:00:00.000Z';
 
-      final ventas = await SupabaseService.client
+      var qVentas = SupabaseService.client
           .from('ventas')
           .select('id, total, tipo_pago')
           .eq('empresa_id', empresaId)
           .eq('estado', 'completada')
-          .gte('created_at', inicioUtc)
-          .lt('created_at', finUtc);
+          .gte('created_at', desdeStr);
+      final ventas = await qVentas;
 
       double totalVentas = 0;
       final ventasIds = <String>[];
-    // También incluir ventas locales no sincronizadas
-      final db = await LocalDatabase.database;
+      // También incluir ventas locales no sincronizadas
       final ventasLocalHoy = await db.query('ventas',
-          where: 'empresa_id = ? AND created_at >= ? AND created_at < ? AND estado = ? AND synced = ?',
-          whereArgs: [empresaId, inicioUtc, finUtc, 'completada', 0]);
+          where: 'empresa_id = ? AND created_at >= ? AND estado = ? AND synced = ?',
+          whereArgs: [empresaId, desdeStr, 'completada', 0]);
 
       final idsOnline = (ventas as List).map((v) => v['id'] as String).toSet();
       final ventasLocalPendientes = ventasLocalHoy
@@ -606,7 +615,7 @@ Widget _buildBannerVencida() {
           AppColors.colorGastos, const GastosScreen()),
       _ModuleItem('Reportes', Icons.bar_chart_rounded,
           AppColors.colorReportes, const ReportesScreen()),
-      _ModuleItem('Cierre de Día', Icons.lock_clock_rounded,
+      _ModuleItem('Cuadre de Caja', Icons.lock_clock_rounded,
           AppColors.primary, const CierreDiaScreen()),
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
