@@ -10,6 +10,7 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -32,6 +33,7 @@ android {
         }
     }
 }
+
 configurations.all {
     resolutionStrategy {
         force("androidx.core:core:1.13.1")
@@ -42,6 +44,7 @@ configurations.all {
 flutter {
     source = "../.."
 }
-flutter {
-    source = "../.."
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
 }

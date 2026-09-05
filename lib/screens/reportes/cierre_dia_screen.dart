@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_colors.dart';
@@ -24,6 +25,8 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
   final _efectivoCtrl = TextEditingController();
   final _notasCtrl    = TextEditingController();
   final _formKey      = GlobalKey<FormState>();
+
+  String? _errorMsg;
 
   // Auto-cuadre
   bool _autoActivo    = false;
@@ -62,25 +65,46 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
   }
 
   Future<void> _cargar() async {
-    setState(() => _cargando = true);
-    final activo    = await CuadreAutomaticoService.isActivo();
-    final hora      = await CuadreAutomaticoService.getHora();
-    final minuto    = await CuadreAutomaticoService.getMinuto();
-    final intervalo = await CuadreAutomaticoService.getIntervalo();
-    final r = await CierreDiaService.calcularResumenHoy();
-    final h = await CierreDiaService.getHistorial();
-    if (!mounted) return;
-    setState(() {
-      _r                = r;
-      _historial        = h;
-      _efectivoEsperado = _d('efectivo_esperado');
-      _diferencia       = _efectivoContado - _efectivoEsperado;
-      _autoActivo       = activo;
-      _autoHora         = hora;
-      _autoMinuto       = minuto;
-      _autoIntervalo    = intervalo;
-      _cargando         = false;
-    });
+    setState(() { _cargando = true; _errorMsg = null; });
+    try {
+      // Correr todas las queries en paralelo — reduce tiempo de carga significativamente
+      final results = await Future.wait([
+        CuadreAutomaticoService.isActivo(),
+        CuadreAutomaticoService.getHora(),
+        CuadreAutomaticoService.getMinuto(),
+        CuadreAutomaticoService.getIntervalo(),
+        CierreDiaService.calcularResumenHoy().timeout(const Duration(seconds: 20)),
+        CierreDiaService.getHistorial().timeout(const Duration(seconds: 10)),
+      ]);
+      final activo    = results[0] as bool;
+      final hora      = results[1] as int;
+      final minuto    = results[2] as int;
+      final intervalo = results[3] as int;
+      final r         = results[4] as Map<String, dynamic>;
+      final h         = results[5] as List<CierreDiaModel>;
+      if (!mounted) return;
+
+      // Check if service returned an error
+      final serviceError = r['_error'] as String?;
+      setState(() {
+        _r                = serviceError != null ? {} : r;
+        _historial        = h;
+        _efectivoEsperado = serviceError != null ? 0 : _d('efectivo_esperado');
+        _diferencia       = _efectivoContado - _efectivoEsperado;
+        _autoActivo       = activo;
+        _autoHora         = hora;
+        _autoMinuto       = minuto;
+        _autoIntervalo    = intervalo;
+        _errorMsg         = serviceError;
+        _cargando         = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _cargando = false;
+        _errorMsg = 'No se pudo cargar el resumen. Verifica tu conexión e intenta de nuevo.';
+      });
+    }
   }
 
   double _d(String k) => (_r[k] as num? ?? 0).toDouble();
@@ -89,34 +113,82 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
   Future<void> _realizarCierre() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _guardando = true);
-    final cierre = await CierreDiaService.guardarCierre(
-      efectivoContado: _efectivoContado,
-      resumen:         _r,
-      notas: _notasCtrl.text.trim().isEmpty ? null : _notasCtrl.text.trim(),
+    try {
+      final cierre = await CierreDiaService.guardarCierre(
+        efectivoContado: _efectivoContado,
+        resumen:         _r,
+        notas: _notasCtrl.text.trim().isEmpty ? null : _notasCtrl.text.trim(),
+      ).timeout(const Duration(seconds: 20));
+      setState(() => _guardando = false);
+      if (!mounted) return;
+      if (cierre != null) {
+        _efectivoCtrl.clear();
+        _notasCtrl.clear();
+        await _cargar();
+        _tabs.animateTo(1);
+        _mostrarConfirmacion(cierre);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('⚠️ Error al guardar el cuadre. Intenta de nuevo.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      setState(() => _guardando = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('⚠️ Tiempo de espera agotado. Verifica tu conexión.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  Future<void> _confirmarEliminar(CierreDiaModel c) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Eliminar cuadre'),
+        content: Text('¿Eliminar el cuadre del \${AppFormatters.fecha(c.fecha)}? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
-    setState(() => _guardando = false);
+    if (ok != true || !mounted) return;
+    final exito = await CierreDiaService.eliminarCierre(c.id);
     if (!mounted) return;
-    if (cierre != null) {
-      _efectivoCtrl.clear();
-      _notasCtrl.clear();
-      await _cargar();
-      _tabs.animateTo(1);
-      _mostrarConfirmacion(cierre);
+    if (exito) {
+      setState(() => _historial.removeWhere((x) => x.id == c.id));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Cuadre eliminado. Ya puedes hacer uno nuevo.'),
+        behavior: SnackBarBehavior.floating,
+      ));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al guardar el cierre')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Error al eliminar el cuadre.'),
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 
   void _mostrarConfirmacion(CierreDiaModel c) {
-    final sobra = c.diferencia >= 0;
+    final esperadoValido = c.efectivoEsperado > 0;
+    final sobra = esperadoValido ? c.diferencia >= 0 : false;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(children: [
-          Icon(sobra ? Icons.check_circle : Icons.warning_amber_rounded,
-              color: sobra ? AppColors.success : AppColors.warning),
+          Icon(esperadoValido
+              ? (sobra ? Icons.check_circle : Icons.warning_amber_rounded)
+              : Icons.info_outline,
+              color: esperadoValido
+                  ? (sobra ? AppColors.success : AppColors.warning)
+                  : AppColors.textSecondary),
           const SizedBox(width: 8),
           const Text('Cuadre registrado'),
         ]),
@@ -130,9 +202,14 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
           const Divider(height: 20),
           _cr('Efectivo esperado',  AppFormatters.moneda(c.efectivoEsperado)),
           _cr('Efectivo contado',   AppFormatters.moneda(c.efectivoContado)),
-          _cr(sobra ? '✅ Sobra' : '⚠️ Falta',
-              AppFormatters.moneda(c.diferencia.abs()),
-              color: sobra ? AppColors.success : AppColors.warning, bold: true),
+          if (esperadoValido)
+            _cr(sobra ? '✅ Sobra' : '⚠️ Falta',
+                AppFormatters.moneda(c.diferencia.abs()),
+                color: sobra ? AppColors.success : AppColors.warning, bold: true)
+          else
+            _cr('⚠️ Sin efectivo esperado',
+                'Los gastos superan los ingresos',
+                color: AppColors.textSecondary, bold: false),
         ]),
         actions: [TextButton(
             onPressed: () => Navigator.pop(context),
@@ -170,9 +247,44 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
 
   // ══════════════════════ TAB 1 ════════════════════════════════
   Widget _tabNuevo() {
-    if (_r.isEmpty) return const Center(child: Text('No hay datos del día'));
+    if (_errorMsg != null) return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.error_outline_rounded, size: 56, color: AppColors.danger),
+          const SizedBox(height: 16),
+          Text('No se pudo cargar', style: TextStyle(
+              fontWeight: FontWeight.bold, fontSize: 16,
+              color: AppColors.textPrimary)),
+          const SizedBox(height: 8),
+          Text(_errorMsg!, textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _cargar,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Reintentar'),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white),
+          ),
+        ]),
+      ),
+    );
+    if (_r.isEmpty) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Icon(Icons.inbox_rounded, size: 56, color: AppColors.textMuted),
+      const SizedBox(height: 12),
+      Text('No hay datos del período', style: TextStyle(color: AppColors.textMuted)),
+      const SizedBox(height: 16),
+      TextButton.icon(
+        onPressed: _cargar,
+        icon: const Icon(Icons.refresh_rounded),
+        label: const Text('Recargar'),
+      ),
+    ]));
 
-    final sobra = _diferencia >= 0;
+    final bool esperadoValido = _efectivoEsperado > 0;
+    final sobra = esperadoValido ? _diferencia >= 0 : _efectivoContado >= 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -320,44 +432,59 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
             const SizedBox(height: 12),
 
             // Resultado en tiempo real
-            if (_efectivoContado > 0 || _efectivoCtrl.text.isNotEmpty)
+            if (_efectivoCtrl.text.isNotEmpty)
               AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: sobra
-                      ? AppColors.successSurface
-                      : AppColors.warningSurface,
+                  color: !esperadoValido
+                      ? AppColors.warningSurface
+                      : sobra
+                          ? AppColors.successSurface
+                          : AppColors.warningSurface,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: sobra ? AppColors.success : AppColors.warning),
+                      color: !esperadoValido
+                          ? AppColors.warning
+                          : sobra ? AppColors.success : AppColors.warning),
                 ),
-                child: Row(children: [
-                  Icon(
-                    sobra ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                    color: sobra ? AppColors.success : AppColors.warning,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 10),
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(
-                      sobra ? 'SOBRA en caja' : 'FALTA en caja',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w700,
-                        color: sobra ? AppColors.success : AppColors.warning,
-                        fontSize: 12,
-                      ),
-                    ),
-                    Text(
-                      AppFormatters.moneda(_diferencia.abs()),
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold,
-                        color: sobra ? AppColors.success : AppColors.warning,
-                        fontSize: 20,
-                      ),
-                    ),
-                  ]),
-                ]),
+                child: !esperadoValido
+                    ? Row(children: [
+                        const Icon(Icons.info_outline_rounded,
+                            color: AppColors.warning, size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(
+                          'El efectivo esperado es negativo porque los gastos superan las ventas. Haz tu primer cuadre para resetear el período.',
+                          style: GoogleFonts.poppins(
+                              fontSize: 12, color: AppColors.warning),
+                        )),
+                      ])
+                    : Row(children: [
+                        Icon(
+                          sobra ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                          color: sobra ? AppColors.success : AppColors.warning,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 10),
+                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(
+                            sobra ? 'SOBRA en caja' : 'FALTA en caja',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w700,
+                              color: sobra ? AppColors.success : AppColors.warning,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            AppFormatters.moneda(_diferencia.abs()),
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.bold,
+                              color: sobra ? AppColors.success : AppColors.warning,
+                              fontSize: 20,
+                            ),
+                          ),
+                        ]),
+                      ]),
               ),
           ]),
           const SizedBox(height: 14),
@@ -598,38 +725,57 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
       itemCount: _historial.length,
       itemBuilder: (_, i) {
         final c     = _historial[i];
-        final sobra = c.diferencia >= 0;
+        final esperadoValido = c.efectivoEsperado > 0;
+        final sobra = esperadoValido ? c.diferencia >= 0 : false;
+        final subtitleText = esperadoValido
+            ? (sobra
+                ? 'Sobró \${AppFormatters.moneda(c.diferencia)}'
+                : 'Faltó \${AppFormatters.moneda(c.diferencia.abs())}')
+            : 'Sin efectivo esperado';
+        final subtitleColor = esperadoValido
+            ? (sobra ? AppColors.success : AppColors.warning)
+            : AppColors.textSecondary;
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: ExpansionTile(
             leading: CircleAvatar(
-              backgroundColor:
-                  sobra ? AppColors.successSurface : AppColors.warningSurface,
+              backgroundColor: esperadoValido
+                  ? (sobra ? AppColors.successSurface : AppColors.warningSurface)
+                  : AppColors.surface,
               child: Icon(
-                sobra ? Icons.check_rounded : Icons.warning_amber_rounded,
-                color: sobra ? AppColors.success : AppColors.warning,
+                esperadoValido
+                    ? (sobra ? Icons.check_rounded : Icons.warning_amber_rounded)
+                    : Icons.info_outline,
+                color: esperadoValido
+                    ? (sobra ? AppColors.success : AppColors.warning)
+                    : AppColors.textSecondary,
               ),
             ),
             title: Text(AppFormatters.fecha(c.fecha),
                 style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-            subtitle: Text(
-              sobra
-                  ? 'Sobró ${AppFormatters.moneda(c.diferencia)}'
-                  : 'Faltó ${AppFormatters.moneda(c.diferencia.abs())}',
-              style: TextStyle(
-                  color: sobra ? AppColors.success : AppColors.warning,
-                  fontWeight: FontWeight.w600),
+            subtitle: Text(subtitleText,
+              style: TextStyle(color: subtitleColor, fontWeight: FontWeight.w600),
             ),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Ganancia real', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
-                Text(AppFormatters.moneda(c.gananciaReal),
-                    style: TextStyle(
-                      color: c.gananciaReal >= 0 ? AppColors.success : AppColors.danger,
-                      fontWeight: FontWeight.bold, fontSize: 13)),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('Ganancia real', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                    Text(AppFormatters.moneda(c.gananciaReal),
+                        style: TextStyle(
+                          color: c.gananciaReal >= 0 ? AppColors.success : AppColors.danger,
+                          fontWeight: FontWeight.bold, fontSize: 13)),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                  tooltip: 'Eliminar cuadre',
+                  onPressed: () => _confirmarEliminar(c),
+                ),
               ],
             ),
             children: [

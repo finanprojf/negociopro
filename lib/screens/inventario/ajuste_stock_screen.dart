@@ -4,6 +4,9 @@ import '../../theme/app_colors.dart';
 import '../../models/producto_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/inventario_service.dart';
+import '../../services/gasto_service.dart';
+import '../../models/gasto_model.dart';
+import '../../utils/formatters.dart';
 
 class AjusteStockScreen extends StatefulWidget {
   final ProductoModel producto;
@@ -43,6 +46,10 @@ class _AjusteStockScreenState extends State<AjusteStockScreen> {
           content: Text('Stock actualizado correctamente'),
           backgroundColor: AppColors.success,
         ));
+        // Ofrecer registrar gasto solo en entradas con precio de compra
+        if (_tipo == 'entrada' && widget.producto.precioCompra > 0) {
+          await _ofrecerRegistrarGasto();
+        }
       } else {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -50,6 +57,89 @@ class _AjusteStockScreenState extends State<AjusteStockScreen> {
           backgroundColor: AppColors.danger,
         ));
       }
+    }
+  }
+
+  Future<void> _ofrecerRegistrarGasto() async {
+    if (!mounted) return;
+    final monto = _cantidad * widget.producto.precioCompra;
+    final descripcion = 'Compra de \${widget.producto.nombre}';
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.colorInventario.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.shopping_bag_rounded,
+                color: AppColors.colorInventario, size: 22),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(child: Text('¿Registrar compra?',
+              style: TextStyle(fontFamily: 'Poppins',
+                  fontSize: 16, fontWeight: FontWeight.w700))),
+        ]),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Se registró una entrada de inventario. ¿Deseas registrar el costo como gasto de mercancía?',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                  color: AppColors.textSecondary)),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.colorInventario.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('🛍️ $descripcion',
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text('\${_cantidad.toStringAsFixed(0)} \${widget.producto.unidad}s × \${AppFormatters.moneda(widget.producto.precioCompra)}',
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 12, color: AppColors.textSecondary)),
+              const SizedBox(height: 8),
+              Text(AppFormatters.moneda(monto),
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontSize: 18, fontWeight: FontWeight.w700,
+                      color: AppColors.colorInventario)),
+            ]),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No registrar',
+                style: TextStyle(color: AppColors.textMuted))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.colorInventario,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+            child: const Text('Sí, registrar',
+                style: TextStyle(fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700))),
+        ],
+      ),
+    );
+    if (confirmar == true && mounted) {
+      await GastoService.guardarGasto(GastoModel(
+        id: '', empresaId: '', categoria: 'mercancia',
+        descripcion: descripcion,
+        monto: monto,
+        fecha: DateTime.now(),
+      ));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('✅ Gasto de mercancía registrado'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 

@@ -1,11 +1,64 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../models/venta_model.dart';
+import '../../services/recibo_service.dart';
 import '../../utils/formatters.dart';
 
-class DetalleVentaScreen extends StatelessWidget {
+class DetalleVentaScreen extends StatefulWidget {
   final VentaModel venta;
   const DetalleVentaScreen({super.key, required this.venta});
+  @override
+  State<DetalleVentaScreen> createState() => _DetalleVentaScreenState();
+}
+
+class _DetalleVentaScreenState extends State<DetalleVentaScreen> {
+  VentaModel get venta => widget.venta;
+
+  Future<void> _imprimirBluetooth() async {
+    final impresoras = await ReciboService.listarImpresoras();
+    if (!mounted) return;
+    if (impresoras.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No hay impresoras Bluetooth vinculadas. Ve a Configuración → Bluetooth y vincúlala primero.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+    // Si solo hay una, imprimir directo; si hay varias, mostrar selector
+    if (impresoras.length == 1) {
+      _ejecutarImpresionBT(impresoras.first);
+    } else {
+      showModalBottomSheet(
+        context: context,
+        builder: (_) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(title: Text('Selecciona impresora', style: TextStyle(fontWeight: FontWeight.bold))),
+            ...impresoras.map((imp) => ListTile(
+              leading: const Icon(Icons.print_rounded),
+              title: Text(imp.name),
+              subtitle: Text(imp.macAdress),
+              onTap: () { Navigator.pop(context); _ejecutarImpresionBT(imp); },
+            )),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _ejecutarImpresionBT(dynamic imp) async {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Conectando con ${imp.name}...'),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 2),
+    ));
+    final resultado = await ReciboService.imprimirBluetooth(venta, imp);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(resultado == 'ok' ? '✅ Recibo impreso' : resultado),
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,9 +67,34 @@ class DetalleVentaScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(venta.numeroFormateado),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.share_rounded),
-            onPressed: () {}, // TODO: compartir recibo
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded),
+            tooltip: 'Opciones de recibo',
+            onSelected: (v) async {
+              if (v == 'texto')     await ReciboService.compartirTexto(venta);
+              else if (v == 'pdf')  await ReciboService.compartirPDF(venta);
+              else if (v == 'wifi') await ReciboService.imprimirWifi(venta);
+              else if (v == 'bt')   await _imprimirBluetooth();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'texto', child: Row(children: [
+                Icon(Icons.message_rounded, size: 20),
+                SizedBox(width: 10), Text('Compartir por WhatsApp / SMS'),
+              ])),
+              PopupMenuItem(value: 'pdf', child: Row(children: [
+                Icon(Icons.picture_as_pdf_rounded, size: 20),
+                SizedBox(width: 10), Text('Compartir como PDF'),
+              ])),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'wifi', child: Row(children: [
+                Icon(Icons.print_rounded, size: 20),
+                SizedBox(width: 10), Text('Imprimir (WiFi / Normal)'),
+              ])),
+              PopupMenuItem(value: 'bt', child: Row(children: [
+                Icon(Icons.bluetooth_rounded, size: 20),
+                SizedBox(width: 10), Text('Imprimir (Térmica Bluetooth)'),
+              ])),
+            ],
           ),
         ],
       ),

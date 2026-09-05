@@ -96,6 +96,8 @@ class CuadreAutomaticoService {
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: intervalo == 0
           ? DateTimeComponents.time   // repetir cada día a la misma hora
           : null,                     // una sola vez (se reprograma al abrir app)

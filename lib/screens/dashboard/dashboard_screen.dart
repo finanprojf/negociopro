@@ -46,7 +46,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _cargarNombre();
     _cargarResumen();
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (mounted) {
         _cargarResumen();
         setState(() {});
@@ -74,16 +74,7 @@ DateTime _toLocal(String dateStr) {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
-
-      if (await SupabaseService.isOnlineAsync) {
-        try {
-          final res = await SupabaseService.client
-              .from('empresas').select('nombre').eq('id', empresaId).single();
-          if (mounted) setState(() => _nombreNegocio = res['nombre'] ?? 'Mi Negocio');
-          return;
-        } catch (_) {}
-      }
-      // Offline: leer de SQLite
+      // Local-first: mostrar nombre inmediatamente sin esperar red
       final db = await LocalDatabase.database;
       final rows = await db.query('empresas', where: 'id = ?', whereArgs: [empresaId]);
       if (rows.isNotEmpty && mounted) {

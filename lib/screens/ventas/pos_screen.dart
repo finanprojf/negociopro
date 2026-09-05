@@ -10,6 +10,7 @@ import '../../services/cliente_service.dart';
 import '../../models/cliente_model.dart';
 import 'historial_ventas_screen.dart';
 import 'dart:io';
+import 'dart:async';
 class _ItemCarrito {
   final ProductoModel producto;
   double cantidad;
@@ -31,6 +32,9 @@ class _PosScreenState extends State<PosScreen> {
   List<ProductoModel> _productos = [];
   List<ProductoModel> _filtrados = [];
   final List<_ItemCarrito> _carrito = [];
+  // Map rápido para lookup O(1) en lugar de O(n) con .where()
+  final Map<String, int> _carritoMap = {}; // productoId -> índice en _carrito
+  Timer? _debounceSearch;
   bool _loading = true;
   String _tipoPago = 'efectivo';
 String? _clienteSeleccionado;
@@ -49,6 +53,7 @@ double _montoIngresadoTemp = 0;
 
   @override
   void dispose() {
+    _debounceSearch?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -133,7 +138,8 @@ Future<void> _agregarClienteRapido() async {
         );
         setState(() {
           _carrito.clear();
-          _clienteSeleccionado = null;
+            _carritoMap.clear();
+            _clienteSeleccionado = null;
           _tipoPago = 'efectivo';
           _montoIngresadoTemp = 0;
         });
@@ -163,27 +169,45 @@ Future<void> _agregarClienteRapido() async {
   }
 
   void _buscar(String q) {
-    setState(() {
-      _filtrados = q.isEmpty
-          ? _productos
-          : _productos.where((p) =>
-              p.nombre.toLowerCase().contains(q.toLowerCase())).toList();
+    _debounceSearch?.cancel();
+    _debounceSearch = Timer(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
+      final lower = q.toLowerCase();
+      setState(() {
+        _filtrados = q.isEmpty
+            ? _productos
+            : _productos.where((p) =>
+                p.nombre.toLowerCase().contains(lower)).toList();
+      });
     });
   }
 
   void _agregar(ProductoModel p) {
     setState(() {
-      final idx = _carrito.indexWhere((i) => i.producto.id == p.id);
-      if (idx >= 0) _carrito[idx].cantidad++;
-      else _carrito.add(_ItemCarrito(producto: p));
+      final idx = _carritoMap[p.id];
+      if (idx != null) {
+        _carrito[idx].cantidad++;
+      } else {
+        _carritoMap[p.id] = _carrito.length;
+        _carrito.add(_ItemCarrito(producto: p));
+      }
     });
     HapticFeedback.lightImpact();
   }
 
   void _cambiarCantidad(int idx, double nueva) {
     setState(() {
-      if (nueva <= 0) _carrito.removeAt(idx);
-      else _carrito[idx].cantidad = nueva;
+      if (nueva <= 0) {
+        final prodId = _carrito[idx].producto.id;
+        _carrito.removeAt(idx);
+        _carritoMap.remove(prodId);
+        // Reconstruir mapa de índices tras remoción
+        for (int i = idx; i < _carrito.length; i++) {
+          _carritoMap[_carrito[i].producto.id] = i;
+        }
+      } else {
+        _carrito[idx].cantidad = nueva;
+      }
     });
   }
 Future<void> _cargarClientes() async {
@@ -212,7 +236,7 @@ Future<void> _cargarClientes() async {
           ),
           if (_carrito.isNotEmpty)
             TextButton(
-              onPressed: () => setState(() => _carrito.clear()),
+              onPressed: () => setState(() { _carrito.clear(); _carritoMap.clear(); }),
               child: Text('Limpiar', style: GoogleFonts.poppins(
                   color: AppColors.danger, fontWeight: FontWeight.w600)),
             ),
@@ -319,9 +343,9 @@ Future<void> _cargarClientes() async {
       ),
       itemCount: _filtrados.length,
     itemBuilder: (_, i) {
-        final cantidad = _carrito
-            .where((c) => c.producto.id == _filtrados[i].id)
-            .fold(0, (s, c) => s + c.cantidad.toInt());
+        final pid = _filtrados[i].id;
+        final carritoIdx = _carritoMap[pid];
+        final cantidad = carritoIdx != null ? _carrito[carritoIdx].cantidad.toInt() : 0;
        return _ProdCard(
           producto: _filtrados[i],
           enCarrito: cantidad > 0,
@@ -329,7 +353,7 @@ Future<void> _cargarClientes() async {
           onTap: () => _agregar(_filtrados[i]),
           onMas: () => _agregar(_filtrados[i]),
           onMenos: () => _cambiarCantidad(
-            _carrito.indexWhere((c) => c.producto.id == _filtrados[i].id),
+            _carritoMap[_filtrados[i].id] ?? -1,
             cantidad - 1,
           ),
         );

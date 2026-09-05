@@ -106,6 +106,164 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
   double get _sugerido150    => _costoUnitario * 2.50;
 
   // ── Guardar ─────────────────────────────────────────────────
+  Future<void> _ofrecerRegistrarGasto() async {
+    if (!mounted) return;
+    final nombre = _nombreCtrl.text.trim();
+
+    if (_esElaborado && _costoTotal > 0) {
+      // Producto elaborado: ofrecer registrar inversión de producción
+      final u = _unidadesProd > 0 ? _unidadesProd.toStringAsFixed(0) : '1';
+      final descripcion = 'Inversión de $nombre';
+      final monto = _costoTotal;
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.receipt_long_rounded,
+                  color: AppColors.accent, size: 22),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('¿Registrar inversión?',
+                style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 16, fontWeight: FontWeight.w700))),
+          ]),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('Se agregó un producto elaborado. ¿Deseas registrar el costo de producción como gasto?',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                    color: AppColors.textSecondary)),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('📦 $descripcion',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text('$u ${_unidad}s producidas',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 12, color: AppColors.textSecondary)),
+                const SizedBox(height: 8),
+                Text(AppFormatters.moneda(monto),
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 18, fontWeight: FontWeight.w700,
+                        color: AppColors.accent)),
+              ]),
+            ),
+          ]),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No registrar',
+                  style: TextStyle(color: AppColors.textMuted))),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10))),
+              child: const Text('Sí, registrar',
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700))),
+          ],
+        ),
+      );
+      if (confirmar == true) {
+        await GastoService.guardarGasto(GastoModel(
+          id: '', empresaId: '', categoria: 'produccion',
+          descripcion: descripcion, monto: monto, fecha: DateTime.now(),
+        ));
+      }
+    } else {
+      // Producto normal: ofrecer registrar compra de inventario
+      final stock = double.tryParse(_stockActualCtrl.text) ?? 0;
+      if (stock <= 0 || _precioCompra <= 0) return;
+      final monto = stock * _precioCompra;
+      final descripcion = 'Compra de $nombre';
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.colorInventario.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.shopping_bag_rounded,
+                  color: AppColors.colorInventario, size: 22),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('¿Registrar compra?',
+                style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 16, fontWeight: FontWeight.w700))),
+          ]),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('Se agregó inventario nuevo. ¿Deseas registrar el costo como gasto de mercancía?',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                    color: AppColors.textSecondary)),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.colorInventario.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('🛍️ $descripcion',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text('${stock.toStringAsFixed(0)} ${_unidad}s × \${AppFormatters.moneda(_precioCompra)}',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 12, color: AppColors.textSecondary)),
+                const SizedBox(height: 8),
+                Text(AppFormatters.moneda(monto),
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 18, fontWeight: FontWeight.w700,
+                        color: AppColors.colorInventario)),
+              ]),
+            ),
+          ]),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No registrar',
+                  style: TextStyle(color: AppColors.textMuted))),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.colorInventario,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10))),
+              child: const Text('Sí, registrar',
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700))),
+          ],
+        ),
+      );
+      if (confirmar == true) {
+        await GastoService.guardarGasto(GastoModel(
+          id: '', empresaId: '', categoria: 'mercancia',
+          descripcion: descripcion, monto: monto, fecha: DateTime.now(),
+        ));
+      }
+    }
+  }
+
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
@@ -170,6 +328,10 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
           content: Text(_esEdicion ? 'Producto actualizado' : 'Producto agregado'),
           backgroundColor: AppColors.success,
         ));
+        // Preguntar si registrar gasto solo al crear (no al editar)
+        if (!_esEdicion) {
+          await _ofrecerRegistrarGasto();
+        }
       }
     } catch (e) {
       if (mounted) {

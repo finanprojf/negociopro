@@ -10,6 +10,8 @@ import 'local_database.dart';
 class InventarioService {
   static const _uuid = Uuid();
 
+
+
   // ============================================================
   // CATEGORÍAS
   // ============================================================
@@ -46,7 +48,6 @@ class InventarioService {
         .map((m) => ProductoModel.fromMap(m))
         .toList();
 
-  // Si hay internet, traer de Supabase y actualizar local
     if (await SupabaseService.isOnlineAsync) {
       try {
         var query = SupabaseService.client
@@ -55,8 +56,7 @@ class InventarioService {
             .eq('empresa_id', empresaId);
         if (soloActivos) query = query.eq('activo', true);
         final res = await query.order('nombre');
-        
-      // Guardar en local
+
         for (final m in res) {
           final map = Map<String, dynamic>.from(m);
           if (m['categorias'] != null) {
@@ -68,7 +68,7 @@ class InventarioService {
             await LocalDatabase.insertar('productos', map);
           } catch (_) {}
         }
-        
+
         return res.map((m) {
           final map = Map<String, dynamic>.from(m);
           if (m['categorias'] != null) {
@@ -79,7 +79,6 @@ class InventarioService {
       } catch (_) {}
     }
 
-   // Si llegó aquí es porque no hay internet o falló Supabase
     return productosLocal;
   }
 

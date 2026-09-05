@@ -12,12 +12,17 @@ class LocalDatabase {
 
   static Future<Database> _initDb() async {
     final path = join(await getDatabasesPath(), AppConstants.dbName);
-    return openDatabase(
+    final db = await openDatabase(
       path,
       version: AppConstants.dbVersion,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+    // Optimizaciones de rendimiento SQLite (con try/catch por seguridad)
+    try { await db.execute('PRAGMA journal_mode = WAL'); } catch (_) {}
+    try { await db.execute('PRAGMA cache_size = -4000'); } catch (_) {}
+    try { await db.execute('PRAGMA synchronous = NORMAL'); } catch (_) {}
+    return db;
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -173,10 +178,31 @@ class LocalDatabase {
         notas TEXT, synced INTEGER DEFAULT 0, created_at TEXT
       )
     ''');
+
+    // Índices para consultas rápidas por empresa y fecha
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_productos_empresa ON productos(empresa_id, activo)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_empresa_fecha ON ventas(empresa_id, created_at)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_detalle_venta ON detalle_ventas(venta_id)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_gastos_empresa_fecha ON gastos(empresa_id, created_at)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_fiados_empresa ON fiados(empresa_id, estado)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_clientes_empresa ON clientes(empresa_id, activo)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_abonos_fiado ON abonos_fiado(fiado_id)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_abonos_apartado ON abonos_apartado(apartado_id)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_apartados_empresa ON apartados(empresa_id, estado)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_cierres_empresa_fecha ON cierres_dia(empresa_id, fecha)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_synced ON ventas(synced)'); } catch (_) {}
   }
 
   // Migraciones por versión — agregar aquí cuando suba dbVersion
   static Future<void> _onUpgrade(Database db, int oldV, int newV) async {
+    // Siempre crear índices si no existen — cada uno con try/catch para no bloquear
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_productos_empresa ON productos(empresa_id, activo)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_empresa_fecha ON ventas(empresa_id, created_at)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_detalle_venta ON detalle_ventas(venta_id)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_gastos_empresa_fecha ON gastos(empresa_id, created_at)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_fiados_empresa ON fiados(empresa_id, estado)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_clientes_empresa ON clientes(empresa_id, activo)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_cierres_empresa_fecha ON cierres_dia(empresa_id, fecha)'); } catch (_) {}
     // v1 → v2: encargos ya está en _onCreate desde v2
     if (oldV < 5) {
       try { await db.execute('ALTER TABLE cierres_dia ADD COLUMN ganancia_real REAL DEFAULT 0'); } catch (_) {}
