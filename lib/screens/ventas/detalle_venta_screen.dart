@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../models/venta_model.dart';
 import '../../services/recibo_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../empresa/impresora_screen.dart';
 import '../../utils/formatters.dart';
 
 class DetalleVentaScreen extends StatefulWidget {
@@ -15,32 +18,94 @@ class _DetalleVentaScreenState extends State<DetalleVentaScreen> {
   VentaModel get venta => widget.venta;
 
   Future<void> _imprimirBluetooth() async {
-    final impresoras = await ReciboService.listarImpresoras();
-    if (!mounted) return;
-    if (impresoras.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('No hay impresoras Bluetooth vinculadas. Ve a Configuración → Bluetooth y vincúlala primero.'),
+    // Solicitar permisos BT en runtime
+    await [
+      Permission.bluetooth,
+      Permission.bluetoothConnect,
+      Permission.bluetoothScan,
+      Permission.locationWhenInUse,
+    ].request();
+
+    // 1) Usar impresora guardada si existe
+    final prefs = await SharedPreferences.getInstance();
+    final macGuardada = prefs.getString('printer_mac');
+    final nombreGuardado = prefs.getString('printer_name') ?? 'Impresora';
+
+    if (macGuardada != null && macGuardada.isNotEmpty) {
+      // Crear un BluetoothInfo temporal con la MAC guardada
+      final impresoras = await ReciboService.listarImpresoras();
+      final guardada = impresoras.cast<dynamic>().firstWhere(
+        (i) => i.macAdress == macGuardada,
+        orElse: () => null,
+      );
+      if (guardada != null) {
+        _ejecutarImpresionBT(guardada);
+        return;
+      }
+      // La MAC está guardada pero no está en la lista de vinculadas — informar
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('La impresora "$nombreGuardado" no está disponible. Verifica que esté encendida.'),
         behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Configurar',
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImpresoraScreen())),
+        ),
       ));
       return;
     }
-    // Si solo hay una, imprimir directo; si hay varias, mostrar selector
+
+    // 2) Sin impresora guardada: mostrar selector o guiar al usuario
+    final impresoras = await ReciboService.listarImpresoras();
+    if (!mounted) return;
+    if (impresoras.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('No hay impresoras vinculadas. Configura tu impresora primero.'),
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Configurar',
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImpresoraScreen())),
+        ),
+      ));
+      return;
+    }
     if (impresoras.length == 1) {
       _ejecutarImpresionBT(impresoras.first);
     } else {
       showModalBottomSheet(
         context: context,
-        builder: (_) => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ListTile(title: Text('Selecciona impresora', style: TextStyle(fontWeight: FontWeight.bold))),
-            ...impresoras.map((imp) => ListTile(
-              leading: const Icon(Icons.print_rounded),
-              title: Text(imp.name),
-              subtitle: Text(imp.macAdress),
-              onTap: () { Navigator.pop(context); _ejecutarImpresionBT(imp); },
-            )),
-          ],
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) => DraggableScrollableSheet(
+          initialChildSize: 0.45,
+          minChildSize: 0.3,
+          maxChildSize: 0.85,
+          expand: false,
+          builder: (_, scrollCtrl) => Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(width: 40, height: 4,
+                decoration: BoxDecoration(color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 4),
+              const ListTile(
+                title: Text('Selecciona impresora',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+              Expanded(
+                child: ListView(
+                  controller: scrollCtrl,
+                  children: impresoras.map((imp) => ListTile(
+                    leading: const Icon(Icons.print_rounded),
+                    title: Text(imp.name),
+                    subtitle: Text(imp.macAdress),
+                    onTap: () { Navigator.pop(ctx); _ejecutarImpresionBT(imp); },
+                  )).toList(),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }

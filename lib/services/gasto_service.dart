@@ -59,7 +59,7 @@ class GastoService {
     if (empresaId == null) return false;
 
     final id = _uuid.v4();
-    final ahora = DateTime.now().toIso8601String();
+    final ahora = DateTime.now().toUtc().toIso8601String();
 
     final map = {
       ...gasto.toMap(),
@@ -94,4 +94,27 @@ class GastoService {
     }
     return total;
   }
+  /// Elimina todos los gastos vinculados a un producto (por notas origen)
+  static Future<void> eliminarGastosPorProducto(String productoId) async {
+    try {
+      final db = await LocalDatabase.database;
+      final origen = 'origen:producto:$productoId';
+      final rows = await db.query('gastos',
+          where: 'notas = ?', whereArgs: [origen]);
+      for (final row in rows) {
+        final id = row['id'] as String;
+        await db.delete('gastos', where: 'id = ?', whereArgs: [id]);
+        try {
+          if (await SupabaseService.isOnlineAsync) {
+            await SupabaseService.client
+                .from('gastos')
+                .delete()
+                .eq('id', id)
+                .timeout(const Duration(seconds: 8));
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
 }

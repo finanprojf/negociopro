@@ -202,33 +202,33 @@ class ReciboService {
     try {
       final conectado = await PrintBluetoothThermal.connect(
           macPrinterAddress: impresora.macAdress);
-      if (!conectado) return 'No se pudo conectar a \${impresora.name}';
+      if (!conectado) return 'No se pudo conectar a ${impresora.name}';
 
       final nombre = await _getNombreNegocio();
-      final linea  = '================================\n';
+      const linea  = '================================\n';
       final sb     = StringBuffer();
 
       sb.write(linea);
       sb.writeln(_centrar(nombre.toUpperCase(), 32));
       sb.write(linea);
-      sb.writeln('Recibo: \${venta.numeroFormateado}');
-      sb.writeln('Fecha:  \${AppFormatters.fechaHora(venta.createdAt)}');
+      sb.writeln('Recibo: ${venta.numeroFormateado}');
+      sb.writeln('Fecha:  ${AppFormatters.fechaHora(venta.createdAt)}');
       if (venta.clienteNombre != null) {
-        sb.writeln('Cliente: \${venta.clienteNombre}');
+        sb.writeln('Cliente: ${venta.clienteNombre}');
       }
       sb.write(linea);
 
       for (final d in venta.detalles) {
         sb.writeln(d.nombreProducto);
-        final cant = '\${d.cantidad.toInt()} x \${AppFormatters.moneda(d.precioUnitario)}';
+        final cant = '${d.cantidad.toInt()} x ${AppFormatters.moneda(d.precioUnitario)}';
         final sub  = AppFormatters.moneda(d.subtotal);
         final esp  = 32 - cant.length - sub.length;
-        sb.writeln('\$cant\${' ' * (esp > 0 ? esp : 1)}\$sub');
+        sb.writeln('$cant${' ' * (esp > 0 ? esp : 1)}$sub');
       }
 
       sb.write(linea);
       if (venta.descuento > 0) {
-        sb.write(_fila('Descuento:', '-\${AppFormatters.moneda(venta.descuento)}'));
+        sb.write(_fila('Descuento:', '-${AppFormatters.moneda(venta.descuento)}'));
       }
       sb.write(_fila('TOTAL:', AppFormatters.moneda(venta.total)));
       sb.write(_fila('Pago:', venta.tipoPago.toUpperCase()));
@@ -236,17 +236,20 @@ class ReciboService {
         sb.write(_fila('Cambio:', AppFormatters.moneda(venta.cambio)));
       }
       sb.write(linea);
-      sb.writeln(_centrar('¡Gracias por su compra!', 32));
+      sb.writeln(_centrar('Gracias por su compra!', 32));
       sb.write(linea);
       sb.write('\n\n\n');
 
-      // Convertir texto a bytes UTF-8
-      final bytes = sb.toString().codeUnits;
+      // Convertir texto a bytes (Latin-1 para impresoras térmicas)
+      final bytes = sb.toString().codeUnits
+          .map((c) => c > 255 ? 63 : c) // ? para caracteres no soportados
+          .toList();
       await PrintBluetoothThermal.writeBytes(bytes);
+      await Future.delayed(const Duration(milliseconds: 300));
       await PrintBluetoothThermal.disconnect;
       return 'ok';
     } catch (e) {
-      return 'Error: \$e';
+      return 'Error: $e';
     }
   }
 

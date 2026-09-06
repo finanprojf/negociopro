@@ -7,6 +7,7 @@ import '../../services/supabase_service.dart';
 import '../suscripcion/suscripcion_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../admin/admin_screen.dart';
+import 'impresora_screen.dart';
 class EmpresaScreen extends StatefulWidget {
   const EmpresaScreen({super.key});
 
@@ -127,6 +128,8 @@ Future<void> _verificarAdmin() async {
           _buildOpcionCuenta(Icons.email_outlined, 'Cambiar correo', () {}),
           const SizedBox(height: 8),
           _buildOpcionCuenta(Icons.notifications_outlined, 'Notificaciones', () {}),
+          const SizedBox(height: 8),
+          _buildOpcionCuenta(Icons.print_rounded, 'Impresora Térmica', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImpresoraScreen()))),
           const SizedBox(height: 24),
           _seccion('Plan'),
           const SizedBox(height: 12),

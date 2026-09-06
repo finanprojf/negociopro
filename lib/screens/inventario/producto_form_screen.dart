@@ -106,7 +106,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
   double get _sugerido150    => _costoUnitario * 2.50;
 
   // ── Guardar ─────────────────────────────────────────────────
-  Future<void> _ofrecerRegistrarGasto() async {
+  Future<void> _ofrecerRegistrarGasto(String productoId) async {
     if (!mounted) return;
     final nombre = _nombreCtrl.text.trim();
 
@@ -183,7 +183,15 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
         await GastoService.guardarGasto(GastoModel(
           id: '', empresaId: '', categoria: 'produccion',
           descripcion: descripcion, monto: monto, fecha: DateTime.now(),
+          notas: 'origen:producto:$productoId',
         ));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('✅ Inversión registrada en gastos'),
+            backgroundColor: Color(0xFF4CAF50),
+            duration: Duration(seconds: 2),
+          ));
+        }
       }
     } else {
       // Producto normal: ofrecer registrar compra de inventario
@@ -259,7 +267,15 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
         await GastoService.guardarGasto(GastoModel(
           id: '', empresaId: '', categoria: 'mercancia',
           descripcion: descripcion, monto: monto, fecha: DateTime.now(),
+          notas: 'origen:producto:$productoId',
         ));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('✅ Compra registrada en gastos'),
+            backgroundColor: Color(0xFF4CAF50),
+            duration: Duration(seconds: 2),
+          ));
+        }
       }
     }
   }
@@ -268,31 +284,6 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      // Registrar gasto automático al crear
-      if (!_esEdicion) {
-        if (_esElaborado && _costoTotal > 0) {
-          final u = _unidadesProd > 0 ? _unidadesProd.toStringAsFixed(0) : '1';
-          await GastoService.guardarGasto(GastoModel(
-            id: '', empresaId: '',
-            categoria: 'produccion',
-            descripcion: 'Producción: ${_nombreCtrl.text.trim()} — $u ${_unidad}s',
-            monto: _costoTotal,
-            fecha: DateTime.now(),
-          ));
-        } else {
-          final stock = double.tryParse(_stockActualCtrl.text) ?? 0;
-          if (stock > 0 && _precioCompra > 0) {
-            await GastoService.guardarGasto(GastoModel(
-              id: '', empresaId: '',
-              categoria: 'mercancia',
-              descripcion: '${_nombreCtrl.text.trim()} — $stock ${_unidad}s',
-              monto: stock * _precioCompra,
-              fecha: DateTime.now(),
-            ));
-          }
-        }
-      }
-
       // Subir foto si hay una nueva
       final String nuevoId = _esEdicion ? widget.producto!.id : const Uuid().v4();
       String? fotoUrlFinal = _rutaImagenGuardada;
@@ -323,15 +314,16 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
       );
 
       if (mounted) {
+        // Preguntar si registrar gasto ANTES de cerrar la pantalla
+        if (!_esEdicion) {
+          await _ofrecerRegistrarGasto(nuevoId);
+        }
+        if (!mounted) return;
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(_esEdicion ? 'Producto actualizado' : 'Producto agregado'),
           backgroundColor: AppColors.success,
         ));
-        // Preguntar si registrar gasto solo al crear (no al editar)
-        if (!_esEdicion) {
-          await _ofrecerRegistrarGasto();
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -814,15 +806,18 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
             onPressed: () async {
               Navigator.pop(context);
               try {
+                final pid = widget.producto!.id;
                 await LocalDatabase.actualizar('productos',
                     {'activo': 0, 'synced': 0,
                      'updated_at': DateTime.now().toIso8601String()},
-                    'id', widget.producto!.id);
+                    'id', pid);
                 if (await SupabaseService.isOnlineAsync) {
                   await SupabaseService.client.from('productos')
-                      .update({'activo': false}).eq('id', widget.producto!.id);
-                  await LocalDatabase.marcarSynced('productos', widget.producto!.id);
+                      .update({'activo': false}).eq('id', pid);
+                  await LocalDatabase.marcarSynced('productos', pid);
                 }
+                // Revertir gastos vinculados a este producto
+                await GastoService.eliminarGastosPorProducto(pid);
                 if (context.mounted) Navigator.pop(context, true);
               } catch (_) {
                 if (context.mounted) Navigator.pop(context, true);

@@ -309,6 +309,11 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
               _fila('Tarjeta', _d('ventas_tarjeta'), color: AppColors.info),
             if (_d('ventas_transferencia') > 0)
               _fila('Transferencia', _d('ventas_transferencia'), color: AppColors.info),
+            if (_d('total_descuentos') > 0)
+              _filaTexto('Descuentos aplicados',
+                  '- ${AppFormatters.moneda(_d('total_descuentos'))}',
+                  color: AppColors.warning,
+                  nota: 'Ya descontados del total de ventas'),
             if (_d('ventas_fiado') > 0)
               _filaTexto('Fiado (deuda, no cobrado)',
                   AppFormatters.moneda(_d('ventas_fiado')),
@@ -729,8 +734,8 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
         final sobra = esperadoValido ? c.diferencia >= 0 : false;
         final subtitleText = esperadoValido
             ? (sobra
-                ? 'Sobró \${AppFormatters.moneda(c.diferencia)}'
-                : 'Faltó \${AppFormatters.moneda(c.diferencia.abs())}')
+                ? 'Sobró ${AppFormatters.moneda(c.diferencia)}'
+                : 'Faltó ${AppFormatters.moneda(c.diferencia.abs())}')
             : 'Sin efectivo esperado';
         final subtitleColor = esperadoValido
             ? (sobra ? AppColors.success : AppColors.warning)

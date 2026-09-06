@@ -41,15 +41,16 @@ class _AjusteStockScreenState extends State<AjusteStockScreen> {
         widget.producto.id, _nuevoStock, tipo: _tipo);
     if (mounted) {
       if (ok) {
+        // Ofrecer registrar gasto ANTES de cerrar la pantalla
+        if (_tipo == 'entrada' && widget.producto.precioCompra > 0) {
+          await _ofrecerRegistrarGasto();
+        }
+        if (!mounted) return;
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Stock actualizado correctamente'),
           backgroundColor: AppColors.success,
         ));
-        // Ofrecer registrar gasto solo en entradas con precio de compra
-        if (_tipo == 'entrada' && widget.producto.precioCompra > 0) {
-          await _ofrecerRegistrarGasto();
-        }
       } else {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

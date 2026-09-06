@@ -26,6 +26,7 @@ class GastoModel {
   });
 
   static const List<Map<String, String>> categorias = [
+    {'id': 'produccion',   'label': 'Producción',        'icon': 'precision_manufacturing'},
     {'id': 'mercancia',    'label': 'Mercancía',        'icon': 'inventory_2'},
     {'id': 'empleados',    'label': 'Empleados',         'icon': 'people'},
     {'id': 'servicios',    'label': 'Servicios',         'icon': 'bolt'},

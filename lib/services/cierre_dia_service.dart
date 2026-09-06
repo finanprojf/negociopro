@@ -49,9 +49,11 @@ class CierreDiaService {
       int cantVentas = 0;
       final ventaIds = <String>[];
 
+      double totalDescuentos = 0;
       for (final v in ventasRows) {
         final total = (v['total'] as num? ?? 0).toDouble();
         final tipo  = (v['tipo_pago'] as String? ?? 'efectivo').toLowerCase();
+        totalDescuentos += (v['descuento'] as num? ?? 0).toDouble();
         cantVentas++;
         final id = v['id'] as String?;
         if (id != null) ventaIds.add(id);
@@ -157,6 +159,7 @@ class CierreDiaService {
 
       return {
         'total_ventas':               totalVentas,
+        'total_descuentos':           totalDescuentos,
         'cantidad_ventas':            cantVentas,
         'ventas_efectivo':            ventasEfectivo,
         'ventas_tarjeta':             ventasTarjeta,

@@ -99,6 +99,14 @@ class _ReportesScreenState extends State<ReportesScreen> {
             .gte('created_at', inicioUtc).lt('created_at', finUtc);
         double gastos = 0;
         for (final g in gastosRes) gastos += (g['monto'] as num).toDouble();
+        // Sumar gastos locales no sincronizados (pueden no estar en Supabase aún)
+        try {
+          final db = await LocalDatabase.database;
+          final gastosLocales = await db.query('gastos',
+              where: 'empresa_id = ? AND synced = 0 AND created_at >= ?',
+              whereArgs: [empresaId, inicioUtc]);
+          for (final g in gastosLocales) gastos += (g['monto'] as num).toDouble();
+        } catch (_) {}
 
         // 4. Cobros de fiado
         final abonosFiado = await SupabaseService.client
@@ -163,7 +171,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
     for (final periodo in ['hoy', 'semana', 'mes']) {
       final inicio    = periodo == 'hoy' ? inicioHoy
           : periodo == 'semana' ? inicioSemana : inicioMes;
-      final inicioStr = inicio.toIso8601String();
+      final inicioStr = inicio.toUtc().toIso8601String();
 
       final ventas = await db.query('ventas',
           where: 'empresa_id = ? AND estado = ? AND created_at >= ?',
@@ -414,7 +422,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
           Text('✅ Ganancia neta',
               style: GoogleFonts.poppins(fontSize: 15,
                   fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-          Text(AppFormatters.moneda(neta.abs()),
+          Text((neta < 0 ? "-" : "") + AppFormatters.moneda(neta.abs()),
               style: GoogleFonts.poppins(fontSize: 22,
                   fontWeight: FontWeight.w800,
                   color: esPos ? AppColors.success : AppColors.danger)),
