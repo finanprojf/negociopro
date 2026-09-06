@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../inventario/scanner_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_colors.dart';
@@ -168,10 +169,63 @@ Future<void> _agregarClienteRapido() async {
     }
   }
 
+  Future<void> _escanearProducto() async {
+    final codigo = await Navigator.push<String>(context,
+        MaterialPageRoute(builder: (_) => const ScannerScreen(titulo: 'Escanear producto')));
+    if (codigo == null || !mounted) return;
+
+    // Buscar por código de barras exacto
+    final encontrado = _productos.cast<dynamic>().firstWhere(
+      (p) => (p.codigoBarras ?? '').trim() == codigo.trim(),
+      orElse: () => null,
+    );
+
+    if (encontrado != null) {
+      _agregar(encontrado);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('✅ ${encontrado.nombre} agregado al carrito'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 1),
+        backgroundColor: const Color(0xFF4CAF50),
+      ));
+    } else {
+      // No encontrado — llenar el buscador para que el usuario lo seleccione
+      setState(() {
+        _searchCtrl.text = codigo;
+        _buscar(codigo);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Código "$codigo" — selecciona el producto de la lista'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ));
+    }
+  }
+
   void _buscar(String q) {
     _debounceSearch?.cancel();
     _debounceSearch = Timer(const Duration(milliseconds: 200), () {
       if (!mounted) return;
+      // ── Auto-agregar si coincide exactamente con un código de barras ──
+      // La pistola Bluetooth envía el código completo de golpe
+      if (q.trim().isNotEmpty) {
+        final porCodigo = _productos.cast<dynamic>().firstWhere(
+          (p) => (p.codigoBarras ?? '').trim() == q.trim(),
+          orElse: () => null,
+        );
+        if (porCodigo != null) {
+          _agregar(porCodigo);
+          _searchCtrl.clear();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('✅ ${porCodigo.nombre} agregado'),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 1),
+            backgroundColor: const Color(0xFF4CAF50),
+          ));
+          setState(() => _filtrados = _productos);
+          return;
+        }
+      }
       final lower = q.toLowerCase();
       setState(() {
         _filtrados = q.isEmpty
@@ -229,6 +283,11 @@ Future<void> _cargarClientes() async {
       appBar: AppBar(
         title: const Text('Nueva venta'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+            tooltip: 'Escanear producto',
+            onPressed: _escanearProducto,
+          ),
           IconButton(
             icon: const Icon(Icons.history_rounded),
             onPressed: () => Navigator.push(context,

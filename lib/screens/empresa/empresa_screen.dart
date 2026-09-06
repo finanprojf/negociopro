@@ -8,6 +8,9 @@ import '../suscripcion/suscripcion_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../admin/admin_screen.dart';
 import 'impresora_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:io';
 class EmpresaScreen extends StatefulWidget {
   const EmpresaScreen({super.key});
 
@@ -22,6 +25,8 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
   final _direccionCtrl = TextEditingController();
   final _lemaCtrl = TextEditingController();
   bool _loading = false;
+  bool _subiendoLogo = false;
+  String? _logoUrl;
 
 bool _esAdmin = false;
 
@@ -60,6 +65,7 @@ Future<void> _verificarAdmin() async {
             _whatsappCtrl.text = res['whatsapp'] ?? '';
             _direccionCtrl.text = res['direccion'] ?? '';
             _lemaCtrl.text = res['lema'] ?? '';
+            _logoUrl = res['logo_url'];
           });
         }
       }
@@ -123,11 +129,11 @@ Future<void> _verificarAdmin() async {
           const SizedBox(height: 24),
           _seccion('Cuenta'),
           const SizedBox(height: 12),
-          _buildOpcionCuenta(Icons.lock_outlined, 'Cambiar contraseña', () {}),
+          _buildOpcionCuenta(Icons.lock_outlined, 'Cambiar contraseña', _cambiarContrasena),
           const SizedBox(height: 8),
-          _buildOpcionCuenta(Icons.email_outlined, 'Cambiar correo', () {}),
+          _buildOpcionCuenta(Icons.email_outlined, 'Cambiar correo', _cambiarCorreo),
           const SizedBox(height: 8),
-          _buildOpcionCuenta(Icons.notifications_outlined, 'Notificaciones', () {}),
+          _buildOpcionCuenta(Icons.notifications_outlined, 'Notificaciones', _notificaciones),
           const SizedBox(height: 8),
           _buildOpcionCuenta(Icons.print_rounded, 'Impresora Térmica', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImpresoraScreen()))),
           const SizedBox(height: 24),
@@ -197,28 +203,223 @@ SizedBox(
   }
 
   Widget _buildLogoSection() {
-    return Center(child: Stack(children: [
-      Container(
-        width: 100, height: 100,
-        decoration: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.circular(24),
+    return Center(child: Stack(clipBehavior: Clip.none, children: [
+      GestureDetector(
+        onTap: _subirLogo,
+        child: Container(
+          width: 100, height: 100,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: _subiendoLogo
+              ? const Center(child: CircularProgressIndicator(color: Colors.white))
+              : _logoUrl != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: CachedNetworkImage(
+                        imageUrl: _logoUrl!,
+                        fit: BoxFit.cover,
+                        width: 100, height: 100,
+                        placeholder: (_, __) => const Center(
+                            child: CircularProgressIndicator(color: Colors.white)),
+                        errorWidget: (_, __, ___) =>
+                            const Icon(Icons.store_rounded, color: Colors.white, size: 50),
+                      ),
+                    )
+                  : const Icon(Icons.store_rounded, color: Colors.white, size: 50),
         ),
-        child: const Icon(Icons.store_rounded, color: Colors.white, size: 50),
       ),
       Positioned(
-        bottom: 0, right: 0,
+        bottom: -4, right: -4,
         child: GestureDetector(
-          onTap: () {}, // TODO: image_picker para logo
+          onTap: _subirLogo,
           child: Container(
             width: 32, height: 32,
             decoration: const BoxDecoration(
-              color: AppColors.accent, shape: BoxShape.circle),
+                color: AppColors.accent, shape: BoxShape.circle),
             child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 18),
           ),
         ),
       ),
     ]));
+  }
+
+  Future<void> _subirLogo() async {
+    final picker = ImagePicker();
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.photo_library_rounded),
+            title: const Text('Galería'),
+            onTap: () => Navigator.pop(context, ImageSource.gallery),
+          ),
+          ListTile(
+            leading: const Icon(Icons.camera_alt_rounded),
+            title: const Text('Cámara'),
+            onTap: () => Navigator.pop(context, ImageSource.camera),
+          ),
+        ]),
+      ),
+    );
+    if (source == null) return;
+
+    final xfile = await picker.pickImage(source: source, imageQuality: 80, maxWidth: 512);
+    if (xfile == null) return;
+
+    setState(() => _subiendoLogo = true);
+    try {
+      final empresaId = await SupabaseService.getEmpresaId();
+      if (empresaId == null) return;
+
+      final bytes = await File(xfile.path).readAsBytes();
+      final ext = xfile.path.split('.').last.toLowerCase();
+      final fileName = 'logo_$empresaId.$ext';
+
+      await SupabaseService.client.storage
+          .from('negociopro-logos')
+          .uploadBinary(fileName, bytes,
+              fileOptions: FileOptions(upsert: true, contentType: 'image/$ext'));
+
+      final url = SupabaseService.client.storage
+          .from('negociopro-logos')
+          .getPublicUrl(fileName);
+
+      final urlConTimestamp = '$url?t=${DateTime.now().millisecondsSinceEpoch}';
+
+      await SupabaseService.client
+          .from('empresas')
+          .update({'logo_url': urlConTimestamp})
+          .eq('id', empresaId);
+
+      if (mounted) setState(() => _logoUrl = urlConTimestamp);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Logo actualizado ✓'),
+          backgroundColor: AppColors.success,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error al subir logo: $e'),
+          backgroundColor: AppColors.danger,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _subiendoLogo = false);
+    }
+  }
+
+  Future<void> _cambiarContrasena() async {
+    final ctrl = TextEditingController();
+    final confirm = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Cambiar contraseña',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: ctrl,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Nueva contraseña'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: confirm,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Confirmar contraseña'),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true),
+              child: const Text('Guardar')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (ctrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('La contraseña no puede estar vacía'),
+          behavior: SnackBarBehavior.floating));
+      return;
+    }
+    if (ctrl.text != confirm.text) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Las contraseñas no coinciden'),
+          behavior: SnackBarBehavior.floating));
+      return;
+    }
+    try {
+      await Supabase.instance.client.auth.updateUser(
+          UserAttributes(password: ctrl.text.trim()));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('✅ Contraseña actualizada'),
+          backgroundColor: Color(0xFF4CAF50),
+          behavior: SnackBarBehavior.floating));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          behavior: SnackBarBehavior.floating));
+    }
+  }
+
+  Future<void> _cambiarCorreo() async {
+    final ctrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Cambiar correo',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(labelText: 'Nuevo correo electrónico'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true),
+              child: const Text('Enviar enlace')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (!ctrl.text.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Ingresa un correo válido'),
+          behavior: SnackBarBehavior.floating));
+      return;
+    }
+    try {
+      await Supabase.instance.client.auth.updateUser(
+          UserAttributes(email: ctrl.text.trim()));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('✅ Revisa tu correo nuevo para confirmar el cambio'),
+          backgroundColor: Color(0xFF4CAF50),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 5)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          behavior: SnackBarBehavior.floating));
+    }
+  }
+
+  void _notificaciones() {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Las notificaciones se configurarán próximamente'),
+        behavior: SnackBarBehavior.floating));
   }
 
   Widget _buildOpcionCuenta(IconData icon, String label, VoidCallback onTap) {

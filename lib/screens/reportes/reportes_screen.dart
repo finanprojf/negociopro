@@ -51,32 +51,45 @@ class _ReportesScreenState extends State<ReportesScreen> {
   Future<void> _cargarOnline(String empresaId) async {
     try {
       final ahora = DateTime.now();
-      final inicioHoy    = DateTime(ahora.year, ahora.month, ahora.day);
-      final inicioSemana = inicioHoy.subtract(Duration(days: ahora.weekday - 1));
-      final inicioMes    = DateTime(ahora.year, ahora.month, 1);
+      final finUtc = ahora.add(const Duration(minutes: 1)).toUtc().toIso8601String();
+      final inicios = {
+        'hoy':    DateTime(ahora.year, ahora.month, ahora.day),
+        'semana': DateTime(ahora.year, ahora.month, ahora.day).subtract(Duration(days: ahora.weekday - 1)),
+        'mes':    DateTime(ahora.year, ahora.month, 1),
+      };
 
-      for (final periodo in ['hoy', 'semana', 'mes']) {
-        final inicio = periodo == 'hoy' ? inicioHoy
-            : periodo == 'semana' ? inicioSemana : inicioMes;
-        final inicioUtc = inicio.toUtc().toIso8601String();
-        final finUtc    = ahora.add(const Duration(minutes: 1)).toUtc().toIso8601String();
+      // ── Lanzar los 3 períodos + top productos en PARALELO ──────
+      Future<_DatosPeriodo> _calcPeriodo(String inicioUtc) async {
+        // Ventas + gastos + abonos en paralelo
+        final results = await Future.wait([
+          SupabaseService.client.from('ventas').select('id, total, tipo_pago')
+              .eq('empresa_id', empresaId).eq('estado', 'completada')
+              .gte('created_at', inicioUtc).lt('created_at', finUtc),
+          SupabaseService.client.from('gastos').select('monto')
+              .eq('empresa_id', empresaId)
+              .gte('created_at', inicioUtc).lt('created_at', finUtc),
+          SupabaseService.client.from('abonos_fiado').select('monto')
+              .eq('empresa_id', empresaId)
+              .gte('created_at', inicioUtc).lt('created_at', finUtc),
+          SupabaseService.client.from('abonos_apartado').select('monto')
+              .eq('empresa_id', empresaId)
+              .gte('created_at', inicioUtc).lt('created_at', finUtc),
+        ]);
 
-        // 1. Ventas
-        final ventas = await SupabaseService.client
-            .from('ventas').select('id, total, tipo_pago')
-            .eq('empresa_id', empresaId).eq('estado', 'completada')
-            .gte('created_at', inicioUtc).lt('created_at', finUtc);
+        final ventas        = results[0] as List;
+        final gastosRes     = results[1] as List;
+        final abonosFiado   = results[2] as List;
+        final abonosApartado = results[3] as List;
 
         double ventasContado = 0, ventasFiado = 0;
         final ventasIds = <String>[];
         for (final v in ventas) {
           final t = (v['total'] as num).toDouble();
-          if (v['tipo_pago'] == 'fiado') { ventasFiado += t; }
-          else { ventasContado += t; }
+          if (v['tipo_pago'] == 'fiado') { ventasFiado += t; } else { ventasContado += t; }
           ventasIds.add(v['id'] as String);
         }
 
-        // 2. Ganancia bruta real (precio_venta - precio_compra) × cantidad
+        // Ganancia bruta (depende de ventasIds)
         double gananciaBruta = 0;
         if (ventasIds.isNotEmpty) {
           final detalles = await SupabaseService.client
@@ -86,65 +99,52 @@ class _ReportesScreenState extends State<ReportesScreen> {
           for (final d in detalles) {
             final pv = (d['precio_unitario'] as num).toDouble();
             final pc = d['productos'] != null
-                ? (d['productos']['precio_compra'] as num? ?? 0).toDouble()
-                : 0.0;
+                ? (d['productos']['precio_compra'] as num? ?? 0).toDouble() : 0.0;
             gananciaBruta += (pv - pc) * (d['cantidad'] as num).toDouble();
           }
         }
 
-        // 3. Gastos
-        final gastosRes = await SupabaseService.client
-            .from('gastos').select('monto')
-            .eq('empresa_id', empresaId)
-            .gte('created_at', inicioUtc).lt('created_at', finUtc);
         double gastos = 0;
         for (final g in gastosRes) gastos += (g['monto'] as num).toDouble();
-        // Sumar gastos locales no sincronizados (pueden no estar en Supabase aún)
+        // Gastos locales no sincronizados
         try {
           final db = await LocalDatabase.database;
-          final gastosLocales = await db.query('gastos',
+          final loc = await db.query('gastos',
               where: 'empresa_id = ? AND synced = 0 AND created_at >= ?',
               whereArgs: [empresaId, inicioUtc]);
-          for (final g in gastosLocales) gastos += (g['monto'] as num).toDouble();
+          for (final g in loc) gastos += (g['monto'] as num).toDouble();
         } catch (_) {}
 
-        // 4. Cobros de fiado
-        final abonosFiado = await SupabaseService.client
-            .from('abonos_fiado').select('monto')
-            .eq('empresa_id', empresaId)
-            .gte('created_at', inicioUtc).lt('created_at', finUtc);
         double cobradoFiado = 0;
         for (final a in abonosFiado) cobradoFiado += (a['monto'] as num).toDouble();
-
-        // 5. Cobros de apartado
-        final abonosApartado = await SupabaseService.client
-            .from('abonos_apartado').select('monto')
-            .eq('empresa_id', empresaId)
-            .gte('created_at', inicioUtc).lt('created_at', finUtc);
         double cobradoApartado = 0;
         for (final a in abonosApartado) cobradoApartado += (a['monto'] as num).toDouble();
 
-        _datos[periodo] = _DatosPeriodo(
-          ventasContado:    ventasContado,
-          ventasFiado:      ventasFiado,
-          gananciaBruta:    gananciaBruta,
-          gastos:           gastos,
-          cobradoFiado:     cobradoFiado,
-          cobradoApartado:  cobradoApartado,
+        return _DatosPeriodo(
+          ventasContado: ventasContado, ventasFiado: ventasFiado,
+          gananciaBruta: gananciaBruta, gastos: gastos,
+          cobradoFiado: cobradoFiado, cobradoApartado: cobradoApartado,
         );
       }
 
-      // Productos más vendidos (del período seleccionado)
-      final inicio = _periodo == 'hoy' ? DateTime(ahora.year, ahora.month, ahora.day)
-          : _periodo == 'semana'
-              ? DateTime(ahora.year, ahora.month, ahora.day)
-                  .subtract(Duration(days: ahora.weekday - 1))
-              : DateTime(ahora.year, ahora.month, 1);
-      final allVentas = await SupabaseService.client
-          .from('ventas').select('id')
+      final inicioTop = inicios[_periodo]!.toUtc().toIso8601String();
+
+      // Períodos en paralelo
+      final periodoResults = await Future.wait<_DatosPeriodo>([
+        _calcPeriodo(inicios['hoy']!.toUtc().toIso8601String()),
+        _calcPeriodo(inicios['semana']!.toUtc().toIso8601String()),
+        _calcPeriodo(inicios['mes']!.toUtc().toIso8601String()),
+      ]);
+
+      _datos['hoy']    = periodoResults[0];
+      _datos['semana'] = periodoResults[1];
+      _datos['mes']    = periodoResults[2];
+
+      // Top productos (independiente)
+      final allVentasTop = await SupabaseService.client.from('ventas').select('id')
           .eq('empresa_id', empresaId).eq('estado', 'completada')
-          .gte('created_at', inicio.toUtc().toIso8601String());
-      final allIds = (allVentas as List).map((v) => v['id'] as String).toList();
+          .gte('created_at', inicioTop);
+      final allIds = (allVentasTop as List).map((v) => v['id'] as String).toList();
       if (allIds.isNotEmpty) {
         final detallesAll = await SupabaseService.client
             .from('detalle_ventas')

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'scanner_screen.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_colors.dart';
 import '../../models/producto_model.dart';
@@ -372,8 +373,25 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
           _buildCampoTexto(_descripcionCtrl, 'Descripción (opcional)',
               Icons.notes_rounded, 'Detalles del producto', requerido: false),
           const SizedBox(height: 12),
-          _buildCampoTexto(_codigoCtrl, 'Código de barras (opcional)',
-              Icons.qr_code_rounded, 'Escanear o ingresar', requerido: false),
+          Row(children: [
+            Expanded(child: _buildCampoTexto(_codigoCtrl, 'Código de barras (opcional)',
+                Icons.qr_code_rounded, 'Escanear o ingresar', requerido: false)),
+            const SizedBox(width: 8),
+            IconButton(
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary),
+              onPressed: () async {
+                final codigo = await Navigator.push<String>(context,
+                    MaterialPageRoute(builder: (_) => const ScannerScreen(titulo: 'Código de barras')));
+                if (codigo != null && mounted) {
+                  _codigoCtrl.text = codigo;
+                }
+              },
+            ),
+          ]),
           const SizedBox(height: 20),
 
           // ── Costos ────────────────────────────────────────

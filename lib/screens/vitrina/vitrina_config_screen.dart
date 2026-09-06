@@ -34,6 +34,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
   String _empresaId = '';
   String _empresaNombre = '';
   String? _configId;
+  String _colorTema = '#6366f1';
 
   // Productos en vitrina
   List<Map<String, dynamic>> _productos = [];
@@ -100,6 +101,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
         _zonaCtrl.text = _zonaDelivery;
         _horarioCtrl.text = _horario;
         _mensajeCtrl.text = _mensajeBienvenida;
+        _colorTema = c['color_tema'] ?? '#6366f1';
       }
 
       // Cargar productos con estado vitrina
@@ -144,6 +146,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
         'zona_delivery': _zonaCtrl.text.trim(),
         'horario': _horarioCtrl.text.trim(),
         'mensaje_bienvenida': _mensajeCtrl.text.trim(),
+        'color_tema': _colorTema,
         'updated_at': DateTime.now().toIso8601String(),
       };
 
@@ -465,6 +468,30 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
 
                 const SizedBox(height: 12),
 
+                // Color del tema
+                _buildCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Color del tema', style: GoogleFonts.poppins(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMuted)),
+                  const SizedBox(height: 4),
+                  Text('Elige el color principal de tu vitrina',
+                      style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted)),
+                  const SizedBox(height: 12),
+                  Wrap(spacing: 10, runSpacing: 10, children: [
+                    _colorChip('#ec4899', 'Rosado'),
+                    _colorChip('#f43f5e', 'Rojo rosa'),
+                    _colorChip('#6366f1', 'Morado'),
+                    _colorChip('#3b82f6', 'Azul'),
+                    _colorChip('#0F7B5B', 'Verde'),
+                    _colorChip('#f97316', 'Naranja'),
+                    _colorChip('#eab308', 'Amarillo'),
+                    _colorChip('#8b5cf6', 'Violeta'),
+                    _colorChip('#ef4444', 'Rojo'),
+                    _colorChip('#1f2937', 'Negro'),
+                  ]),
+                ])),
+
+                const SizedBox(height: 12),
+
                 // Productos en vitrina
                 _buildCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -542,6 +569,31 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
                 const SizedBox(height: 40),
               ],
             ),
+    );
+  }
+
+  Widget _colorChip(String hex, String label) {
+    final color = Color(int.parse('0xFF${hex.substring(1)}'));
+    final selected = _colorTema == hex;
+    return GestureDetector(
+      onTap: () => setState(() => _colorTema = hex),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 40, height: 40,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? Colors.black : Colors.transparent,
+              width: 3,
+            ),
+            boxShadow: selected ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 8, spreadRadius: 1)] : [],
+          ),
+          child: selected ? const Icon(Icons.check_rounded, color: Colors.white, size: 20) : null,
+        ),
+        const SizedBox(height: 4),
+        Text(label, style: GoogleFonts.poppins(fontSize: 9, color: AppColors.textMuted)),
+      ]),
     );
   }
 

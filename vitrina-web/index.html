@@ -8,6 +8,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     * { font-family: 'Poppins', sans-serif; }
+    :root {
+      --color-primary: #6366f1;
+      --color-primary-dark: #4f46e5;
+      --color-primary-light: #eef2ff;
+      --color-primary-text: #4338ca;
+      --color-primary-border: #818cf8;
+    }
     .badge-sin-stock { background: #fee2e2; color: #dc2626; }
     .badge-stock-bajo { background: #fef3c7; color: #d97706; }
     .badge-disponible { background: #dcfce7; color: #16a34a; }
@@ -15,6 +22,30 @@
     .carrito-fab { position: fixed; bottom: 24px; right: 24px; z-index: 50; }
     .slide-up { animation: slideUp 0.3s ease; }
     @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    /* Clases de tema dinámico */
+    .theme-bg { background-color: var(--color-primary) !important; }
+    .theme-bg-dark { background-color: var(--color-primary-dark) !important; }
+    .theme-bg-light { background-color: var(--color-primary-light) !important; }
+    .theme-text { color: var(--color-primary) !important; }
+    .theme-text-dark { color: var(--color-primary-text) !important; }
+    .theme-border { border-color: var(--color-primary) !important; }
+    .theme-border-light { border-color: var(--color-primary-border) !important; }
+    .theme-fab { background-color: var(--color-primary); color: white; border-radius: 1rem; padding: 0.875rem 1.25rem; box-shadow: 0 10px 25px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.875rem; }
+    .theme-fab:hover { background-color: var(--color-primary-dark); }
+    .theme-count { background: white; border-radius: 9999px; width: 1.5rem; height: 1.5rem; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; color: var(--color-primary); }
+    .theme-btn-add { width: 100%; color: white; border-radius: 0.75rem; padding: 0.5rem; font-size: 0.875rem; font-weight: 600; background-color: var(--color-primary); cursor: pointer; border: none; }
+    .theme-btn-add:hover { background-color: var(--color-primary-dark); }
+    .theme-qty-box { display: flex; align-items: center; justify-content: space-between; border-radius: 0.75rem; padding: 0.25rem 0.5rem; background-color: var(--color-primary-light); }
+    .theme-qty-btn { color: var(--color-primary); }
+    .theme-qty-num { font-weight: 700; color: var(--color-primary-text); }
+    .theme-price { color: var(--color-primary-text); font-weight: 700; font-size: 1rem; margin-top: 0.25rem; }
+    .theme-focus:focus { border-color: var(--color-primary-border); outline: none; }
+    .theme-entrega-active { border-color: var(--color-primary) !important; background-color: var(--color-primary-light) !important; color: var(--color-primary-text) !important; }
+    .theme-entrega-inactive { border-color: #e5e7eb; color: #6b7280; }
+    .theme-total { color: var(--color-primary-text); font-weight: 700; font-size: 1.125rem; }
+    .theme-delivery-cost { color: var(--color-primary); font-weight: 600; }
+    .theme-bienvenida { background-color: var(--color-primary-light); border-color: var(--color-primary-border); color: var(--color-primary-text); }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -33,7 +64,7 @@
 </div>
 
 <!-- INFO BAR -->
-<div id="infoBar" class="hidden bg-indigo-600 text-white">
+<div id="infoBar" class="hidden theme-bg text-white">
   <div class="max-w-xl mx-auto px-4 py-2 flex flex-wrap gap-4 text-xs">
     <span id="horarioInfo" class="hidden flex items-center gap-1">⏰ <span id="horarioText"></span></span>
     <span id="deliveryInfo" class="hidden flex items-center gap-1">🛵 <span id="deliveryText"></span></span>
@@ -43,13 +74,13 @@
 
 <!-- MENSAJE BIENVENIDA -->
 <div id="mensajeBienvenida" class="hidden max-w-xl mx-auto px-4 pt-3">
-  <div class="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-sm text-indigo-800" id="mensajeText"></div>
+  <div class="theme-bienvenida border rounded-xl px-4 py-3 text-sm" id="mensajeText"></div>
 </div>
 
 <!-- BUSCADOR -->
 <div class="max-w-xl mx-auto px-4 pt-4">
   <input id="buscador" type="text" placeholder="🔍 Buscar producto..."
-    class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white shadow-sm"
+    class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-white shadow-sm theme-focus"
     oninput="filtrar()" />
 </div>
 
@@ -73,9 +104,9 @@
 
 <!-- CARRITO FAB -->
 <div id="carritoFab" class="carrito-fab hidden" onclick="abrirCarrito()">
-  <button class="bg-indigo-600 text-white rounded-2xl px-5 py-3.5 shadow-xl flex items-center gap-2 font-semibold text-sm">
+  <button class="theme-fab">
     🛒 Ver pedido
-    <span id="carritoCount" class="bg-white text-indigo-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">0</span>
+    <span id="carritoCount" class="theme-count">0</span>
   </button>
 </div>
 
@@ -95,11 +126,11 @@
         <p class="text-sm font-semibold text-gray-700 mb-2">¿Cómo lo recibes?</p>
         <div class="flex gap-2">
           <button id="btnRecoger" onclick="setEntrega('recoger')"
-            class="flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all border-indigo-500 bg-indigo-50 text-indigo-700">
+            class="flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all theme-entrega-active">
             🏪 Recoger
           </button>
           <button id="btnDelivery" onclick="setEntrega('delivery')"
-            class="flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all border-gray-200 text-gray-500 hidden">
+            class="flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all theme-entrega-inactive hidden">
             🛵 Delivery
           </button>
         </div>
@@ -108,13 +139,13 @@
       <!-- Dirección delivery -->
       <div id="camposDireccion" class="hidden space-y-2">
         <input id="inputDireccion" type="text" placeholder="Tu dirección de entrega"
-          class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
+          class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none theme-focus" />
         <p id="costoDeliveryText" class="text-xs text-gray-500"></p>
       </div>
 
       <!-- Nombre cliente -->
       <input id="inputNombre" type="text" placeholder="Tu nombre (opcional)"
-        class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
+        class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none theme-focus" />
 
       <!-- ¿Con cuánto pagas? -->
       <div class="bg-amber-50 border border-amber-100 rounded-xl p-3">
@@ -135,11 +166,11 @@
         </div>
         <div id="filaDelivery" class="hidden flex justify-between text-sm">
           <span class="text-gray-600">Delivery</span>
-          <span id="deliveryCostoText" class="font-semibold text-indigo-600">RD$0</span>
+          <span id="deliveryCostoText" class="theme-delivery-cost">RD$0</span>
         </div>
         <div class="flex justify-between text-base border-t pt-1 mt-1">
           <span class="font-bold text-gray-800">Total</span>
-          <span id="totalText" class="font-bold text-indigo-700 text-lg">RD$0</span>
+          <span id="totalText" class="theme-total">RD$0</span>
         </div>
       </div>
 
@@ -162,9 +193,36 @@
   let empresa = null;
   let config = null;
   let productos = [];
-  let carrito = {}; // { productoId: { producto, cantidad } }
+  let carrito = {};
   let tipoEntrega = 'recoger';
   let categoriaActiva = 'todas';
+
+  // ─── TEMA ──────────────────────────────────────────────────────────────────
+  function aplicarTema(hex) {
+    if (!hex || !hex.startsWith('#')) return;
+    const r = parseInt(hex.slice(1,3),16);
+    const g = parseInt(hex.slice(3,5),16);
+    const b = parseInt(hex.slice(5,7),16);
+    // Variante oscura (80% del color)
+    const dr = Math.max(0, Math.round(r * 0.8));
+    const dg = Math.max(0, Math.round(g * 0.8));
+    const db = Math.max(0, Math.round(b * 0.8));
+    // Variante clara (10% opacidad sobre blanco)
+    const lr = Math.round(r * 0.12 + 255 * 0.88);
+    const lg = Math.round(g * 0.12 + 255 * 0.88);
+    const lb = Math.round(b * 0.12 + 255 * 0.88);
+    // Texto oscuro (60% del color)
+    const tr = Math.max(0, Math.round(r * 0.65));
+    const tg = Math.max(0, Math.round(g * 0.65));
+    const tb = Math.max(0, Math.round(b * 0.65));
+
+    const root = document.documentElement;
+    root.style.setProperty('--color-primary', hex);
+    root.style.setProperty('--color-primary-dark', `rgb(${dr},${dg},${db})`);
+    root.style.setProperty('--color-primary-light', `rgb(${lr},${lg},${lb})`);
+    root.style.setProperty('--color-primary-text', `rgb(${tr},${tg},${tb})`);
+    root.style.setProperty('--color-primary-border', `rgba(${r},${g},${b},0.4)`);
+  }
 
   // ─── INIT ──────────────────────────────────────────────────────────────────
   async function init() {
@@ -172,23 +230,22 @@
     if (!slug) { mostrarError(); return; }
 
     try {
-      // Buscar config por slug o por empresa_id
       const cfgRes = await fetchSB(`vitrina_config?slug=eq.${encodeURIComponent(slug)}&activa=eq.true&select=*`);
       let cfgData = cfgRes;
       if (!cfgData.length) {
-        // intento por empresa_id (si usaron el UUID directo)
         const cfgRes2 = await fetchSB(`vitrina_config?empresa_id=eq.${encodeURIComponent(slug)}&activa=eq.true&select=*`);
         cfgData = cfgRes2;
       }
       if (!cfgData.length) { mostrarError(); return; }
       config = cfgData[0];
 
-      // Cargar empresa
+      // Aplicar color del tema
+      if (config.color_tema) aplicarTema(config.color_tema);
+
       const empRes = await fetchSB(`empresas?id=eq.${config.empresa_id}&select=nombre,whatsapp,telefono,direccion,logo_url,lema`);
       if (!empRes.length) { mostrarError(); return; }
       empresa = empRes[0];
 
-      // Cargar productos visibles en vitrina
       const vpRes = await fetchSB(`vitrina_productos?empresa_id=eq.${config.empresa_id}&visible=eq.true&select=producto_id`);
       const ids = vpRes.map(v => v.producto_id);
 
@@ -196,7 +253,6 @@
       if (ids.length) {
         prodRes = await fetchSB(`productos?id=in.(${ids.join(',')})&activo=eq.true&select=id,nombre,descripcion,precio_venta,stock_actual,foto_url,categoria_id`);
       } else {
-        // Si no hay registro en vitrina_productos, mostrar todos los activos
         prodRes = await fetchSB(`productos?empresa_id=eq.${config.empresa_id}&activo=eq.true&select=id,nombre,descripcion,precio_venta,stock_actual,foto_url,categoria_id`);
       }
       productos = prodRes;
@@ -291,24 +347,25 @@
         <div class="p-3 flex flex-col flex-1">
           <p class="text-sm font-semibold text-gray-900 leading-tight">${p.nombre}</p>
           ${p.descripcion ? `<p class="text-xs text-gray-400 mt-0.5 line-clamp-1">${p.descripcion}</p>` : ''}
-          <p class="text-indigo-700 font-bold text-base mt-1">RD$${Number(p.precio_venta).toLocaleString()}</p>
+          <p class="theme-price">RD$${Number(p.precio_venta).toLocaleString()}</p>
           <p class="text-xs text-gray-400 mt-0.5">Stock: ${Math.floor(p.stock_actual)} disponibles</p>
-          <div class="mt-auto pt-2">
-            ${sinStock
-              ? `<p class="text-xs text-red-400 font-medium text-center">No disponible</p>`
-              : enCarrito === 0
-                ? `<button onclick="agregarAlCarrito('${p.id}')" class="w-full bg-indigo-600 text-white rounded-xl py-2 text-sm font-semibold">+ Agregar</button>`
-                : `<div class="flex items-center justify-between bg-indigo-50 rounded-xl px-2 py-1">
-                    <button class="qty-btn text-indigo-600" onclick="cambiarCantidad('${p.id}', -1)">−</button>
-                    <span class="font-bold text-indigo-700">${enCarrito}</span>
-                    <button class="qty-btn text-indigo-600" onclick="cambiarCantidad('${p.id}', 1)">+</button>
-                  </div>`
-            }
+          <div class="mt-auto pt-2" id="ctrl-${p.id}">
+            ${renderCtrl(p, enCarrito, sinStock)}
           </div>
         </div>
       `;
       grid.appendChild(card);
     });
+  }
+
+  function renderCtrl(p, enCarrito, sinStock) {
+    if (sinStock) return `<p class="text-xs text-red-400 font-medium text-center">No disponible</p>`;
+    if (enCarrito === 0) return `<button onclick="agregarAlCarrito('${p.id}')" class="theme-btn-add">+ Agregar</button>`;
+    return `<div class="theme-qty-box">
+      <button class="qty-btn theme-qty-btn" onclick="cambiarCantidad('${p.id}', -1)">−</button>
+      <span class="theme-qty-num">${enCarrito}</span>
+      <button class="qty-btn theme-qty-btn" onclick="cambiarCantidad('${p.id}', 1)">+</button>
+    </div>`;
   }
 
   // ─── BUSCADOR / FILTRO ─────────────────────────────────────────────────────
@@ -377,12 +434,12 @@
           <p class="text-sm font-semibold text-gray-800">${producto.nombre}</p>
           <p class="text-xs text-gray-500">RD$${Number(producto.precio_venta).toLocaleString()} c/u</p>
         </div>
-        <div class="flex items-center gap-2 bg-indigo-50 rounded-xl px-2 py-1">
-          <button class="qty-btn text-indigo-600 text-lg" onclick="cambiarCantidad('${producto.id}', -1); renderCarritoModal()">−</button>
-          <span class="font-bold text-indigo-700 w-5 text-center">${cantidad}</span>
-          <button class="qty-btn text-indigo-600 text-lg" onclick="cambiarCantidad('${producto.id}', 1); renderCarritoModal()">+</button>
+        <div class="theme-qty-box">
+          <button class="qty-btn theme-qty-btn text-lg" onclick="cambiarCantidad('${producto.id}', -1); renderCarritoModal()">−</button>
+          <span class="theme-qty-num w-5 text-center">${cantidad}</span>
+          <button class="qty-btn theme-qty-btn text-lg" onclick="cambiarCantidad('${producto.id}', 1); renderCarritoModal()">+</button>
         </div>
-        <p class="text-sm font-bold text-indigo-700 w-16 text-right">RD$${Number(subtotal).toLocaleString()}</p>
+        <p class="text-sm font-bold theme-text-dark w-16 text-right">RD$${Number(subtotal).toLocaleString()}</p>
       `;
       items.appendChild(div);
     });
@@ -409,8 +466,15 @@
 
   function setEntrega(tipo) {
     tipoEntrega = tipo;
-    document.getElementById('btnRecoger').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${tipo === 'recoger' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500'}`;
-    document.getElementById('btnDelivery').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${tipo === 'delivery' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500'}`;
+    const btnR = document.getElementById('btnRecoger');
+    const btnD = document.getElementById('btnDelivery');
+    if (tipo === 'recoger') {
+      btnR.className = 'flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all theme-entrega-active';
+      btnD.className = 'flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all theme-entrega-inactive';
+    } else {
+      btnD.className = 'flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all theme-entrega-active';
+      btnR.className = 'flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition-all theme-entrega-inactive';
+    }
     const campos = document.getElementById('camposDireccion');
     tipo === 'delivery' ? campos.classList.remove('hidden') : campos.classList.add('hidden');
     actualizarTotales();
@@ -470,11 +534,7 @@
 
     let numero = (empresa.whatsapp || empresa.telefono || '').replace(/[^0-9]/g, '');
     if (!numero) { alert('Este negocio no tiene número de WhatsApp configurado.'); return; }
-    // Si el número tiene 10 dígitos y empieza con 8 o 9, es dominicano → agregar 1
-    if (numero.length === 10 && (numero.startsWith('8') || numero.startsWith('9'))) {
-      numero = '1' + numero;
-    }
-    // Si tiene 7 dígitos, agregar 1809
+    if (numero.length === 10 && (numero.startsWith('8') || numero.startsWith('9'))) numero = '1' + numero;
     if (numero.length === 7) numero = '1809' + numero;
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
   }

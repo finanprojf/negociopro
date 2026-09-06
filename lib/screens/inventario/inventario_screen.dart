@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'scanner_screen.dart';
 import '../../theme/app_colors.dart';
 import '../../models/producto_model.dart';
 import '../../utils/formatters.dart';
@@ -72,8 +73,17 @@ class _InventarioScreenState extends State<InventarioScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.qr_code_scanner_rounded),
-            onPressed: () {},
-            tooltip: 'Escanear código',
+            tooltip: 'Buscar por código',
+            onPressed: () async {
+              final codigo = await Navigator.push<String>(context,
+                  MaterialPageRoute(builder: (_) => const ScannerScreen(titulo: 'Buscar producto')));
+              if (codigo != null && mounted) {
+                setState(() {
+                  _searchCtrl.text = codigo;
+                  _aplicarFiltros();
+                });
+              }
+            },
           ),
         ],
       ),
