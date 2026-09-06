@@ -137,7 +137,7 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
       setState(() => _guardando = false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('⚠️ Tiempo de espera agotado. Verifica tu conexión.'),
+        content: const Text('⚠️ Tiempo de espera agotado. Verifica tu conexión.'),
         behavior: SnackBarBehavior.floating,
       ));
     }
@@ -904,8 +904,9 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: TextStyle(
-                color: AppColors.textSecondary, fontSize: 13)),
+            Expanded(child: Text(label, style: TextStyle(
+                color: AppColors.textSecondary, fontSize: 13), overflow: TextOverflow.ellipsis)),
+            const SizedBox(width: 8),
             Text(valor, style: TextStyle(
                 color: color ?? AppColors.textPrimary,
                 fontWeight: bold ? FontWeight.bold : FontWeight.w600,

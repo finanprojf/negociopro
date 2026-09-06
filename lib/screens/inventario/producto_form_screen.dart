@@ -310,6 +310,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
           esElaborado:       _esElaborado,
           costoProduccion:   _esElaborado ? _costoTotal : 0,
           unidadesProducidas:_esElaborado ? _unidadesProd : 1,
+          codigoBarras:      _codigoCtrl.text.trim().isEmpty ? null : _codigoCtrl.text.trim(),
         ),
         esNuevo: !_esEdicion,
       );

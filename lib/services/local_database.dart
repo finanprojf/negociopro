@@ -204,6 +204,9 @@ class LocalDatabase {
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_clientes_empresa ON clientes(empresa_id, activo)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_cierres_empresa_fecha ON cierres_dia(empresa_id, fecha)'); } catch (_) {}
     // v1 → v2: encargos ya está en _onCreate desde v2
+    if (oldV < 7) {
+      try { await db.execute('ALTER TABLE cierres_dia ADD COLUMN ganancia_real REAL DEFAULT 0'); } catch (_) {}
+    }
     if (oldV < 5) {
       try { await db.execute('ALTER TABLE cierres_dia ADD COLUMN ganancia_real REAL DEFAULT 0'); } catch (_) {}
     }
