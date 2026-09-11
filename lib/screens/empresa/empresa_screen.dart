@@ -136,6 +136,13 @@ Future<void> _verificarAdmin() async {
           _buildOpcionCuenta(Icons.notifications_outlined, 'Notificaciones', _notificaciones),
           const SizedBox(height: 8),
           _buildOpcionCuenta(Icons.print_rounded, 'Impresora Térmica', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImpresoraScreen()))),
+          const SizedBox(height: 8),
+          _buildOpcionCuenta(
+            Icons.delete_forever_rounded,
+            'Eliminar mi cuenta',
+            _iniciarFlujoBaja,
+            esDestructivo: true,
+          ),
           const SizedBox(height: 24),
           _seccion('Plan'),
           const SizedBox(height: 12),
@@ -422,20 +429,54 @@ SizedBox(
         behavior: SnackBarBehavior.floating));
   }
 
-  Widget _buildOpcionCuenta(IconData icon, String label, VoidCallback onTap) {
+  // ─── FLUJO ELIMINAR CUENTA ───────────────────────────────────────────────
+
+  void _iniciarFlujoBaja() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _EliminarCuentaSheet(),
+    ).then((eliminado) {
+      if (eliminado == true && mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    });
+  }
+
+  // ─── WIDGETS ─────────────────────────────────────────────────────────────
+
+  Widget _buildOpcionCuenta(IconData icon, String label, VoidCallback onTap,
+      {bool esDestructivo = false}) {
+    final color = esDestructivo ? AppColors.danger : AppColors.textSecondary;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(color: AppColors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.cardBorder)),
+        decoration: BoxDecoration(
+          color: esDestructivo
+              ? AppColors.danger.withValues(alpha: 0.06)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: esDestructivo
+                ? AppColors.danger.withValues(alpha: 0.3)
+                : AppColors.cardBorder,
+          ),
+        ),
         child: Row(children: [
-          Icon(icon, color: AppColors.textSecondary, size: 20),
+          Icon(icon, color: color, size: 20),
           const SizedBox(width: 14),
-          Expanded(child: Text(label, style: const TextStyle(fontFamily: 'Poppins',
-              fontSize: 14, color: AppColors.textPrimary))),
-          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 20),
+          Expanded(child: Text(label, style: TextStyle(fontFamily: 'Poppins',
+              fontSize: 14, color: color, fontWeight: esDestructivo
+                  ? FontWeight.w600 : FontWeight.normal))),
+          Icon(Icons.chevron_right_rounded,
+              color: esDestructivo ? AppColors.danger.withValues(alpha: 0.5)
+                  : AppColors.textMuted,
+              size: 20),
         ]),
       ),
     );
@@ -523,6 +564,392 @@ SizedBox(
           ),
         ],
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  SHEET: Wizard de 3 pasos para eliminar cuenta
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _EliminarCuentaSheet extends StatefulWidget {
+  const _EliminarCuentaSheet();
+
+  @override
+  State<_EliminarCuentaSheet> createState() => _EliminarCuentaSheetState();
+}
+
+class _EliminarCuentaSheetState extends State<_EliminarCuentaSheet> {
+  int _paso = 0; // 0 = razón, 1 = comentario, 2 = confirmación final
+  String? _razonSeleccionada;
+  final _comentarioCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  bool _eliminando = false;
+  bool _confirmError = false;
+
+  static const _razones = [
+    ('🐛', 'La app tiene errores o fallas'),
+    ('💸', 'Es muy cara / no puedo pagar'),
+    ('🏪', 'Ya cerré mi negocio'),
+    ('🔄', 'Uso otra aplicación'),
+    ('😕', 'No le encuentro utilidad'),
+    ('🔒', 'Preocupaciones de privacidad'),
+    ('🤷', 'Otro motivo'),
+  ];
+
+  @override
+  void dispose() {
+    _comentarioCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: _paso == 0
+              ? _buildPasoRazon()
+              : _paso == 1
+                  ? _buildPasoComentario()
+                  : _buildPasoConfirmacion(),
+        ),
+      ),
+    );
+  }
+
+  // ── Paso 0: seleccionar razón ──────────────────────────────────────────
+
+  Widget _buildPasoRazon() {
+    return Padding(
+      key: const ValueKey(0),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        _handle(),
+        const SizedBox(height: 16),
+        const Icon(Icons.help_outline_rounded,
+            color: AppColors.textMuted, size: 40),
+        const SizedBox(height: 12),
+        const Text('¿Por qué quieres eliminar\ntu cuenta?',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: 'Poppins',
+                fontSize: 18, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        const Text('Tu opinión nos ayuda a mejorar NegocioPro',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: 'Poppins',
+                fontSize: 13, color: AppColors.textSecondary)),
+        const SizedBox(height: 20),
+        ..._razones.map((r) {
+          final selected = _razonSeleccionada == r.$2;
+          return GestureDetector(
+            onTap: () => setState(() => _razonSeleccionada = r.$2),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppColors.danger.withValues(alpha: 0.08)
+                    : AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: selected ? AppColors.danger : AppColors.cardBorder,
+                  width: selected ? 1.5 : 1,
+                ),
+              ),
+              child: Row(children: [
+                Text(r.$1, style: const TextStyle(fontSize: 18)),
+                const SizedBox(width: 12),
+                Expanded(child: Text(r.$2,
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                        color: selected ? AppColors.danger : AppColors.textPrimary))),
+                if (selected)
+                  const Icon(Icons.check_circle_rounded,
+                      color: AppColors.danger, size: 18),
+              ]),
+            ),
+          );
+        }),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12))),
+              child: const Text('Cancelar',
+                  style: TextStyle(fontFamily: 'Poppins')),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: _razonSeleccionada == null
+                  ? null
+                  : () => setState(() => _paso = 1),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Continuar',
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600, color: Colors.white)),
+            ),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  // ── Paso 1: comentario opcional ────────────────────────────────────────
+
+  Widget _buildPasoComentario() {
+    return Padding(
+      key: const ValueKey(1),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        _handle(),
+        const SizedBox(height: 16),
+        const Icon(Icons.chat_bubble_outline_rounded,
+            color: AppColors.textMuted, size: 40),
+        const SizedBox(height: 12),
+        const Text('¿Algo más que quieras\ncontarnos?',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: 'Poppins',
+                fontSize: 18, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        const Text('Opcional — pero nos ayuda mucho',
+            style: TextStyle(fontFamily: 'Poppins',
+                fontSize: 13, color: AppColors.textSecondary)),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _comentarioCtrl,
+          maxLines: 4,
+          maxLength: 300,
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+          decoration: InputDecoration(
+            hintText: 'Cuéntanos qué podríamos mejorar...',
+            hintStyle: const TextStyle(fontFamily: 'Poppins',
+                fontSize: 13, color: AppColors.textMuted),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.all(14),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => setState(() => _paso = 0),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12))),
+              child: const Text('Atrás',
+                  style: TextStyle(fontFamily: 'Poppins')),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () => setState(() => _paso = 2),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Continuar',
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600, color: Colors.white)),
+            ),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  // ── Paso 2: confirmación final ─────────────────────────────────────────
+
+  Widget _buildPasoConfirmacion() {
+    return Padding(
+      key: const ValueKey(2),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        _handle(),
+        const SizedBox(height: 16),
+        Container(
+          width: 64, height: 64,
+          decoration: BoxDecoration(
+            color: AppColors.danger.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.warning_amber_rounded,
+              color: AppColors.danger, size: 36),
+        ),
+        const SizedBox(height: 14),
+        const Text('Esto es permanente',
+            style: TextStyle(fontFamily: 'Poppins',
+                fontSize: 20, fontWeight: FontWeight.w700,
+                color: AppColors.danger)),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.danger.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.danger.withValues(alpha: 0.2)),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _AdvertenciaItem('Se eliminarán todos tus productos e inventario'),
+              _AdvertenciaItem('Se eliminarán tus ventas y reportes'),
+              _AdvertenciaItem('Se eliminarán tus clientes y fiados'),
+              _AdvertenciaItem('Se eliminarán tus encargos y gastos'),
+              _AdvertenciaItem('Esta acción NO se puede deshacer'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text('Escribe ELIMINAR para confirmar:',
+              style: TextStyle(fontFamily: 'Poppins',
+                  fontSize: 13, fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _confirmCtrl,
+          style: const TextStyle(fontFamily: 'Poppins',
+              fontWeight: FontWeight.w700, letterSpacing: 1.5),
+          textCapitalization: TextCapitalization.characters,
+          onChanged: (_) {
+            if (_confirmError) setState(() => _confirmError = false);
+          },
+          decoration: InputDecoration(
+            hintText: 'ELIMINAR',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                  color: _confirmError ? AppColors.danger : Colors.grey),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.danger, width: 2),
+            ),
+            errorText: _confirmError ? 'Escribe exactamente: ELIMINAR' : null,
+          ),
+        ),
+        const SizedBox(height: 20),
+        Row(children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _eliminando ? null : () => setState(() => _paso = 1),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12))),
+              child: const Text('Atrás',
+                  style: TextStyle(fontFamily: 'Poppins')),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: _eliminando ? null : _eliminarCuenta,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: _eliminando
+                  ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.5, color: Colors.white))
+                  : const Text('Eliminar cuenta',
+                      style: TextStyle(fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w700, color: Colors.white)),
+            ),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  Future<void> _eliminarCuenta() async {
+    if (_confirmCtrl.text.trim().toUpperCase() != 'ELIMINAR') {
+      setState(() => _confirmError = true);
+      return;
+    }
+    setState(() => _eliminando = true);
+    try {
+      final userId = SupabaseService.userId;
+      // Guardar feedback antes de eliminar (best-effort)
+      if (userId != null) {
+        try {
+          await SupabaseService.client.from('feedback_bajas').insert({
+            'user_id': userId,
+            'razon': _razonSeleccionada,
+            'comentario': _comentarioCtrl.text.trim().isEmpty
+                ? null : _comentarioCtrl.text.trim(),
+            'app': 'negociopro',
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        } catch (_) {/* ignorar si la tabla no existe */}
+      }
+      // Cerrar sesión y eliminar cuenta en Supabase Auth
+      await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      setState(() => _eliminando = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: AppColors.danger,
+        ));
+      }
+    }
+  }
+
+  Widget _handle() => Center(
+    child: Container(
+      width: 40, height: 4,
+      decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(2)),
+    ),
+  );
+}
+
+class _AdvertenciaItem extends StatelessWidget {
+  final String texto;
+  const _AdvertenciaItem(this.texto);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('⚠️ ', style: TextStyle(fontSize: 12)),
+        Expanded(child: Text(texto,
+            style: const TextStyle(fontFamily: 'Poppins',
+                fontSize: 12, color: AppColors.danger))),
+      ]),
     );
   }
 }

@@ -27,9 +27,20 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = "negociopro"
+            keyPassword = "123456"
+            storeFile = file("C:/Users/bulma/negociopro2/android/app/negociopro.jks")
+            storePassword = "123456"
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

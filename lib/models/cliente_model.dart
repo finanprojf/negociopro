@@ -77,6 +77,7 @@ activo: map['activo'] == true || map['activo'] == 1,
       'direccion': direccion,
       'foto_url': fotoUrl,
       'notas': notas,
+      'puntos_fidelidad': puntosFidelidad,
       'limite_credito': limiteCredito,
       'activo': activo,
     };

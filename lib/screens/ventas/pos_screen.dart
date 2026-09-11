@@ -704,13 +704,8 @@ Future<void> _cargarClientes() async {
                       montoPagado: 0,
                       descuento: opcion == 'descuento' ? _total : 0,
                     );
-                    setState(() {
-                      _carrito.clear();
-                      _clienteSeleccionado = null;
-                      _tipoPago = 'efectivo';
-                    });
                     if (context.mounted) {
-                     Navigator.pop(context, true);
+                      Navigator.pop(context, true);
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(opcion == 'fiado'
                             ? '¡Registrado en fiado!'
@@ -822,25 +817,20 @@ Future<void> _cargarClientes() async {
                       montoPagado: montoIngresado,
                       descuento: opcion == 'descuento' ? faltante : 0,
                     );
-                    setState(() {
-                      _carrito.clear();
-                      _clienteSeleccionado = null;
-                      _tipoPago = 'efectivo';
-                    });
                     if (context.mounted) {
+                      Navigator.pop(context, true);
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(opcion == 'fiado'
                             ? '¡Venta registrada en fiado!'
                             : '¡Venta con descuento registrada!'),
                         backgroundColor: AppColors.success,
                       ));
-                     Navigator.pop(context, true);
                     }
                     return;
                   }
 
                   Navigator.pop(ctx);
-                await VentaService.registrarVenta(
+                  await VentaService.registrarVenta(
                     items: _carrito.map((i) => {
                       'producto': i.producto,
                       'cantidad': i.cantidad,
@@ -849,17 +839,14 @@ Future<void> _cargarClientes() async {
                     clienteId: _clienteSeleccionado,
                     montoPagado: _tipoPago == 'fiado' ? 0 : (double.tryParse(ctrl.text) ?? _total),
                   );
-                  setState(() {
-                    _carrito.clear();
-                    _clienteSeleccionado = null;
-                  });
                   if (context.mounted) {
+                    // Salir del POS PRIMERO para evitar el flash rojo
+                    Navigator.pop(context, true);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text('¡Venta registrada!',
                           style: GoogleFonts.poppins()),
                       backgroundColor: AppColors.success,
                     ));
-                    Navigator.pop(context, true);
                   }
                 },
                 child: Text('Confirmar venta', style: GoogleFonts.poppins(
@@ -891,128 +878,144 @@ class _ProdCard extends StatelessWidget {
       required this.onMas,
       required this.onMenos});
 
+  static const _verde  = Color(0xFF16A34A);
+  static const _rojo   = Color(0xFFDC2626);
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: producto.sinStock ? null : onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: enCarrito ? AppColors.primarySurface : AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: enCarrito ? AppColors.primary : AppColors.cardBorder,
-            width: enCarrito ? 1.5 : 1,
+    final agotado = producto.sinStock;
+
+    // ── Foto / ícono ─────────────────────────────────────────────
+    Widget foto = Container(
+      width: 28, height: 28,
+      decoration: BoxDecoration(
+        color: AppColors.colorVentas.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(7)),
+      child: producto.fotoUrl != null
+          ? ClipRRect(borderRadius: BorderRadius.circular(7),
+              child: producto.fotoUrl!.startsWith('http')
+                  ? Image.network(producto.fotoUrl!, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                          Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 15))
+                  : Image.file(File(producto.fotoUrl!), fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                          Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 15)))
+          : const Icon(Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 15),
+    );
+
+    // ── Contenido de la tarjeta (siempre igual) ──────────────────
+    Widget info = Padding(
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(children: [
+            foto,
+            const Spacer(),
+            // Badge stock o cantidad
+            if (enCarrito)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(8)),
+                child: Text('$cantidadEnCarrito',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)))
+            else if (agotado)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(color: AppColors.dangerSurface,
+                    borderRadius: BorderRadius.circular(4)),
+                child: Text('Agotado', style: GoogleFonts.poppins(
+                    fontSize: 8, color: AppColors.danger, fontWeight: FontWeight.w600)))
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: producto.stockBajo ? AppColors.warning : AppColors.textMuted,
+                  borderRadius: BorderRadius.circular(8)),
+                child: Text('${producto.stockActual.toInt()}',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white))),
+          ]),
+          const SizedBox(height: 8),
+          Text(producto.nombre,
+              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600,
+                  color: agotado ? AppColors.textMuted : AppColors.textPrimary),
+              maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 3),
+          Text(AppFormatters.moneda(producto.precioVenta),
+              style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700,
+                  color: agotado ? AppColors.textMuted : AppColors.primary)),
+          // Íconos −/+ solo visibles cuando está en carrito
+          if (enCarrito) ...[
+            const Spacer(),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Icon(Icons.remove_rounded, size: 18, color: _rojo.withValues(alpha: 0.7)),
+              Icon(Icons.add_rounded,    size: 18, color: _verde.withValues(alpha: 0.7)),
+            ]),
+          ],
+        ],
+      ),
+    );
+
+    // ══════════════════════════════════════════════════════════════
+    // ESTADO NORMAL — tarjeta completa = agregar
+    // ══════════════════════════════════════════════════════════════
+    if (!enCarrito) {
+      return GestureDetector(
+        onTap: agotado ? null : onMas,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.cardBorder),
           ),
+          child: info,
         ),
+      );
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // ESTADO EN CARRITO — mitad izquierda roja / mitad derecha verde
+    // ══════════════════════════════════════════════════════════════
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary, width: 1.5),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
         child: Stack(children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(children: [
-                Container(width: 28, height: 28,
-                    decoration: BoxDecoration(
-                      color: AppColors.colorVentas.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(7)),
-                    child: producto.fotoUrl != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(7),
-                            child: producto.fotoUrl!.startsWith('http')
-                                ? Image.network(producto.fotoUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Icon(
-                                        Icons.inventory_2_rounded,
-                                        color: AppColors.colorVentas, size: 16))
-                                : Image.file(File(producto.fotoUrl!),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Icon(
-                                        Icons.inventory_2_rounded,
-                                        color: AppColors.colorVentas, size: 16)))
-                        : const Icon(Icons.inventory_2_rounded,
-                            color: AppColors.colorVentas, size: 16)),
-                const Spacer(),
-                if (producto.sinStock)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(color: AppColors.dangerSurface,
-                        borderRadius: BorderRadius.circular(4)),
-                    child: Text('Agotado', style: GoogleFonts.poppins(
-                        fontSize: 8, color: AppColors.danger,
-                        fontWeight: FontWeight.w600)),
-                  ),
-              ]),
-              const SizedBox(height: 8),
-              Text(producto.nombre,
-                  style: GoogleFonts.poppins(fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: producto.sinStock
-                          ? AppColors.textMuted : AppColors.textPrimary),
-                  maxLines: 2, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 4),
-              Text(AppFormatters.moneda(producto.precioVenta),
-                  style: GoogleFonts.poppins(fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: producto.sinStock
-                          ? AppColors.textMuted : AppColors.primary)),
-              if (enCarrito) ...[
-                const SizedBox(height: 8),
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  GestureDetector(
-                    onTap: onMenos,
-                    child: Container(
-                      width: 26, height: 26,
-                      decoration: BoxDecoration(
-                        color: AppColors.danger.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-                      ),
-                      child: const Icon(Icons.remove_rounded,
-                          color: AppColors.danger, size: 16),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text('${cantidadEnCarrito}x',
-                        style: GoogleFonts.poppins(fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary)),
-                  ),
-                  GestureDetector(
-                    onTap: onMas,
-                    child: Container(
-                      width: 26, height: 26,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                      ),
-                      child: const Icon(Icons.add_rounded,
-                          color: AppColors.primary, size: 16),
-                    ),
-                  ),
-                ]),
-              ],
-            ],
-          ),
-          // Stock en esquina superior derecha
-          Positioned(top: 0, right: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-              decoration: BoxDecoration(
-                color: producto.sinStock
-                    ? AppColors.danger
-                    : producto.stockBajo
-                        ? AppColors.warning
-                        : AppColors.textMuted,
-                borderRadius: BorderRadius.circular(8),
+          // Fondo dividido: izquierda rojo más oscuro, derecha verde más suave
+          Row(children: [
+            Expanded(child: Container(color: _rojo.withValues(alpha: 0.22))),
+            Expanded(child: Container(color: _verde.withValues(alpha: 0.14))),
+          ]),
+          // Info encima (no bloquea los taps laterales)
+          IgnorePointer(child: info),
+          // Toque izquierdo = quitar  |  derecho = agregar
+          // HitTestBehavior.opaque es CLAVE: captura taps aunque el widget sea transparente
+          Positioned.fill(
+            child: Row(children: [
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onMenos,
+                ),
               ),
-              child: Text('${producto.stockActual.toInt()}',
-                  style: const TextStyle(fontFamily: 'Poppins',
-                      fontSize: 9, fontWeight: FontWeight.w700,
-                      color: Colors.white)),
-            )),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: agotado ? null : onMas,
+                ),
+              ),
+            ]),
+          ),
         ]),
       ),
     );

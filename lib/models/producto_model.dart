@@ -106,7 +106,7 @@ class ProductoModel {
         'stock_actual':       stockActual,
         'stock_minimo':       stockMinimo,
         'unidad':             unidad,
-        'activo':             activo,
+        'activo':             activo ? 1 : 0,    // int para SQLite
         'es_elaborado':       esElaborado ? 1 : 0,
         'costo_produccion':   costoProduccion,
         'unidades_producidas':unidadesProducidas,

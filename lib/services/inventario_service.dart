@@ -64,6 +64,8 @@ class InventarioService {
           }
           map.remove('categorias');
           map['synced'] = 1;
+          map['activo'] = m['activo'] == true ? 1 : 0;         // bool → int para SQLite
+          map['es_elaborado'] = m['es_elaborado'] == true ? 1 : 0; // bool → int para SQLite
           try {
             await LocalDatabase.insertar('productos', map);
           } catch (_) {}
@@ -111,6 +113,8 @@ class InventarioService {
           ...producto.toMap(),
           'id': id,
           'empresa_id': empresaId,
+          'activo': producto.activo,              // bool para Supabase
+          'es_elaborado': producto.esElaborado,   // bool para Supabase
         };
         if (esNuevo) {
           await SupabaseService.client.from('productos').insert(dataOnline);

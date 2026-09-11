@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
 import '../ventas/pos_screen.dart';
@@ -32,6 +33,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   String _nombreNegocio = 'Mi Negocio';
   String? _empresaId;
+  String _appVersion = '';
   double _ventasHoy = 0;
   double _gananciasHoy = 0;
   int _productosLowStock = 0;
@@ -46,6 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _cargarNombre();
     _cargarResumen();
+    _cargarVersion();
     _timer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (mounted) {
         _cargarResumen();
@@ -60,7 +63,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-DateTime _toLocal(String dateStr) {
+Future<void> _cargarVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) setState(() => _appVersion = 'v${info.version}');
+  }
+
+  DateTime _toLocal(String dateStr) {
     try {
       final utcStr = dateStr
           .replaceAll('+00:00', 'Z')
@@ -606,8 +614,6 @@ Widget _buildBannerVencida() {
           AppColors.colorGastos, const GastosScreen()),
       _ModuleItem('Reportes', Icons.bar_chart_rounded,
           AppColors.colorReportes, const ReportesScreen()),
-      _ModuleItem('Cuadre de Caja', Icons.lock_clock_rounded,
-          AppColors.primary, const CierreDiaScreen()),
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Módulos', style: GoogleFonts.poppins(
@@ -684,6 +690,19 @@ Widget _buildBannerVencida() {
       else
         Center(child: Text('Sin actividad reciente',
             style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textMuted))),
+      const SizedBox(height: 24),
+      Center(
+        child: Text(
+          'NegocioPro $_appVersion · FinanPro Solutions',
+          style: GoogleFonts.poppins(
+            fontSize: 11,
+            color: AppColors.textMuted,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.3,
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
     ]);
   }
 
@@ -823,9 +842,8 @@ Widget _buildBannerVencida() {
  Widget _buildOtrasPantallas() {
     final pantallas = [
       const DashboardScreen(),
-      const InventarioScreen(),
       const EncargosScreen(),
-      const ReportesScreen(),
+      const CierreDiaScreen(),
     ];
     return pantallas[_selectedIndex];
   }
@@ -837,12 +855,10 @@ Widget _buildBannerVencida() {
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home_rounded), label: 'Inicio'),
-        BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined),
-            activeIcon: Icon(Icons.inventory_2_rounded), label: 'Inventario'),
         BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_outlined),
             activeIcon: Icon(Icons.shopping_bag_rounded), label: 'Encargos'),
-        BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined),
-            activeIcon: Icon(Icons.bar_chart_rounded), label: 'Reportes'),
+        BottomNavigationBarItem(icon: Icon(Icons.lock_clock_outlined),
+            activeIcon: Icon(Icons.lock_clock_rounded), label: 'Cuadre de Caja'),
       ],
     );
   }

@@ -27,7 +27,14 @@ class ClienteService {
             .eq('activo', true)
             .order('nombre');
 
+        // IDs pendientes de sync — NO sobreescribir con datos de Supabase
+        final idsPendientes = local
+            .where((m) => m['synced'] == 0)
+            .map((m) => m['id'] as String)
+            .toSet();
+
         for (final m in res) {
+          if (idsPendientes.contains(m['id'])) continue; // preservar cambio local
           final map = Map<String, dynamic>.from(m);
           map['synced'] = 1;
           map['activo'] = m['activo'] == true ? 1 : 0;
@@ -133,6 +140,7 @@ class ClienteService {
           ...cliente.toMap(),
           'id': id,
           'empresa_id': empresaId,
+          'activo': cliente.activo, // bool para Supabase
           'updated_at': ahora,
         };
         if (esNuevo) {
