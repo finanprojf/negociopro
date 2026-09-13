@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import 'package:sqflite/sqflite.dart';
 import '../models/cierre_dia_model.dart';
 import 'supabase_service.dart';
 import 'local_database.dart';
@@ -24,7 +25,7 @@ class CierreDiaService {
         inicio = cierres.first['created_at'] as String;
       }
 
-      // ── 1-4: Queries en paralelo ─────────────────────────────
+      // ── 1-4: Queries en paralelo (SQLite) ────────────────────
       final queryResults = await Future.wait([
         db.query('ventas',
             where: "empresa_id = ? AND estado = 'completada' AND created_at >= ?",
@@ -39,10 +40,75 @@ class CierreDiaService {
             where: "empresa_id = ? AND created_at >= ?",
             whereArgs: [empresaId, inicio]),
       ]);
-      final ventasRows        = queryResults[0];
-      final abonosFiadoRows   = queryResults[1];
-      final abonosApartadoRows = queryResults[2];
-      final gastosRows        = queryResults[3];
+      var ventasRows           = List<Map<String, dynamic>>.from(queryResults[0]);
+      var abonosFiadoRows      = List<Map<String, dynamic>>.from(queryResults[1]);
+      var abonosApartadoRows   = List<Map<String, dynamic>>.from(queryResults[2]);
+      var gastosRows           = List<Map<String, dynamic>>.from(queryResults[3]);
+
+      // ── 1b: Si hay internet, complementar con Supabase ────────
+      // (cubre reinstalaciones frescas donde SQLite no tiene histórico)
+      if (await SupabaseService.isOnlineAsync) {
+        try {
+          final idsVentasLocal    = ventasRows.map((r) => r['id'] as String).toSet();
+          final idsAbonosFiado    = abonosFiadoRows.map((r) => r['id'] as String).toSet();
+          final idsAbonosApartado = abonosApartadoRows.map((r) => r['id'] as String).toSet();
+          final idsGastos         = gastosRows.map((r) => r['id'] as String).toSet();
+
+          final onlineResults = await Future.wait([
+            SupabaseService.client
+                .from('ventas')
+                .select()
+                .eq('empresa_id', empresaId)
+                .eq('estado', 'completada')
+                .gte('created_at', inicio),
+            SupabaseService.client
+                .from('abonos_fiado')
+                .select()
+                .eq('empresa_id', empresaId)
+                .gte('created_at', inicio),
+            SupabaseService.client
+                .from('abonos_apartado')
+                .select()
+                .eq('empresa_id', empresaId)
+                .gte('created_at', inicio),
+            SupabaseService.client
+                .from('gastos')
+                .select()
+                .eq('empresa_id', empresaId)
+                .gte('created_at', inicio),
+          ]).timeout(const Duration(seconds: 15));
+
+          // Agregar solo los registros que NO están en SQLite local
+          for (final r in (onlineResults[0] as List)) {
+            final m = Map<String, dynamic>.from(r as Map);
+            if (!idsVentasLocal.contains(m['id'] as String?)) {
+              ventasRows.add(m);
+              // Guardar en SQLite para la próxima vez
+              try {
+                final local = Map<String, dynamic>.from(m);
+                local['synced'] = 1;
+                local['activo'] = m['activo'] == true ? 1 : 0;
+                await db.insert('ventas', local,
+                    conflictAlgorithm: ConflictAlgorithm.ignore);
+              } catch (_) {}
+            }
+          }
+          for (final r in (onlineResults[1] as List)) {
+            final m = Map<String, dynamic>.from(r as Map);
+            if (!idsAbonosFiado.contains(m['id'] as String?)) abonosFiadoRows.add(m);
+          }
+          for (final r in (onlineResults[2] as List)) {
+            final m = Map<String, dynamic>.from(r as Map);
+            if (!idsAbonosApartado.contains(m['id'] as String?)) abonosApartadoRows.add(m);
+          }
+          for (final r in (onlineResults[3] as List)) {
+            final m = Map<String, dynamic>.from(r as Map);
+            if (!idsGastos.contains(m['id'] as String?)) gastosRows.add(m);
+          }
+        } catch (_) {
+          // Si Supabase falla, continuar con lo que hay en SQLite
+        }
+      }
 
       double ventasEfectivo = 0, ventasTarjeta = 0,
              ventasTransferencia = 0, ventasFiado = 0;
@@ -108,21 +174,38 @@ class CierreDiaService {
         }
       }
 
-      // ── 5. GANANCIA REAL — una sola query masiva ──────────────
+      // ── 5. GANANCIA REAL ─────────────────────────────────────
       double gananciaBruta = 0;
       if (ventaIds.isNotEmpty) {
         try {
-          // Traer todos los detalles de todas las ventas en una sola query
+          // Detalles en SQLite (los que ya están locales)
           final placeholders = ventaIds.map((_) => '?').join(',');
-          final detalles = await db.rawQuery(
-            'SELECT d.cantidad, d.precio_unitario, d.producto_id, '
+          final detallesLocal = await db.rawQuery(
+            'SELECT d.venta_id, d.cantidad, d.precio_unitario, d.producto_id, '
             'p.precio_compra, p.es_elaborado, p.costo_produccion, p.unidades_producidas '
             'FROM detalle_ventas d '
             'LEFT JOIN productos p ON p.id = d.producto_id '
             'WHERE d.venta_id IN ($placeholders)',
             ventaIds,
           );
-          for (final d in detalles) {
+
+          final idsConDetalle = detallesLocal.map((d) => d['venta_id'] as String).toSet();
+          final idsSinDetalle = ventaIds.where((id) => !idsConDetalle.contains(id)).toList();
+
+          // Si hay ventas sin detalles en SQLite (vienen de Supabase), buscar online
+          List<Map<String, dynamic>> detallesOnline = [];
+          if (idsSinDetalle.isNotEmpty && await SupabaseService.isOnlineAsync) {
+            try {
+              final res = await SupabaseService.client
+                  .from('detalle_ventas')
+                  .select('venta_id, cantidad, precio_unitario, precio_compra')
+                  .inFilter('venta_id', idsSinDetalle)
+                  .timeout(const Duration(seconds: 10));
+              detallesOnline = List<Map<String, dynamic>>.from(res as List);
+            } catch (_) {}
+          }
+
+          for (final d in [...detallesLocal, ...detallesOnline]) {
             final cantidad    = (d['cantidad'] as num? ?? 0).toDouble();
             final precioVenta = (d['precio_unitario'] as num? ?? 0).toDouble();
             final esElab      = (d['es_elaborado'] as int? ?? 0) == 1;
@@ -137,7 +220,6 @@ class CierreDiaService {
             gananciaBruta += (precioVenta - costo) * cantidad;
           }
         } catch (_) {
-          // Si falla el JOIN, ganancia real = 0 (no bloquea el cierre)
           gananciaBruta = 0;
         }
       }
