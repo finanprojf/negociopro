@@ -10,6 +10,10 @@ class ApartadoService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
+    // Cargar local primero (incluye pendientes offline)
+    final local = await LocalDatabase.consultar('apartados', empresaId);
+    var localLista = local.map((m) => ApartadoModel.fromMap(m)).toList();
+
     if (await SupabaseService.isOnlineAsync) {
       try {
         List<dynamic> res;
@@ -27,16 +31,39 @@ class ApartadoService {
               .eq('empresa_id', empresaId)
               .order('created_at', ascending: false);
         }
-        return res.map((m) => ApartadoModel.fromMap(m)).toList();
+
+        // IDs con cambios locales pendientes — NO sobreescribir
+        final idsPendientes = local
+            .where((m) => m['synced'] == 0)
+            .map((m) => m['id'] as String)
+            .toSet();
+
+        // Cachear en SQLite los registros de Supabase
+        for (final m in res) {
+          if (idsPendientes.contains(m['id'] as String?)) continue;
+          final map = Map<String, dynamic>.from(m)..remove('clientes');
+          map['synced'] = 1;
+          try { await LocalDatabase.insertar('apartados', map); } catch (_) {}
+        }
+
+        // Combinar: online tiene prioridad salvo pendientes locales
+        final localPendientes = Map.fromEntries(
+          local.where((m) => m['synced'] == 0)
+               .map((m) => MapEntry(m['id'] as String, ApartadoModel.fromMap(m))),
+        );
+        final idsOnline = res.map((m) => m['id'] as String).toSet();
+        final soloLocales = localLista.where((a) => !idsOnline.contains(a.id)).toList();
+        var lista = [
+          ...res.map((m) => localPendientes[m['id']] ?? ApartadoModel.fromMap(m)),
+          ...soloLocales,
+        ];
+        if (estado != null) lista = lista.where((a) => a.estado == estado).toList();
+        return lista;
       } catch (_) {}
     }
 
-    final local = await LocalDatabase.consultar('apartados', empresaId);
-    var lista = local.map((m) => ApartadoModel.fromMap(m)).toList();
-    if (estado != null) {
-      lista = lista.where((a) => a.estado == estado).toList();
-    }
-    return lista;
+    if (estado != null) localLista = localLista.where((a) => a.estado == estado).toList();
+    return localLista;
   }
 
   static Future<bool> crearApartado({
@@ -91,6 +118,20 @@ class ApartadoService {
         final onlineMap = Map<String, dynamic>.from(map)..remove('synced');
         await SupabaseService.client.from('apartados').insert(onlineMap);
         await LocalDatabase.marcarSynced('apartados', id);
+
+        // Sincronizar el abono inicial si existía
+        if (abonoInicial > 0) {
+          final abonosLocal = await LocalDatabase.database
+              .then((db) => db.query('abonos_apartado',
+                  where: 'apartado_id = ? AND synced = 0', whereArgs: [id]));
+          for (final ab in abonosLocal) {
+            try {
+              final abMap = Map<String, dynamic>.from(ab)..remove('synced');
+              await SupabaseService.client.from('abonos_apartado').insert(abMap);
+              await LocalDatabase.marcarSynced('abonos_apartado', ab['id'] as String);
+            } catch (_) {}
+          }
+        }
       } catch (_) {}
     }
 

@@ -90,15 +90,34 @@ static Future<void> sincronizarPendientes() async {
         final ventaData = Map<String, dynamic>.from(v)..remove('synced');
         await SupabaseService.client.from('ventas').upsert(ventaData);
 
-        // 2. Subir los detalles directamente desde SQLite (sin ProductoModel)
+        // 2. Subir los detalles y actualizar stock con el valor ACTUAL remoto
         final detalles = await db.query('detalle_ventas',
             where: 'venta_id = ?', whereArgs: [v['id']]);
+        final ahoraSync = DateTime.now().toUtc().toIso8601String();
         for (final d in detalles) {
           try {
             await SupabaseService.client
                 .from('detalle_ventas')
                 .upsert(Map<String, dynamic>.from(d));
           } catch (_) {}
+          // Descontar stock del servidor leyendo el valor remoto primero
+          final pid = d['producto_id'] as String?;
+          final qty = (d['cantidad'] as num? ?? 0).toDouble();
+          if (pid != null && qty > 0) {
+            try {
+              final res = await SupabaseService.client
+                  .from('productos')
+                  .select('stock_actual')
+                  .eq('id', pid)
+                  .single();
+              final stockRemoto = (res['stock_actual'] as num? ?? 0).toDouble();
+              final nuevoStock = (stockRemoto - qty).clamp(0.0, double.infinity);
+              await SupabaseService.client
+                  .from('productos')
+                  .update({'stock_actual': nuevoStock, 'updated_at': ahoraSync})
+                  .eq('id', pid);
+            } catch (_) {}
+          }
         }
 
         // 3. Si era fiado, sincronizar el fiado asociado
@@ -231,12 +250,19 @@ static Future<void> sincronizarPendientes() async {
       } catch (_) {}
     }
 
-    // Actualizar stock en Supabase
+    // Actualizar stock en Supabase — leer el stock ACTUAL remoto primero
+    // para evitar sobreescribir con datos viejos si hubo ventas offline múltiples
     for (final item in items) {
       final p = item['producto'] as ProductoModel;
       final cantidad = (item['cantidad'] as num).toDouble();
-      final nuevoStock = (p.stockActual - cantidad).clamp(0.0, double.infinity);
       try {
+        final res = await SupabaseService.client
+            .from('productos')
+            .select('stock_actual')
+            .eq('id', p.id)
+            .single();
+        final stockRemoto = (res['stock_actual'] as num? ?? p.stockActual).toDouble();
+        final nuevoStock = (stockRemoto - cantidad).clamp(0.0, double.infinity);
         await SupabaseService.client
             .from('productos')
             .update({'stock_actual': nuevoStock, 'updated_at': ahora})

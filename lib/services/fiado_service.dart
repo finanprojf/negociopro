@@ -130,6 +130,7 @@ class FiadoService {
         'saldo_pendiente': nuevoSaldo,
         'estado': nuevoEstado,
         'updated_at': ahora,
+        'synced': 0,
       }, 'id', fiadoId);
     }
 

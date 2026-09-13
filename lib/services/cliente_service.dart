@@ -164,7 +164,7 @@ class ClienteService {
     if (empresaId == null) return false;
 
     await LocalDatabase.actualizar('clientes',
-        {'puntos_fidelidad': puntos, 'updated_at': DateTime.now().toIso8601String()},
+        {'puntos_fidelidad': puntos, 'updated_at': DateTime.now().toIso8601String(), 'synced': 0},
         'id', clienteId);
 
     if (await SupabaseService.isOnlineAsync) {

@@ -49,8 +49,7 @@ static Future<void> limpiarCache() async {
     await prefs.remove('empresa_id');
   }
 
-  static bool get isOnline => true;
-static Future<bool> get isOnlineAsync async {
+  static Future<bool> get isOnlineAsync async {
     // Reusar resultado por 5 segundos
     if (_onlineCache != null && _onlineCheckedAt != null) {
       final diff = DateTime.now().difference(_onlineCheckedAt!);
