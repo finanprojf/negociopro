@@ -5,6 +5,8 @@ import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
 import '../../services/supabase_service.dart';
 import '../../services/local_database.dart';
+import '../../services/cuadre_automatico_service.dart';
+import 'cierre_dia_screen.dart';
 
 class ReportesScreen extends StatefulWidget {
   const ReportesScreen({super.key});
@@ -16,6 +18,13 @@ class _ReportesScreenState extends State<ReportesScreen> {
   String _periodo = 'hoy';
   bool _loading = false;
 
+  // Cuadre de caja — estado
+  bool _autoActivo    = false;
+  int  _autoHora      = 22;
+  int  _autoMinuto    = 0;
+  int  _autoIntervalo = 0;
+  bool _cuadreHechoHoy = false;
+
   // Estructura de datos por período
   Map<String, _DatosPeriodo> _datos = {
     'hoy':    _DatosPeriodo(),
@@ -23,7 +32,10 @@ class _ReportesScreenState extends State<ReportesScreen> {
     'mes':    _DatosPeriodo(),
   };
 
-  List<Map<String, dynamic>> _productosTop = [];
+  // Top productos por período
+  Map<String, List<Map<String, dynamic>>> _productosTopPorPeriodo = {
+    'hoy': [], 'semana': [], 'mes': [],
+  };
 
   _DatosPeriodo get _d => _datos[_periodo]!;
 
@@ -38,6 +50,25 @@ class _ReportesScreenState extends State<ReportesScreen> {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
+
+      // Cargar config cuadre y si ya se hizo hoy — en paralelo con los datos
+      final cuadreResults = await Future.wait([
+        CuadreAutomaticoService.isActivo(),
+        CuadreAutomaticoService.getHora(),
+        CuadreAutomaticoService.getMinuto(),
+        CuadreAutomaticoService.getIntervalo(),
+        _verificarCuadreHoy(empresaId),
+      ]);
+      if (mounted) {
+        setState(() {
+          _autoActivo    = cuadreResults[0] as bool;
+          _autoHora      = cuadreResults[1] as int;
+          _autoMinuto    = cuadreResults[2] as int;
+          _autoIntervalo = cuadreResults[3] as int;
+          _cuadreHechoHoy = cuadreResults[4] as bool;
+        });
+      }
+
       if (await SupabaseService.isOnlineAsync) {
         await _cargarOnline(empresaId);
       } else {
@@ -45,6 +76,24 @@ class _ReportesScreenState extends State<ReportesScreen> {
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<bool> _verificarCuadreHoy(String empresaId) async {
+    try {
+      final db  = await LocalDatabase.database;
+      final hoy = DateTime.now();
+      final fechaStr =
+          '${hoy.year}-${hoy.month.toString().padLeft(2, '0')}-${hoy.day.toString().padLeft(2, '0')}';
+      final rows = await db.query(
+        'cierres_dia',
+        where: 'empresa_id = ? AND fecha = ?',
+        whereArgs: [empresaId, fechaStr],
+        limit: 1,
+      );
+      return rows.isNotEmpty;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -89,19 +138,53 @@ class _ReportesScreenState extends State<ReportesScreen> {
           ventasIds.add(v['id'] as String);
         }
 
-        // Ganancia bruta (depende de ventasIds)
+        // ── Ventas locales NO sincronizadas (offline o sync pendiente) ──
+        // Si una venta se hizo sin internet y no subió aún, Supabase no la tiene.
+        // Las sumamos aquí para que el reporte siempre sea completo.
         double gananciaBruta = 0;
-        if (ventasIds.isNotEmpty) {
-          final detalles = await SupabaseService.client
-              .from('detalle_ventas')
-              .select('cantidad, precio_unitario, productos(precio_compra)')
-              .inFilter('venta_id', ventasIds);
-          for (final d in detalles) {
-            final pv = (d['precio_unitario'] as num).toDouble();
-            final pc = d['productos'] != null
-                ? (d['productos']['precio_compra'] as num? ?? 0).toDouble() : 0.0;
-            gananciaBruta += (pv - pc) * (d['cantidad'] as num).toDouble();
+        try {
+          final dbLocal = await LocalDatabase.database;
+          final ventasNoSync = await dbLocal.query(
+            'ventas',
+            where: "empresa_id = ? AND synced = 0 AND estado = 'completada' AND created_at >= ?",
+            whereArgs: [empresaId, inicioUtc],
+          );
+          for (final v in ventasNoSync) {
+            final t    = (v['total'] as num? ?? 0).toDouble();
+            final tipo = (v['tipo_pago'] as String? ?? 'efectivo').toLowerCase();
+            final vid  = v['id'] as String?;
+            if (tipo == 'fiado') { ventasFiado += t; } else { ventasContado += t; }
+            // Ganancia bruta desde detalle_ventas local para ventas no sincronizadas
+            if (vid != null) {
+              final detallesLocal = await dbLocal.query(
+                'detalle_ventas',
+                where: 'venta_id = ?',
+                whereArgs: [vid],
+              );
+              for (final d in detallesLocal) {
+                final pv  = (d['precio_unitario'] as num? ?? 0).toDouble();
+                // precio_compra no está en detalle_ventas; aproximar con 0 si no hay dato
+                final pc  = (d['precio_compra']  as num? ?? 0).toDouble();
+                gananciaBruta += (pv - pc) * (d['cantidad'] as num? ?? 1).toDouble();
+              }
+            }
           }
+        } catch (_) {}
+
+        // Ganancia bruta de ventas sincronizadas (desde Supabase con precio_compra)
+        if (ventasIds.isNotEmpty) {
+          try {
+            final detalles = await SupabaseService.client
+                .from('detalle_ventas')
+                .select('cantidad, precio_unitario, productos(precio_compra)')
+                .inFilter('venta_id', ventasIds);
+            for (final d in detalles) {
+              final pv = (d['precio_unitario'] as num).toDouble();
+              final pc = d['productos'] != null
+                  ? (d['productos']['precio_compra'] as num? ?? 0).toDouble() : 0.0;
+              gananciaBruta += (pv - pc) * (d['cantidad'] as num).toDouble();
+            }
+          } catch (_) {}
         }
 
         double gastos = 0;
@@ -127,33 +210,41 @@ class _ReportesScreenState extends State<ReportesScreen> {
         );
       }
 
-      final inicioTop = inicios[_periodo]!.toUtc().toIso8601String();
+      // Períodos + top productos para cada período — todo en paralelo
+      Future<List<Map<String, dynamic>>> _calcTop(String inicioUtc) async {
+        try {
+          final ventasTop = await SupabaseService.client
+              .from('ventas').select('id')
+              .eq('empresa_id', empresaId).eq('estado', 'completada')
+              .gte('created_at', inicioUtc);
+          final ids = (ventasTop as List).map((v) => v['id'] as String).toList();
+          if (ids.isEmpty) return [];
+          final detalles = await SupabaseService.client
+              .from('detalle_ventas')
+              .select('nombre_producto, cantidad, precio_unitario')
+              .inFilter('venta_id', ids);
+          return _calcularTop(detalles);
+        } catch (_) {
+          return [];
+        }
+      }
 
-      // Períodos en paralelo
-      final periodoResults = await Future.wait<_DatosPeriodo>([
+      final allResults = await Future.wait([
         _calcPeriodo(inicios['hoy']!.toUtc().toIso8601String()),
         _calcPeriodo(inicios['semana']!.toUtc().toIso8601String()),
         _calcPeriodo(inicios['mes']!.toUtc().toIso8601String()),
+        _calcTop(inicios['hoy']!.toUtc().toIso8601String()),
+        _calcTop(inicios['semana']!.toUtc().toIso8601String()),
+        _calcTop(inicios['mes']!.toUtc().toIso8601String()),
       ]);
 
-      _datos['hoy']    = periodoResults[0];
-      _datos['semana'] = periodoResults[1];
-      _datos['mes']    = periodoResults[2];
+      _datos['hoy']    = allResults[0] as _DatosPeriodo;
+      _datos['semana'] = allResults[1] as _DatosPeriodo;
+      _datos['mes']    = allResults[2] as _DatosPeriodo;
 
-      // Top productos (independiente)
-      final allVentasTop = await SupabaseService.client.from('ventas').select('id')
-          .eq('empresa_id', empresaId).eq('estado', 'completada')
-          .gte('created_at', inicioTop);
-      final allIds = (allVentasTop as List).map((v) => v['id'] as String).toList();
-      if (allIds.isNotEmpty) {
-        final detallesAll = await SupabaseService.client
-            .from('detalle_ventas')
-            .select('nombre_producto, cantidad, precio_unitario')
-            .inFilter('venta_id', allIds);
-        _productosTop = _calcularTop(detallesAll);
-      } else {
-        _productosTop = [];
-      }
+      _productosTopPorPeriodo['hoy']    = allResults[3] as List<Map<String, dynamic>>;
+      _productosTopPorPeriodo['semana'] = allResults[4] as List<Map<String, dynamic>>;
+      _productosTopPorPeriodo['mes']    = allResults[5] as List<Map<String, dynamic>>;
     } catch (_) {
       await _cargarOffline(empresaId);
       return;
@@ -219,8 +310,32 @@ class _ReportesScreenState extends State<ReportesScreen> {
       );
     }
 
-    final todosDetalles = await db.query('detalle_ventas');
-    _productosTop = _calcularTop(todosDetalles);
+    // Top productos por período (offline — desde SQLite)
+    for (final periodo in ['hoy', 'semana', 'mes']) {
+      final inicio    = periodo == 'hoy' ? inicioHoy
+          : periodo == 'semana' ? inicioSemana : inicioMes;
+      final inicioStr = inicio.toUtc().toIso8601String();
+      try {
+        final ventasPeriodo = await db.query('ventas',
+            columns: ['id'],
+            where: 'empresa_id = ? AND estado = ? AND created_at >= ?',
+            whereArgs: [empresaId, 'completada', inicioStr]);
+        final ids = ventasPeriodo.map((v) => v['id'] as String).toList();
+        if (ids.isEmpty) {
+          _productosTopPorPeriodo[periodo] = [];
+        } else {
+          final ph = ids.map((_) => '?').join(',');
+          final detalles = await db.rawQuery(
+            'SELECT nombre_producto, cantidad, precio_unitario '
+            'FROM detalle_ventas WHERE venta_id IN ($ph)',
+            ids,
+          );
+          _productosTopPorPeriodo[periodo] = _calcularTop(detalles);
+        }
+      } catch (_) {
+        _productosTopPorPeriodo[periodo] = [];
+      }
+    }
     if (mounted) setState(() => _loading = false);
   }
 
@@ -261,7 +376,9 @@ class _ReportesScreenState extends State<ReportesScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildSelectorPeriodo(),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
+                  _buildCuadreBanner(),
+                  const SizedBox(height: 12),
                   _buildKPIs(),
                   const SizedBox(height: 12),
                   _buildCajaCard(),
@@ -278,6 +395,119 @@ class _ReportesScreenState extends State<ReportesScreen> {
                 ]),
               ),
             ),
+    );
+  }
+
+  Widget _buildCuadreBanner() {
+    // ✅ Cuadre ya hecho hoy
+    if (_cuadreHechoHoy) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: AppColors.successSurface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.check_circle_rounded,
+              color: AppColors.success, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('✅ Cuadre de caja registrado hoy',
+                style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.success)),
+          ),
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CierreDiaScreen()),
+            ).then((_) => _cargarDatos()),
+            child: Text('Ver historial',
+                style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: AppColors.success,
+                    decoration: TextDecoration.underline)),
+          ),
+        ]),
+      );
+    }
+
+    // 🤖 Automático configurado — cuadre pendiente aún
+    if (_autoActivo) {
+      final horaLabel =
+          '${_autoHora.toString().padLeft(2, '0')}:${_autoMinuto.toString().padLeft(2, '0')}';
+      final descripcion = _autoIntervalo == 0
+          ? 'Se hará automáticamente a las $horaLabel'
+          : 'Se hará automáticamente cada $_autoIntervalo horas';
+      return GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const CierreDiaScreen()),
+        ).then((_) => _cargarDatos()),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: AppColors.primarySurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+          ),
+          child: Row(children: [
+            const Icon(Icons.alarm_rounded, color: AppColors.primary, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Cuadre automático activado',
+                    style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary)),
+                Text(descripcion,
+                    style: GoogleFonts.poppins(
+                        fontSize: 11, color: AppColors.textMuted)),
+              ]),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: AppColors.primary, size: 18),
+          ]),
+        ),
+      );
+    }
+
+    // ⚠️ Manual y pendiente — llamada a la acción
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const CierreDiaScreen()),
+      ).then((_) => _cargarDatos()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.warningSurface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.lock_clock_rounded,
+              color: AppColors.warning, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Cuadre de caja pendiente',
+                  style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.warning)),
+              Text('Toca aquí para registrar el cuadre de hoy',
+                  style: GoogleFonts.poppins(
+                      fontSize: 11, color: AppColors.textMuted)),
+            ]),
+          ),
+          const Icon(Icons.chevron_right_rounded,
+              color: AppColors.warning, size: 18),
+        ]),
+      ),
     );
   }
 
@@ -504,6 +734,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
   );
 
   Widget _buildProductosTop() {
+    final _productosTop = _productosTopPorPeriodo[_periodo] ?? [];
     if (_productosTop.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(20),
