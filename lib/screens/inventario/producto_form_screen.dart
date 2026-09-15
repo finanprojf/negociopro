@@ -236,7 +236,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
                     style: const TextStyle(fontFamily: 'Poppins',
                         fontSize: 13, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
-                Text('${stock.toStringAsFixed(0)} ${_unidad}s × \${AppFormatters.moneda(_precioCompra)}',
+                Text('${stock.toStringAsFixed(0)} ${_unidad}s × ${AppFormatters.moneda(_precioCompra)}',
                     style: const TextStyle(fontFamily: 'Poppins',
                         fontSize: 12, color: AppColors.textSecondary)),
                 const SizedBox(height: 8),

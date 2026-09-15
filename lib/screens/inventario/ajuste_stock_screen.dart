@@ -6,7 +6,6 @@ import '../../utils/formatters.dart';
 import '../../services/inventario_service.dart';
 import '../../services/gasto_service.dart';
 import '../../models/gasto_model.dart';
-import '../../utils/formatters.dart';
 
 class AjusteStockScreen extends StatefulWidget {
   final ProductoModel producto;
@@ -64,7 +63,7 @@ class _AjusteStockScreenState extends State<AjusteStockScreen> {
   Future<void> _ofrecerRegistrarGasto() async {
     if (!mounted) return;
     final monto = _cantidad * widget.producto.precioCompra;
-    final descripcion = 'Compra de \${widget.producto.nombre}';
+    final descripcion = 'Compra de ${widget.producto.nombre}';
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -85,7 +84,7 @@ class _AjusteStockScreenState extends State<AjusteStockScreen> {
                   fontSize: 16, fontWeight: FontWeight.w700))),
         ]),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Se registró una entrada de inventario. ¿Deseas registrar el costo como gasto de mercancía?',
+          const Text('Se agregó inventario nuevo. ¿Deseas registrar el costo como gasto de mercancía?',
               style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
                   color: AppColors.textSecondary)),
           const SizedBox(height: 16),
@@ -101,7 +100,7 @@ class _AjusteStockScreenState extends State<AjusteStockScreen> {
                   style: const TextStyle(fontFamily: 'Poppins',
                       fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
-              Text('\${_cantidad.toStringAsFixed(0)} \${widget.producto.unidad}s × \${AppFormatters.moneda(widget.producto.precioCompra)}',
+              Text('${_cantidad.toStringAsFixed(0)} ${widget.producto.unidad}s × ${AppFormatters.moneda(widget.producto.precioCompra)}',
                   style: const TextStyle(fontFamily: 'Poppins',
                       fontSize: 12, color: AppColors.textSecondary)),
               const SizedBox(height: 8),
