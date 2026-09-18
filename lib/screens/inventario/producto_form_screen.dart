@@ -3,6 +3,7 @@ import 'scanner_screen.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_colors.dart';
 import '../../models/producto_model.dart';
+import '../../models/categoria_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/inventario_service.dart';
 import '../../services/supabase_service.dart';
@@ -38,6 +39,8 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
 
   String _unidad      = 'unidad';
   bool   _loading     = false;
+  String? _categoriaId;
+  List<CategoriaModel> _categorias = [];
   bool   _esElaborado = false;
 
   File?   _imagenSeleccionada;
@@ -54,6 +57,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
   @override
   void initState() {
     super.initState();
+    _cargarCategorias();
     _costoTotalCtrl.addListener(_recalcular);
     _unidadesProdCtrl.addListener(_recalcular);
     _precioCompraCtrl.addListener(() => setState(() {}));
@@ -75,6 +79,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
       } else {
         _precioCompraCtrl.text  = p.precioCompra.toString();
       }
+      _categoriaId = p.categoriaId;
       if (p.fotoUrl != null) _rutaImagenGuardada = p.fotoUrl;
     }
   }
@@ -87,6 +92,13 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
     _stockMinimoCtrl.dispose();  _costoTotalCtrl.dispose();
     _unidadesProdCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _cargarCategorias() async {
+    try {
+      final cats = await InventarioService.getCategorias();
+      if (mounted) setState(() => _categorias = cats);
+    } catch (_) {}
   }
 
   void _recalcular() => setState(() {});
@@ -311,6 +323,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
           costoProduccion:   _esElaborado ? _costoTotal : 0,
           unidadesProducidas:_esElaborado ? _unidadesProd : 1,
           codigoBarras:      _codigoCtrl.text.trim().isEmpty ? null : _codigoCtrl.text.trim(),
+          categoriaId:       _categoriaId,
         ),
         esNuevo: !_esEdicion,
       );
@@ -424,6 +437,8 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
           ]),
           const SizedBox(height: 12),
           _buildSelectorUnidad(),
+          const SizedBox(height: 12),
+          _buildSelectorCategoria(),
           const SizedBox(height: 32),
 
           _buildBotonGuardar(),
@@ -780,6 +795,220 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
               }
             : null,
       );
+
+
+  static const _presetCategorias = [
+    'Bebidas', 'Snacks', 'Aseo', 'Repostería', 'Limpieza',
+    'Carnes', 'Lácteos', 'Panadería', 'Confitería', 'Otros',
+  ];
+
+  Widget _buildSelectorCategoria() {
+    final catNombre = _categoriaId == null
+        ? null
+        : _categorias.firstWhere((c) => c.id == _categoriaId,
+            orElse: () => _categorias.first).nombre;
+
+    return GestureDetector(
+      onTap: _abrirSelectorCategoria,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.category_outlined, color: AppColors.primary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                catNombre ?? 'Categoría (opcional)',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 14,
+                  color: catNombre != null ? AppColors.textPrimary : AppColors.textSecondary,
+                ),
+              ),
+            ),
+            if (_categoriaId != null)
+              GestureDetector(
+                onTap: () => setState(() => _categoriaId = null),
+                child: const Icon(Icons.close, size: 16, color: AppColors.textSecondary),
+              )
+            else
+              const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _abrirSelectorCategoria() async {
+    final existingNames = _categorias.map((c) => c.nombre.toLowerCase()).toSet();
+    final presets = _presetCategorias
+        .where((p) => !existingNames.contains(p.toLowerCase()))
+        .toList();
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.only(top: 8, bottom: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: [
+                      const Text('Categoría',
+                          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 16)),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline, color: AppColors.primary),
+                        tooltip: 'Nueva categoría',
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _agregarNuevaCategoria();
+                          await _abrirSelectorCategoria();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.block, size: 18, color: AppColors.textSecondary),
+                  title: const Text('Sin categoría',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textSecondary)),
+                  onTap: () {
+                    setState(() => _categoriaId = null);
+                    Navigator.pop(ctx);
+                  },
+                ),
+                if (_categorias.isNotEmpty) ...[
+                  const Padding(
+                    padding: EdgeInsets.only(left: 16, top: 8, bottom: 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Tus categorías',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                              color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  ..._categorias.map((c) => ListTile(
+                    leading: CircleAvatar(
+                      radius: 10,
+                      backgroundColor: AppColors.primary.withOpacity(0.15),
+                      child: const Icon(Icons.label, size: 12, color: AppColors.primary),
+                    ),
+                    title: Text(c.nombre,
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)),
+                    trailing: _categoriaId == c.id
+                        ? const Icon(Icons.check, color: AppColors.primary, size: 18)
+                        : null,
+                    onTap: () {
+                      setState(() => _categoriaId = c.id);
+                      Navigator.pop(ctx);
+                    },
+                  )),
+                ],
+                if (presets.isNotEmpty) ...[
+                  const Padding(
+                    padding: EdgeInsets.only(left: 16, top: 8, bottom: 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Sugerencias',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                              color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  ...presets.map((nombre) => ListTile(
+                    leading: const Icon(Icons.add, size: 16, color: AppColors.textSecondary),
+                    title: Text(nombre,
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                            color: AppColors.textSecondary)),
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      final nueva = await InventarioService.crearCategoria(nombre);
+                      if (nueva != null && mounted) {
+                        await _cargarCategorias();
+                        setState(() => _categoriaId = nueva.id);
+                      }
+                    },
+                  )),
+                ],
+                SizedBox(height: MediaQuery.of(ctx).viewInsets.bottom),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _agregarNuevaCategoria() async {
+    final controller = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Nueva categoría',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 16)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            hintText: 'Ej: Bebidas',
+            hintStyle: const TextStyle(fontFamily: 'Poppins'),
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+          ),
+          style: const TextStyle(fontFamily: 'Poppins'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              final nombre = controller.text.trim();
+              if (nombre.isEmpty) return;
+              Navigator.pop(ctx);
+              final nueva = await InventarioService.crearCategoria(nombre);
+              if (nueva != null && mounted) {
+                await _cargarCategorias();
+                setState(() => _categoriaId = nueva.id);
+              }
+            },
+            child: const Text('Crear', style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSelectorUnidad() => DropdownButtonFormField<String>(
     value: _unidad,

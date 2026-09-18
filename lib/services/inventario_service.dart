@@ -34,6 +34,24 @@ class InventarioService {
     return local.map((m) => CategoriaModel.fromMap(m)).toList();
   }
 
+
+  static Future<CategoriaModel?> crearCategoria(String nombre) async {
+    final empresaId = await SupabaseService.getEmpresaId();
+    if (empresaId == null) return null;
+    final id = const Uuid().v4();
+    final cat = CategoriaModel(id: id, empresaId: empresaId, nombre: nombre.trim());
+    try {
+      await SupabaseService.client.from('categorias').insert({
+        'id': id,
+        'empresa_id': empresaId,
+        'nombre': cat.nombre,
+        'color': cat.color,
+      });
+    } catch (_) {}
+    await LocalDatabase.insertar('categorias', cat.toMap()..['id'] = id..['empresa_id'] = empresaId);
+    return cat;
+  }
+
   // ============================================================
   // PRODUCTOS
   // ============================================================
