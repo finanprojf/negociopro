@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_colors.dart';
+import 'vitrina_qr_screen.dart';
 import 'dart:io';
 import '../../services/supabase_service.dart';
 import '../../services/local_database.dart';
@@ -375,6 +376,26 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
                         ),
                       ),
                     ]),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => VitrinaQrScreen(
+                            url: _linkCompleto,
+                            empresaNombre: _empresaNombre,
+                          )),
+                        ),
+                        icon: const Icon(Icons.qr_code_rounded, size: 18),
+                        label: const Text('Ver mi código QR'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primary),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
                   ])),
                   const SizedBox(height: 12),
                 ],
