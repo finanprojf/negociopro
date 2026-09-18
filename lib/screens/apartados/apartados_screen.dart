@@ -163,7 +163,7 @@ Future<void> _cargar() async {
                     style: const TextStyle(fontFamily: 'Poppins',
                         fontSize: 15, fontWeight: FontWeight.w700),
                     maxLines: 1, overflow: TextOverflow.ellipsis)),
-                Text('\${abonos.length} abonos',
+                Text(abonos.isEmpty ? 'Sin abonos' : 'Abonado: \${AppFormatters.moneda(abonos.fold(0.0, (s, a) => s + (a['monto'] as num).toDouble()))}',
                     style: const TextStyle(fontFamily: 'Poppins',
                         fontSize: 12, color: AppColors.textMuted)),
               ]),
