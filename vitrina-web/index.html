@@ -106,6 +106,7 @@
     <div class="text-4xl mb-3">😕</div>
     <p class="text-sm font-semibold">Vitrina no encontrada</p>
     <p class="text-xs mt-1">Este negocio no tiene vitrina activa.</p>
+    <p id="errorMsg" class="text-xs mt-2 text-red-400 px-4"></p>
   </div>
   <div id="productosGrid" class="grid grid-cols-2 gap-3 hidden"></div>
 </div>
@@ -292,7 +293,13 @@
       document.getElementById('productosGrid').classList.remove('hidden');
       document.title = `${empresa.nombre} — Catálogo`;
 
-    } catch(e) { mostrarError(); }
+    } catch(e) {
+      console.error('VITRINA ERROR:', e);
+      try {
+        document.getElementById('errorMsg').textContent = '⚠️ ' + (e?.message || String(e));
+      } catch(_) {}
+      mostrarError();
+    }
   }
 
   async function fetchSB(path) {
@@ -399,37 +406,54 @@
 
       const card = document.createElement('div');
       card.className = 'bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col';
-      card.innerHTML = `
-        <div class="relative">
-          ${p.foto_url
-            ? `<img src="${p.foto_url}" class="w-full h-36 object-cover" onerror="this.style.display='none'" />`
-            : `<div class="w-full h-36 bg-gray-100 flex items-center justify-center text-4xl">🛍️</div>`}
-          ${!disponible && !sinStock
-            ? '<div class="no-disp-overlay rounded-t-2xl"><span class="bg-white/90 px-3 py-1 rounded-full text-xs font-semibold text-gray-500 shadow">No disponible ahora</span></div>'
-            : ''}
-          ${sinStock
-            ? '<span class="absolute top-2 right-2 badge-sin-stock text-xs font-semibold px-2 py-0.5 rounded-full">Sin stock</span>'
-            : stockBajo
-              ? '<span class="absolute top-2 right-2 badge-stock-bajo text-xs font-semibold px-2 py-0.5 rounded-full">¡Últimos!</span>'
-              : ''}
-          ${descPct ? `<span class="absolute top-2 left-2 badge-oferta text-xs font-bold px-2 py-0.5 rounded-full">-${descPct}%</span>` : ''}
-        </div>
-        <div class="p-3 flex flex-col flex-1">
-          <p class="text-sm font-semibold text-gray-900 leading-tight">${p.nombre}</p>
-          ${p.descripcion ? `<p class="text-xs text-gray-400 mt-0.5 line-clamp-1">${p.descripcion}</p>` : ''}
-          ${enOferta
-            ? `<div class="mt-1 flex items-center gap-1.5">
-                <span class="precio-tachado">RD$${Number(p.precio_venta).toLocaleString()}</span>
-                <span class="theme-price" style="margin-top:0">RD$${Number(pEfectivo).toLocaleString()}</span>
-               </div>`
-            : `<p class="theme-price">RD$${Number(p.precio_venta).toLocaleString()}</p>`}
-          ${badgeDisp ? `<div class="mt-1">${badgeDisp}</div>` : ''}
-          ${disponible && !sinStock ? `<p class="text-xs text-gray-400 mt-0.5">Stock: ${Math.floor(p.stock_actual)}</p>` : ''}
-          <div class="mt-auto pt-2" id="ctrl-${p.id}">
-            ${renderCtrl(p, enCarrito, disponible)}
-          </div>
-        </div>
-      `;
+
+      // imagen / placeholder
+      let imgHtml = p.foto_url
+        ? '<img src="' + p.foto_url + '" class="w-full h-36 object-cover" onerror="this.style.display=\'none\'" />'
+        : '<div class="w-full h-36 bg-gray-100 flex items-center justify-center text-4xl">🛍️</div>';
+
+      // overlay "no disponible ahora"
+      let overlayHtml = (!disponible && !sinStock)
+        ? '<div class="no-disp-overlay rounded-t-2xl"><span class="bg-white/90 px-3 py-1 rounded-full text-xs font-semibold text-gray-500 shadow">No disponible ahora</span></div>'
+        : '';
+
+      // badge stock
+      let badgeStockHtml = sinStock
+        ? '<span class="absolute top-2 right-2 badge-sin-stock text-xs font-semibold px-2 py-0.5 rounded-full">Sin stock</span>'
+        : stockBajo
+          ? '<span class="absolute top-2 right-2 badge-stock-bajo text-xs font-semibold px-2 py-0.5 rounded-full">¡Últimos!</span>'
+          : '';
+
+      // badge oferta
+      let badgeOfertaHtml = descPct
+        ? '<span class="absolute top-2 left-2 badge-oferta text-xs font-bold px-2 py-0.5 rounded-full">-' + descPct + '%</span>'
+        : '';
+
+      // nombre seguro
+      let nombreSafe = (p.nombre || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      let descSafe   = (p.descripcion || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      // precio
+      let precioHtml = enOferta
+        ? '<div class="mt-1 flex items-center gap-1.5"><span class="precio-tachado">RD$' + Number(p.precio_venta).toLocaleString() + '</span><span class="theme-price" style="margin-top:0">RD$' + Number(pEfectivo).toLocaleString() + '</span></div>'
+        : '<p class="theme-price">RD$' + Number(p.precio_venta).toLocaleString() + '</p>';
+
+      let descHtml  = p.descripcion ? '<p class="text-xs text-gray-400 mt-0.5 line-clamp-1">' + descSafe + '</p>' : '';
+      let badgeDispHtml = badgeDisp ? '<div class="mt-1">' + badgeDisp + '</div>' : '';
+      let stockHtml = (disponible && !sinStock) ? '<p class="text-xs text-gray-400 mt-0.5">Stock: ' + Math.floor(p.stock_actual || 0) + '</p>' : '';
+
+      card.innerHTML =
+        '<div class="relative">' +
+          imgHtml + overlayHtml + badgeStockHtml + badgeOfertaHtml +
+        '</div>' +
+        '<div class="p-3 flex flex-col flex-1">' +
+          '<p class="text-sm font-semibold text-gray-900 leading-tight">' + nombreSafe + '</p>' +
+          descHtml + precioHtml + badgeDispHtml + stockHtml +
+          '<div class="mt-auto pt-2" id="ctrl-' + p.id + '">' +
+            renderCtrl(p, enCarrito, disponible) +
+          '</div>' +
+        '</div>';
+
       grid.appendChild(card);
     });
   }
