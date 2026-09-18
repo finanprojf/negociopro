@@ -196,13 +196,13 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
                     version: QrVersions.auto,
                     size: 200,
                     backgroundColor: Colors.white,
-                    eyeStyle: QrEyeStyle(
+                    eyeStyle: const QrEyeStyle(
                       eyeShape: QrEyeShape.square,
-                      color: _colorMarca,
+                      color: Color(0xFF1A1A1A),
                     ),
-                    dataModuleStyle: QrDataModuleStyle(
+                    dataModuleStyle: const QrDataModuleStyle(
                       dataModuleShape: QrDataModuleShape.square,
-                      color: _colorMarca,
+                      color: Color(0xFF1A1A1A),
                     ),
                     errorCorrectionLevel: QrErrorCorrectLevel.M,
                   ),
@@ -507,13 +507,13 @@ class _PromoCard extends StatelessWidget {
             version: QrVersions.auto,
             size: 180,
             backgroundColor: Colors.white,
-            eyeStyle: QrEyeStyle(
+            eyeStyle: const QrEyeStyle(
               eyeShape: QrEyeShape.square,
-              color: colorMarca,
+              color: Color(0xFF1A1A1A),
             ),
-            dataModuleStyle: QrDataModuleStyle(
+            dataModuleStyle: const QrDataModuleStyle(
               dataModuleShape: QrDataModuleShape.square,
-              color: colorMarca,
+              color: Color(0xFF1A1A1A),
             ),
             errorCorrectionLevel: QrErrorCorrectLevel.M,
           ),
