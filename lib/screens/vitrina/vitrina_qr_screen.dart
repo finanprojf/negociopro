@@ -28,6 +28,22 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
   final GlobalKey _qrKey = GlobalKey();
   bool _procesando = false;
 
+  // Color de marca
+  Color _colorMarca = AppColors.primary;
+
+  static const List<Color> _coloresPredefinidos = [
+    Color(0xFF0F7B5B), // Verde NegocioPro
+    Color(0xFFE91E8C), // Rosa
+    Color(0xFF7C3AED), // Morado
+    Color(0xFF1D4ED8), // Azul
+    Color(0xFFDC2626), // Rojo
+    Color(0xFFEA580C), // Naranja
+    Color(0xFF0891B2), // Celeste
+    Color(0xFF854D0E), // Café
+    Color(0xFF1A1A2E), // Negro elegante
+    Color(0xFF065F46), // Verde oscuro
+  ];
+
   Future<Uint8List?> _capturarWidget(GlobalKey key) async {
     try {
       final boundary =
@@ -60,12 +76,9 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
     if (!mounted) return;
     setState(() => _procesando = true);
 
-    // Insertar tarjeta en Overlay fuera de pantalla para capturarla correctamente
     OverlayEntry? entry;
-    final captureKey = GlobalKey();
-
-    final completer = Future<Uint8List?>.value(null);
     Uint8List? bytes;
+    final captureKey = GlobalKey();
 
     try {
       entry = OverlayEntry(
@@ -80,6 +93,7 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
               child: _PromoCard(
                 url: widget.url,
                 empresaNombre: widget.empresaNombre,
+                colorMarca: _colorMarca,
               ),
             ),
           ),
@@ -87,10 +101,7 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
       );
 
       Overlay.of(context).insert(entry);
-
-      // Esperar 2 frames para asegurar que se rendericé completamente
       await Future.delayed(const Duration(milliseconds: 400));
-
       bytes = await _capturarWidget(captureKey);
     } finally {
       entry?.remove();
@@ -140,6 +151,7 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(children: [
+
           // Card QR principal
           RepaintBoundary(
             key: _qrKey,
@@ -151,14 +163,13 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.08),
+                    color: _colorMarca.withValues(alpha: 0.12),
                     blurRadius: 20,
                     offset: const Offset(0, 6),
                   ),
                 ],
               ),
               child: Column(children: [
-                // Nombre del negocio
                 Text(
                   widget.empresaNombre,
                   style: GoogleFonts.poppins(
@@ -173,26 +184,25 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
                     style: GoogleFonts.poppins(
                         fontSize: 12, color: AppColors.textMuted)),
                 const SizedBox(height: 20),
-                // QR Code
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.cardBorder, width: 1.5),
+                    border: Border.all(color: _colorMarca.withValues(alpha: 0.3), width: 2),
                   ),
                   child: QrImageView(
                     data: widget.url,
                     version: QrVersions.auto,
                     size: 200,
                     backgroundColor: Colors.white,
-                    eyeStyle: const QrEyeStyle(
+                    eyeStyle: QrEyeStyle(
                       eyeShape: QrEyeShape.square,
-                      color: AppColors.textPrimary,
+                      color: _colorMarca,
                     ),
-                    dataModuleStyle: const QrDataModuleStyle(
+                    dataModuleStyle: QrDataModuleStyle(
                       dataModuleShape: QrDataModuleShape.square,
-                      color: AppColors.textPrimary,
+                      color: _colorMarca,
                     ),
                     errorCorrectionLevel: QrErrorCorrectLevel.M,
                   ),
@@ -204,28 +214,26 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
                         color: AppColors.textSecondary),
                     textAlign: TextAlign.center),
                 const SizedBox(height: 6),
-                // URL
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppColors.primarySurface,
+                    color: _colorMarca.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     widget.url,
                     style: GoogleFonts.poppins(
-                        fontSize: 10, color: AppColors.primary,
+                        fontSize: 10, color: _colorMarca,
                         fontWeight: FontWeight.w500),
                     textAlign: TextAlign.center,
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Logo / branding
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Container(
                     width: 20, height: 20,
                     decoration: BoxDecoration(
-                      color: AppColors.primary,
+                      color: _colorMarca,
                       borderRadius: BorderRadius.circular(5),
                     ),
                     child: const Icon(Icons.storefront_rounded,
@@ -242,12 +250,82 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
           ),
           const SizedBox(height: 20),
 
+          // ── Selector de color de marca ──────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.cardBorder),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(Icons.palette_rounded, color: _colorMarca, size: 18),
+                const SizedBox(width: 8),
+                Text('Color de tu marca',
+                    style: GoogleFonts.poppins(
+                        fontSize: 13, fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary)),
+                const Spacer(),
+                Container(
+                  width: 24, height: 24,
+                  decoration: BoxDecoration(
+                    color: _colorMarca,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [BoxShadow(
+                      color: _colorMarca.withValues(alpha: 0.4),
+                      blurRadius: 6,
+                    )],
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _coloresPredefinidos.map((color) {
+                  final selected = _colorMarca.toARGB32() == color.toARGB32();
+                  return GestureDetector(
+                    onTap: () => setState(() => _colorMarca = color),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected ? Colors.white : Colors.transparent,
+                          width: 3,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: color.withValues(alpha: selected ? 0.6 : 0.25),
+                            blurRadius: selected ? 8 : 4,
+                            spreadRadius: selected ? 1 : 0,
+                          ),
+                        ],
+                      ),
+                      child: selected
+                          ? const Icon(Icons.check_rounded,
+                              color: Colors.white, size: 18)
+                          : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 14),
+
           // Botones de acción
           _botonAccion(
             icon: Icons.share_rounded,
             label: 'Compartir código QR',
             sublabel: 'Envía por WhatsApp, Instagram o email',
-            color: AppColors.primary,
+            color: _colorMarca,
             onTap: _compartirQr,
           ),
           const SizedBox(height: 10),
@@ -255,7 +333,7 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
             icon: Icons.image_rounded,
             label: 'Compartir imagen promocional',
             sublabel: 'Imagen lista para imprimir o compartir',
-            color: const Color(0xFF7C3AED),
+            color: _colorMarca,
             onTap: _compartirPromo,
           ),
           const SizedBox(height: 10),
@@ -273,18 +351,18 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.primarySurface,
+              color: _colorMarca.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Icon(Icons.tips_and_updates_rounded,
-                  color: AppColors.primary, size: 18),
+              Icon(Icons.tips_and_updates_rounded,
+                  color: _colorMarca, size: 18),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Imprime el código QR y colócalo en tu negocio para que tus clientes puedan ver tu catálogo en cualquier momento.',
                   style: GoogleFonts.poppins(
-                      fontSize: 12, color: AppColors.primary),
+                      fontSize: 12, color: _colorMarca),
                 ),
               ),
             ]),
@@ -293,10 +371,10 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
         ]),
       ),
       bottomNavigationBar: _procesando
-          ? Container(
+          ? const SizedBox(
               height: 4,
-              child: const LinearProgressIndicator(
-                  backgroundColor: AppColors.primarySurface,
+              child: LinearProgressIndicator(
+                  backgroundColor: Color(0xFFE8F7F2),
                   color: AppColors.primary),
             )
           : null,
@@ -354,15 +432,25 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
   }
 }
 
-// Tarjeta promocional para imprimir/compartir
+// ── Tarjeta promocional para imprimir/compartir ─────────────────────────────
 class _PromoCard extends StatelessWidget {
   final String url;
   final String empresaNombre;
+  final Color colorMarca;
 
-  const _PromoCard({required this.url, required this.empresaNombre});
+  const _PromoCard({
+    required this.url,
+    required this.empresaNombre,
+    required this.colorMarca,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Color oscuro derivado del color de marca para el gradiente
+    final colorOscuro = HSLColor.fromColor(colorMarca)
+        .withLightness((HSLColor.fromColor(colorMarca).lightness - 0.15).clamp(0.0, 1.0))
+        .toColor();
+
     return Container(
       width: 400,
       padding: const EdgeInsets.all(28),
@@ -370,10 +458,7 @@ class _PromoCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            AppColors.primary,
-            const Color(0xFF0A5C44),
-          ],
+          colors: [colorMarca, colorOscuro],
         ),
         borderRadius: BorderRadius.circular(20),
       ),
@@ -398,7 +483,6 @@ class _PromoCard extends StatelessWidget {
         ]),
         const SizedBox(height: 20),
 
-        // Nombre negocio
         Text(empresaNombre,
             style: GoogleFonts.poppins(
                 color: Colors.white, fontSize: 22,
@@ -423,6 +507,14 @@ class _PromoCard extends StatelessWidget {
             version: QrVersions.auto,
             size: 180,
             backgroundColor: Colors.white,
+            eyeStyle: QrEyeStyle(
+              eyeShape: QrEyeShape.square,
+              color: colorMarca,
+            ),
+            dataModuleStyle: QrDataModuleStyle(
+              dataModuleShape: QrDataModuleShape.square,
+              color: colorMarca,
+            ),
             errorCorrectionLevel: QrErrorCorrectLevel.M,
           ),
         ),
@@ -435,7 +527,6 @@ class _PromoCard extends StatelessWidget {
             textAlign: TextAlign.center),
         const SizedBox(height: 16),
 
-        // Footer
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
