@@ -12,6 +12,9 @@ import '../gastos/gastos_screen.dart';
 import '../reportes/reportes_screen.dart';
 import '../empresa/empresa_screen.dart';
 import '../vitrina/vitrina_config_screen.dart';
+import '../vitrina/vitrina_qr_screen.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import 'dart:async';
@@ -21,6 +24,7 @@ import '../suscripcion/suscripcion_screen.dart';
 import '../encargos/encargos_screen.dart';
 import '../reportes/cierre_dia_screen.dart';
 import '../auth/login_screen.dart';
+import '../recordatorios/recordatorios_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -41,6 +45,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _apartadosActivos = 0;
   int _diasRestantes = 999;
   bool _suscripcionVencida = false;
+  bool _vitrinaActiva = false;
+  String _vitrinaUrl = '';
+  List<Map<String, dynamic>> _recordatoriosHoy = [];
   Timer? _timer;
 
   @override
@@ -49,6 +56,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _cargarNombre();
     _cargarResumen();
     _cargarVersion();
+    _cargarRecordatoriosHoy();
+    _cargarVitrina();
     _timer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (mounted) {
         _cargarResumen();
@@ -281,6 +290,44 @@ Future<void> _cargarVersion() async {
     } catch (_) {}
   }
 
+  Future<void> _cargarVitrina() async {
+    try {
+      final empresaId = await SupabaseService.getEmpresaId();
+      if (empresaId == null) return;
+      final db = await LocalDatabase.database;
+      final rows = await db.query('vitrina_config',
+          where: 'empresa_id = ?', whereArgs: [empresaId], limit: 1);
+      if (rows.isNotEmpty && mounted) {
+        final row = rows.first;
+        final slug = row['slug'] as String? ?? '';
+        final activa = (row['activa'] as int? ?? 0) == 1;
+        final url = 'https://vitrina-web-beta.vercel.app/t/${slug.isNotEmpty ? slug : empresaId}';
+        setState(() {
+          _vitrinaActiva = activa;
+          _vitrinaUrl = url;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _cargarRecordatoriosHoy() async {
+    try {
+      final empresaId = await SupabaseService.getEmpresaId();
+      if (empresaId == null) return;
+      final hoy = DateTime.now();
+      final fechaStr =
+          '${hoy.year}-${hoy.month.toString().padLeft(2, '0')}-${hoy.day.toString().padLeft(2, '0')}';
+      final db = await LocalDatabase.database;
+      final rows = await db.query(
+        'recordatorios',
+        where: 'empresa_id = ? AND fecha = ? AND completado = 0',
+        whereArgs: [empresaId, fechaStr],
+        orderBy: 'hora ASC',
+      );
+      if (mounted) setState(() => _recordatoriosHoy = rows);
+    } catch (_) {}
+  }
+
  @override
   Widget build(BuildContext context) {
     if (_suscripcionVencida) {
@@ -365,7 +412,112 @@ Future<void> _cargarVersion() async {
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
-Widget _buildBannerVencida() {
+Widget _buildVitrinaWidget() {
+    return GestureDetector(
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => const VitrinaConfigScreen()))
+              .then((_) => _cargarVitrina()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: _vitrinaActiva
+                ? [const Color(0xFF0F7B5B), const Color(0xFF0A5C44)]
+                : [AppColors.surfaceAlt, AppColors.surfaceAlt],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: _vitrinaActiva
+              ? null
+              : Border.all(color: AppColors.cardBorder),
+        ),
+        child: Row(children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              color: _vitrinaActiva
+                  ? Colors.white.withValues(alpha: 0.2)
+                  : AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.storefront_rounded,
+                color: _vitrinaActiva ? Colors.white : AppColors.primary,
+                size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Vitrina Online',
+                  style: GoogleFonts.poppins(
+                      fontSize: 13, fontWeight: FontWeight.w700,
+                      color: _vitrinaActiva ? Colors.white : AppColors.textPrimary)),
+              Text(_vitrinaActiva ? 'Tu tienda está activa y visible' : 'Tu tienda está desactivada',
+                  style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: _vitrinaActiva
+                          ? Colors.white.withValues(alpha: 0.75)
+                          : AppColors.textMuted)),
+            ],
+          )),
+          // Botones rápidos
+          if (_vitrinaActiva) ...[
+            _miniBtn(
+              icon: Icons.qr_code_rounded,
+              tooltip: 'Ver QR',
+              light: true,
+              onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => VitrinaQrScreen(
+                    url: _vitrinaUrl,
+                    empresaNombre: _nombreNegocio,
+                  ))),
+            ),
+            const SizedBox(width: 6),
+            _miniBtn(
+              icon: Icons.share_rounded,
+              tooltip: 'Compartir',
+              light: true,
+              onTap: () => Share.share(
+                '🛍️ Mira el catálogo de $_nombreNegocio:\n$_vitrinaUrl',
+                subject: 'Catálogo de $_nombreNegocio',
+              ),
+            ),
+          ] else ...[
+            Icon(Icons.chevron_right_rounded,
+                color: AppColors.textMuted, size: 20),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _miniBtn({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    bool light = false,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 34, height: 34,
+          decoration: BoxDecoration(
+            color: light
+                ? Colors.white.withValues(alpha: 0.2)
+                : AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Icon(icon,
+              color: light ? Colors.white : AppColors.primary, size: 17),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBannerVencida() {
     return GestureDetector(
       onTap: () => Navigator.push(context,
           MaterialPageRoute(builder: (_) => const SuscripcionScreen())),
@@ -429,7 +581,15 @@ Widget _buildBannerVencida() {
                 _buildBannerAviso(),
               const SizedBox(height: 20),
               _buildGreeting(),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              if (_recordatoriosHoy.isNotEmpty) ...[
+                _buildRecordatoriosHoy(),
+                const SizedBox(height: 16),
+              ],
+              if (_vitrinaUrl.isNotEmpty) ...[
+                _buildVitrinaWidget(),
+                const SizedBox(height: 16),
+              ],
               _buildStatCards(),
               const SizedBox(height: 24),
               _buildAlertSection(),
@@ -471,7 +631,8 @@ Widget _buildBannerVencida() {
         ),
         IconButton(
           icon: const Icon(Icons.notifications_outlined, color: AppColors.textSecondary),
-          onPressed: () {},
+          onPressed: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const RecordatoriosScreen())),
         ),
       GestureDetector(
           onTap: () => showModalBottomSheet(
@@ -523,6 +684,88 @@ Widget _buildBannerVencida() {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildRecordatoriosHoy() {
+    final count = _recordatoriosHoy.length;
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const RecordatoriosScreen()),
+      ).then((_) => _cargarRecordatoriosHoy()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.22)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34, height: 34,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.notifications_active_rounded,
+                  size: 18, color: AppColors.primary),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    count == 1
+                        ? '1 recordatorio para hoy'
+                        : '$count recordatorios para hoy',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  ..._recordatoriosHoy.take(2).map((r) {
+                    final titulo = r['titulo'] as String? ?? '';
+                    final clienteNombre = r['cliente_nombre'] as String?;
+                    final hora = r['hora'] as String?;
+                    final horaLabel = hora != null ? ' · $hora' : '';
+                    final label = clienteNombre != null && clienteNombre.isNotEmpty
+                        ? '$titulo — $clienteNombre$horaLabel'
+                        : '$titulo$horaLabel';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 1),
+                      child: Text(
+                        '• $label',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11.5,
+                          color: AppColors.textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }),
+                  if (count > 2)
+                    Text(
+                      '+ ${count - 2} más...',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded,
+                size: 18, color: AppColors.primary.withValues(alpha: 0.6)),
+          ],
+        ),
+      ),
     );
   }
 
