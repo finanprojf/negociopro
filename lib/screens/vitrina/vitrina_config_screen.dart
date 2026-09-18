@@ -9,6 +9,8 @@ import '../../services/supabase_service.dart';
 import '../../services/local_database.dart';
 import '../../services/inventario_service.dart';
 import '../../utils/constants.dart';
+import '../../models/categoria_model.dart';
+import 'vitrina_producto_config_screen.dart';
 
 class VitrinaConfigScreen extends StatefulWidget {
   const VitrinaConfigScreen({super.key});
@@ -39,6 +41,8 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
 
   // Productos en vitrina
   List<Map<String, dynamic>> _productos = [];
+  List<CategoriaModel> _categorias = [];
+  String? _categoriaFiltro; // null = todas
 
   final _slugCtrl = TextEditingController();
   final _precioDeliveryCtrl = TextEditingController();
@@ -105,26 +109,59 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
         _colorTema = c['color_tema'] ?? '#6366f1';
       }
 
+      // Cargar categorías
+      try {
+        final cats = await SupabaseService.client
+            .from('categorias')
+            .select()
+            .eq('empresa_id', empresaId)
+            .order('nombre');
+        _categorias = (cats as List).map((c) => CategoriaModel.fromMap(c)).toList();
+      } catch (_) {}
+
       // Cargar productos con estado vitrina
       final prods = await SupabaseService.client
           .from('productos')
-          .select('id, nombre, precio_venta, stock_actual, foto_url, activo')
+          .select('id, nombre, precio_venta, stock_actual, foto_url, activo, categoria_id')
           .eq('empresa_id', empresaId)
           .eq('activo', true)
           .order('nombre');
 
-      final vitrinaProds = await SupabaseService.client
-          .from('vitrina_productos')
-          .select('producto_id, visible')
-          .eq('empresa_id', empresaId);
+      // Cargar vitrina_productos — con fallback si las columnas nuevas no existen aún
+      Map<String, Map<String, dynamic>> vitrinaMap = {};
+      try {
+        final vitrinaProds = await SupabaseService.client
+            .from('vitrina_productos')
+            .select('producto_id, visible, precio_oferta, descuento_porcentaje, disponibilidad, fecha_disponibilidad')
+            .eq('empresa_id', empresaId);
+        vitrinaMap = {
+          for (final v in vitrinaProds)
+            v['producto_id'] as String: v as Map<String, dynamic>
+        };
+      } catch (_) {
+        // Columnas nuevas aún no existen: cargar solo visible
+        try {
+          final vitrinaProds = await SupabaseService.client
+              .from('vitrina_productos')
+              .select('producto_id, visible')
+              .eq('empresa_id', empresaId);
+          vitrinaMap = {
+            for (final v in vitrinaProds)
+              v['producto_id'] as String: v as Map<String, dynamic>
+          };
+        } catch (_) {}
+      }
 
-      final vitrinaMap = {
-        for (final v in vitrinaProds) v['producto_id'] as String: v['visible'] as bool
-      };
-
-      _productos = (prods as List).map((p) => {
-        ...Map<String, dynamic>.from(p),
-        'en_vitrina': vitrinaMap[p['id']] ?? true,
+      _productos = (prods as List).map((p) {
+        final vp = vitrinaMap[p['id'] as String];
+        return {
+          ...Map<String, dynamic>.from(p),
+          'en_vitrina':           vp?['visible'] ?? true,
+          'precio_oferta':        vp?['precio_oferta'],
+          'descuento_porcentaje': vp?['descuento_porcentaje'],
+          'disponibilidad':       vp?['disponibilidad'] ?? 'stock',
+          'fecha_disponibilidad': vp?['fecha_disponibilidad'],
+        };
       }).toList();
 
     } catch (_) {}
@@ -170,9 +207,13 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
         await SupabaseService.client
             .from('vitrina_productos')
             .upsert({
-              'empresa_id': _empresaId,
-              'producto_id': p['id'],
-              'visible': p['en_vitrina'],
+              'empresa_id':           _empresaId,
+              'producto_id':          p['id'],
+              'visible':              p['en_vitrina'],
+              'precio_oferta':        p['precio_oferta'],
+              'descuento_porcentaje': p['descuento_porcentaje'],
+              'disponibilidad':       p['disponibilidad'] ?? 'stock',
+              'fecha_disponibilidad': p['fecha_disponibilidad'],
             }, onConflict: 'empresa_id,producto_id');
       }
 
@@ -523,15 +564,47 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
                             fontWeight: FontWeight.w600)),
                   ]),
                   const SizedBox(height: 4),
-                  Text('Activa o desactiva qué productos se muestran',
+                  Text('Toca un producto para configurar oferta y disponibilidad',
                       style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted)),
+
+                  // Filtro por categoría
+                  if (_categorias.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(children: [
+                        _CatChip(
+                          label: 'Todas',
+                          color: AppColors.primary,
+                          selected: _categoriaFiltro == null,
+                          onTap: () => setState(() => _categoriaFiltro = null),
+                        ),
+                        ..._categorias.map((cat) {
+                          final catColor = Color(int.parse(
+                              '0xFF${cat.color.replaceFirst('#', '')}'));
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: _CatChip(
+                              label: cat.nombre,
+                              color: catColor,
+                              selected: _categoriaFiltro == cat.id,
+                              onTap: () => setState(() =>
+                                  _categoriaFiltro = _categoriaFiltro == cat.id ? null : cat.id),
+                            ),
+                          );
+                        }),
+                      ]),
+                    ),
+                  ],
+
                   const SizedBox(height: 10),
-                  ..._productos.map((p) => _ProductoVitrinaRow(
-                    nombre: p['nombre'] as String,
-                    precio: (p['precio_venta'] as num).toDouble(),
-                    stock: (p['stock_actual'] as num).toDouble(),
-                    visible: p['en_vitrina'] as bool,
+                  ...(_categoriaFiltro == null
+                      ? _productos
+                      : _productos.where((p) => p['categoria_id'] == _categoriaFiltro).toList()
+                  ).map((p) => _ProductoVitrinaRow(
+                    producto: p,
                     onChanged: (v) => setState(() => p['en_vitrina'] = v),
+                    onTap: () => _abrirConfigProducto(p),
                   )),
                 ])),
 
@@ -593,6 +666,21 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
     );
   }
 
+  void _abrirConfigProducto(Map<String, dynamic> p) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => VitrinaProductoConfigSheet(
+        producto: p,
+        onSave: (updated) {
+          final idx = _productos.indexWhere((x) => x['id'] == updated['id']);
+          if (idx != -1) setState(() => _productos[idx] = updated);
+        },
+      ),
+    );
+  }
+
   Widget _colorChip(String hex, String label) {
     final color = Color(int.parse('0xFF${hex.substring(1)}'));
     final selected = _colorTema == hex;
@@ -630,35 +718,158 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
 }
 
 class _ProductoVitrinaRow extends StatelessWidget {
-  final String nombre;
-  final double precio;
-  final double stock;
-  final bool visible;
+  final Map<String, dynamic> producto;
   final ValueChanged<bool> onChanged;
+  final VoidCallback onTap;
 
   const _ProductoVitrinaRow({
-    required this.nombre, required this.precio, required this.stock,
-    required this.visible, required this.onChanged,
+    required this.producto, required this.onChanged, required this.onTap,
   });
+
+  static const _dispLabels = {
+    'stock':  null,
+    'hoy':    'Disponible hoy',
+    'manana': 'Disponible mañana',
+    'pronto': 'Disponible pronto',
+    'fecha':  null, // se construye con la fecha
+  };
+  static const _dispColors = {
+    'hoy':    Color(0xFF3b82f6),
+    'manana': Color(0xFFf97316),
+    'pronto': Color(0xFF8b5cf6),
+    'fecha':  Color(0xFFec4899),
+  };
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(nombre, style: GoogleFonts.poppins(
-              fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-          Text('RD\$${precio.toStringAsFixed(0)} · Stock: ${stock.toStringAsFixed(0)}',
-              style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted)),
-        ])),
-        Switch(
-          value: visible,
-          onChanged: onChanged,
-          activeColor: AppColors.primary,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    final nombre    = producto['nombre'] as String? ?? '';
+    final precio    = (producto['precio_venta'] as num?)?.toDouble() ?? 0;
+    final stock     = (producto['stock_actual'] as num?)?.toDouble() ?? 0;
+    final visible   = producto['en_vitrina'] as bool? ?? true;
+    final enOferta  = producto['precio_oferta'] != null;
+    final pct       = (producto['descuento_porcentaje'] as num?)?.toDouble();
+    final disp      = producto['disponibilidad'] as String? ?? 'stock';
+    final fechaStr  = producto['fecha_disponibilidad'] as String?;
+
+    String dispLabel = '';
+    Color? dispColor;
+    if (disp != 'stock') {
+      dispColor = _dispColors[disp];
+      if (disp == 'fecha' && fechaStr != null) {
+        final d = DateTime.tryParse(fechaStr);
+        dispLabel = d != null
+            ? 'Disponible el ${d.day}/${d.month}'
+            : 'Fecha específica';
+      } else {
+        dispLabel = _dispLabels[disp] ?? '';
+      }
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: visible ? AppColors.background : AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.cardBorder),
         ),
-      ]),
+        child: Row(children: [
+          // Icono visible/oculto
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: visible
+                  ? AppColors.primary.withValues(alpha: 0.08)
+                  : AppColors.textMuted.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              visible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+              size: 18,
+              color: visible ? AppColors.primary : AppColors.textMuted,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(nombre, style: GoogleFonts.poppins(
+                fontSize: 13, fontWeight: FontWeight.w600,
+                color: visible ? AppColors.textPrimary : AppColors.textMuted),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 3),
+            Row(children: [
+              if (enOferta && pct != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: AppColors.danger,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text('-${pct.toStringAsFixed(0)}%',
+                      style: GoogleFonts.poppins(
+                          fontSize: 9, fontWeight: FontWeight.w700,
+                          color: Colors.white)),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Text('RD\$${precio.toStringAsFixed(0)} · ${stock.toStringAsFixed(0)} uds',
+                  style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted)),
+              if (dispLabel.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: (dispColor ?? AppColors.primary).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(dispLabel,
+                      style: GoogleFonts.poppins(
+                          fontSize: 9, fontWeight: FontWeight.w600,
+                          color: dispColor ?? AppColors.primary)),
+                ),
+              ],
+            ]),
+          ])),
+          Switch(
+            value: visible,
+            onChanged: onChanged,
+            activeColor: AppColors.primary,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _CatChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  const _CatChip({required this.label, required this.color,
+      required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? color.withValues(alpha: 0.12) : AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: selected ? color : AppColors.cardBorder,
+              width: selected ? 1.5 : 1),
+        ),
+        child: Text(label, style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            color: selected ? color : AppColors.textSecondary)),
+      ),
     );
   }
 }

@@ -38,7 +38,7 @@ void _mostrarHistorial() async {
         try {
           final data = await SupabaseService.client
               .from('abonos_apartado')
-              .select('*, apartados(descripcion)')
+              .select('*, apartados(descripcion, id)')
               .eq('cliente_id', widget.cliente.id)
               .order('created_at', ascending: false);
           res = List<Map<String, dynamic>>.from(data);
@@ -59,78 +59,118 @@ void _mostrarHistorial() async {
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (_) => Container(
-          height: MediaQuery.of(context).size.height * 0.6,
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              child: Row(children: [
-                const Icon(Icons.history_rounded,
-                    color: AppColors.colorApartados),
-                const SizedBox(width: 10),
-                const Text('Historial de pagos',
-                    style: TextStyle(fontFamily: 'Poppins',
-                        fontSize: 16, fontWeight: FontWeight.w700)),
-                const Spacer(),
-                Text('${res.length} pagos',
-                    style: const TextStyle(fontFamily: 'Poppins',
-                        fontSize: 13, color: AppColors.textMuted)),
-              ]),
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx2, setModal) => Container(
+            height: MediaQuery.of(context).size.height * 0.62,
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
-            const Divider(height: 1),
-            Expanded(
-              child: res.isEmpty
-                  ? const Center(child: Text('Sin pagos registrados',
+            child: Column(children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                child: Row(children: [
+                  const Icon(Icons.history_rounded, color: AppColors.colorApartados),
+                  const SizedBox(width: 10),
+                  const Text('Historial de pagos',
                       style: TextStyle(fontFamily: 'Poppins',
-                          color: AppColors.textMuted)))
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: res.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (_, i) {
-                        final p = res[i];
-                        final descripcion = p['apartados'] != null
-                            ? p['apartados']['descripcion'] as String
-                            : 'Apartado';
-                        return Row(children: [
-                          Container(
-                            width: 40, height: 40,
-                            decoration: BoxDecoration(
-                              color: AppColors.accentSurface,
-                              borderRadius: BorderRadius.circular(10),
+                          fontSize: 16, fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  Text('${res.length} pagos',
+                      style: const TextStyle(fontFamily: 'Poppins',
+                          fontSize: 12, color: AppColors.textMuted)),
+                ]),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: res.isEmpty
+                    ? const Center(child: Text('Sin pagos registrados',
+                        style: TextStyle(fontFamily: 'Poppins',
+                            color: AppColors.textMuted)))
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: res.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final p = res[i];
+                          final descripcion = p['apartados'] != null
+                              ? p['apartados']['descripcion'] as String
+                              : 'Apartado';
+                          final apartadoId = p['apartados'] != null
+                              ? p['apartados']['id'] as String
+                              : (p['apartado_id'] as String? ?? '');
+                          return Row(children: [
+                            Container(
+                              width: 40, height: 40,
+                              decoration: BoxDecoration(
+                                color: AppColors.accentSurface,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.payments_rounded,
+                                  color: AppColors.colorApartados, size: 20),
                             ),
-                            child: const Icon(Icons.payments_rounded,
-                                color: AppColors.colorApartados, size: 20),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                            Text(descripcion,
+                            const SizedBox(width: 12),
+                            Expanded(child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                              Text(descripcion,
+                                  style: const TextStyle(fontFamily: 'Poppins',
+                                      fontSize: 13, fontWeight: FontWeight.w600,
+                                      color: AppColors.textPrimary),
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                              Text(AppFormatters.fechaHora(
+                                  DateTime.parse(p['created_at'])),
+                                  style: const TextStyle(fontFamily: 'Poppins',
+                                      fontSize: 11, color: AppColors.textMuted)),
+                            ])),
+                            Text(AppFormatters.moneda((p['monto'] as num).toDouble()),
                                 style: const TextStyle(fontFamily: 'Poppins',
-                                    fontSize: 13, fontWeight: FontWeight.w600,
-                                    color: AppColors.textPrimary),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                            Text(AppFormatters.fechaHora(
-                                DateTime.parse(p['created_at'])),
-                                style: const TextStyle(fontFamily: 'Poppins',
-                                    fontSize: 11, color: AppColors.textMuted)),
-                          ])),
-                          Text(AppFormatters.moneda(
-                              (p['monto'] as num).toDouble()),
-                              style: const TextStyle(fontFamily: 'Poppins',
-                                  fontSize: 15, fontWeight: FontWeight.w700,
-                                  color: AppColors.colorApartados)),
-                        ]);
-                      },
-                    ),
-            ),
-          ]),
+                                    fontSize: 14, fontWeight: FontWeight.w700,
+                                    color: AppColors.colorApartados)),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded,
+                                  color: AppColors.danger, size: 20),
+                              tooltip: 'Cancelar abono',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                              onPressed: () async {
+                                final montoAbono = (p['monto'] as num).toDouble();
+                                final ok = await showDialog<bool>(
+                                  context: ctx2,
+                                  builder: (_) => AlertDialog(
+                                    title: const Text('Cancelar abono',
+                                        style: TextStyle(fontFamily: 'Poppins',
+                                            fontWeight: FontWeight.w700)),
+                                    content: Text(
+                                        '¿Eliminar abono de ${AppFormatters.moneda(montoAbono)}?',
+                                        style: const TextStyle(fontFamily: 'Poppins')),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(_, false),
+                                          child: const Text('No')),
+                                      TextButton(onPressed: () => Navigator.pop(_, true),
+                                          child: const Text('Eliminar',
+                                              style: TextStyle(color: AppColors.danger))),
+                                    ],
+                                  ),
+                                );
+                                if (ok == true) {
+                                  await ApartadoService.cancelarAbono(
+                                      p['id'] as String,
+                                      apartadoId,
+                                      (p['monto'] as num).toDouble());
+                                  res.removeAt(i);
+                                  setModal(() {});
+                                  _cargar();
+                                }
+                              },
+                            ),
+                          ]);
+                        },
+                      ),
+              ),
+            ]),
+          ),
         ),
       );
     } catch (_) {}
@@ -349,22 +389,39 @@ class _ApartadoCard extends StatelessWidget {
             ],
           ]),
         ),
-        if (!apartado.estaCompletado && !apartado.estaCancelado)
-          Container(
-            decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.cardBorder))),
-            child: TextButton.icon(
-              onPressed: onAbonar,
-              icon: const Icon(Icons.payments_rounded,
-                  size: 16, color: AppColors.colorApartados),
-              label: const Text('Registrar abono',
-                  style: TextStyle(fontFamily: 'Poppins',
-                      fontSize: 13, fontWeight: FontWeight.w600,
-                      color: AppColors.colorApartados)),
-              style: TextButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 42)),
-            ),
-          ),
+        Container(
+          decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: AppColors.cardBorder))),
+          child: apartado.estaCompletado
+              ? Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: const BoxDecoration(
+                    color: AppColors.successSurface,
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+                  ),
+                  child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.check_circle_rounded, color: AppColors.success, size: 18),
+                    SizedBox(width: 6),
+                    Text('¡Listo! Cliente puede retirar',
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                            fontWeight: FontWeight.w600, color: AppColors.success)),
+                  ]),
+                )
+              : apartado.estaCancelado
+                  ? const SizedBox.shrink()
+                  : TextButton.icon(
+                      onPressed: onAbonar,
+                      icon: const Icon(Icons.payments_rounded,
+                          size: 16, color: AppColors.colorApartados),
+                      label: const Text('Registrar abono',
+                          style: TextStyle(fontFamily: 'Poppins',
+                              fontSize: 13, fontWeight: FontWeight.w600,
+                              color: AppColors.colorApartados)),
+                      style: TextButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 42)),
+                    ),
+        ),
       ]),
     );
   }
