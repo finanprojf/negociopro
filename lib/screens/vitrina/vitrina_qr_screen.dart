@@ -26,7 +26,6 @@ class VitrinaQrScreen extends StatefulWidget {
 
 class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
   final GlobalKey _qrKey = GlobalKey();
-  final GlobalKey _promoKey = GlobalKey();
   bool _procesando = false;
 
   Future<Uint8List?> _capturarWidget(GlobalKey key) async {
@@ -58,18 +57,63 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
   }
 
   Future<void> _compartirPromo() async {
+    if (!mounted) return;
     setState(() => _procesando = true);
-    await Future.delayed(const Duration(milliseconds: 300));
-    final bytes = await _capturarWidget(_promoKey);
-    setState(() => _procesando = false);
-    if (bytes == null || !mounted) return;
+
+    // Insertar tarjeta en Overlay fuera de pantalla para capturarla correctamente
+    OverlayEntry? entry;
+    final captureKey = GlobalKey();
+
+    final completer = Future<Uint8List?>.value(null);
+    Uint8List? bytes;
+
+    try {
+      entry = OverlayEntry(
+        builder: (_) => Positioned(
+          left: -4000,
+          top: 0,
+          width: 400,
+          child: RepaintBoundary(
+            key: captureKey,
+            child: Material(
+              color: Colors.transparent,
+              child: _PromoCard(
+                url: widget.url,
+                empresaNombre: widget.empresaNombre,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      Overlay.of(context).insert(entry);
+
+      // Esperar 2 frames para asegurar que se rendericé completamente
+      await Future.delayed(const Duration(milliseconds: 400));
+
+      bytes = await _capturarWidget(captureKey);
+    } finally {
+      entry?.remove();
+      if (mounted) setState(() => _procesando = false);
+    }
+
+    if (bytes == null || !mounted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudo generar la imagen'),
+          backgroundColor: Colors.red,
+        ));
+      }
+      return;
+    }
+
     final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/promo_vitrina.png');
+    final file = File('\${dir.path}/promo_vitrina.png');
     await file.writeAsBytes(bytes);
     await Share.shareXFiles(
       [XFile(file.path)],
       text: '🛍️ ¡Visita nuestra tienda en línea!',
-      subject: 'Catálogo en línea - ${widget.empresaNombre}',
+      subject: 'Catálogo en línea - \${widget.empresaNombre}',
     );
   }
 
@@ -223,21 +267,6 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
             onTap: _copiarEnlace,
           ),
           const SizedBox(height: 24),
-
-          // Imagen promocional (off-screen render)
-          Opacity(
-            opacity: 0.0,
-            child: SizedBox(
-              width: 400,
-              child: RepaintBoundary(
-                key: _promoKey,
-                child: _PromoCard(
-                  url: widget.url,
-                  empresaNombre: widget.empresaNombre,
-                ),
-              ),
-            ),
-          ),
 
           // Tip
           Container(
