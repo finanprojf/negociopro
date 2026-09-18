@@ -294,18 +294,25 @@ Future<void> _cargarVersion() async {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
-      final db = await LocalDatabase.database;
-      final rows = await db.query('vitrina_config',
-          where: 'empresa_id = ?', whereArgs: [empresaId], limit: 1);
-      if (rows.isNotEmpty && mounted) {
-        final row = rows.first;
-        final slug = row['slug'] as String? ?? '';
-        final activa = (row['activa'] as int? ?? 0) == 1;
-        final url = 'https://vitrina-web-beta.vercel.app/t/${slug.isNotEmpty ? slug : empresaId}';
-        setState(() {
-          _vitrinaActiva = activa;
-          _vitrinaUrl = url;
-        });
+      // Siempre mostramos el widget, URL por defecto con empresaId
+      final defaultUrl = 'https://vitrina-web-beta.vercel.app/t/$empresaId';
+      if (mounted) setState(() => _vitrinaUrl = defaultUrl);
+
+      if (await SupabaseService.isOnlineAsync) {
+        final res = await SupabaseService.client
+            .from('vitrina_config')
+            .select()
+            .eq('empresa_id', empresaId)
+            .maybeSingle();
+        if (res != null && mounted) {
+          final slug = res['slug'] as String? ?? '';
+          final activa = res['activa'] == true;
+          final url = 'https://vitrina-web-beta.vercel.app/t/${slug.isNotEmpty ? slug : empresaId}';
+          setState(() {
+            _vitrinaActiva = activa;
+            _vitrinaUrl = url;
+          });
+        }
       }
     } catch (_) {}
   }
@@ -775,64 +782,51 @@ Widget _buildVitrinaWidget() {
       Row(children: [
         Expanded(child: Text(_nombreNegocio, style: GoogleFonts.poppins(
             fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: AppColors.successSurface, borderRadius: BorderRadius.circular(20)),
-          child: Text('● Plan Pro', style: GoogleFonts.poppins(
-              fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.success)),
+        GestureDetector(
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const VitrinaConfigScreen()))
+                  .then((_) => _cargarVitrina()),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: _vitrinaActiva
+                  ? AppColors.primary.withValues(alpha: 0.1)
+                  : AppColors.cardBorder,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.storefront_rounded, size: 11,
+                  color: _vitrinaActiva ? AppColors.primary : AppColors.textMuted),
+              const SizedBox(width: 4),
+              Text(_vitrinaActiva ? '● Vitrina activa' : '○ Vitrina inactiva',
+                  style: GoogleFonts.poppins(
+                      fontSize: 11, fontWeight: FontWeight.w600,
+                      color: _vitrinaActiva ? AppColors.primary : AppColors.textMuted)),
+            ]),
+          ),
         ),
       ]),
       const SizedBox(height: 4),
       Row(children: [
         Expanded(child: Text(AppFormatters.fechaHora(DateTime.now()),
             style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textMuted))),
-        if (_vitrinaUrl.isNotEmpty) ...[
+        if (_vitrinaActiva) ...[
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const VitrinaConfigScreen()))
-                    .then((_) => _cargarVitrina()),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-              decoration: BoxDecoration(
-                color: _vitrinaActiva
-                    ? AppColors.primary.withValues(alpha: 0.1)
-                    : AppColors.cardBorder.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.storefront_rounded,
-                    size: 11,
-                    color: _vitrinaActiva ? AppColors.primary : AppColors.textMuted),
-                const SizedBox(width: 4),
-                Text(_vitrinaActiva ? 'Vitrina activa' : 'Vitrina inactiva',
-                    style: GoogleFonts.poppins(
-                        fontSize: 10, fontWeight: FontWeight.w600,
-                        color: _vitrinaActiva ? AppColors.primary : AppColors.textMuted)),
-                if (_vitrinaActiva) ...[
-                  const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => VitrinaQrScreen(
-                          url: _vitrinaUrl,
-                          empresaNombre: _nombreNegocio,
-                        ))),
-                    child: Icon(Icons.qr_code_rounded,
-                        size: 14, color: AppColors.primary),
-                  ),
-                  const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: () => Share.share(
-                      '🛍️ Mira el catálogo de $_nombreNegocio:\n$_vitrinaUrl',
-                      subject: 'Catálogo de $_nombreNegocio',
-                    ),
-                    child: Icon(Icons.share_rounded,
-                        size: 14, color: AppColors.primary),
-                  ),
-                ],
-              ]),
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+                builder: (_) => VitrinaQrScreen(
+                  url: _vitrinaUrl,
+                  empresaNombre: _nombreNegocio,
+                ))),
+            child: Icon(Icons.qr_code_rounded, size: 16, color: AppColors.primary),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: () => Share.share(
+              '🛍️ Mira el catálogo de $_nombreNegocio:\n$_vitrinaUrl',
+              subject: 'Catálogo de $_nombreNegocio',
             ),
+            child: Icon(Icons.share_rounded, size: 16, color: AppColors.primary),
           ),
         ],
       ]),
