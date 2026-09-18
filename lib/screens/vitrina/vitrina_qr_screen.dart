@@ -108,12 +108,12 @@ class _VitrinaQrScreenState extends State<VitrinaQrScreen> {
     }
 
     final dir = await getTemporaryDirectory();
-    final file = File('\${dir.path}/promo_vitrina.png');
+    final file = File('${dir.path}/promo_vitrina.png');
     await file.writeAsBytes(bytes);
     await Share.shareXFiles(
       [XFile(file.path)],
       text: '🛍️ ¡Visita nuestra tienda en línea!',
-      subject: 'Catálogo en línea - \${widget.empresaNombre}',
+      subject: 'Catálogo en línea - ${widget.empresaNombre}',
     );
   }
 
