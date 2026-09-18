@@ -18,7 +18,7 @@
     .badge-sin-stock   { background:#fee2e2; color:#dc2626; }
     .badge-stock-bajo  { background:#fef3c7; color:#d97706; }
     .badge-disponible  { background:#dcfce7; color:#16a34a; }
-    .badge-oferta      { background:#fef3c7; color:#b45309; }
+    .badge-oferta      { background:#f97316; color:#ffffff; font-size:0.65rem; letter-spacing:0.05em; }
     .badge-disp-hoy    { background:#d1fae5; color:#065f46; }
     .badge-disp-manana { background:#dbeafe; color:#1e40af; }
     .badge-disp-pronto { background:#ede9fe; color:#5b21b6; }
@@ -426,7 +426,7 @@
 
       // badge oferta
       let badgeOfertaHtml = descPct
-        ? '<span class="absolute top-2 left-2 badge-oferta text-xs font-bold px-2 py-0.5 rounded-full">-' + descPct + '%</span>'
+        ? '<span class="absolute top-2 left-2 badge-oferta font-bold px-2 py-1 rounded-full flex flex-col items-center leading-tight"><span style="font-size:0.6rem;letter-spacing:0.08em">OFERTA</span><span style="font-size:0.75rem">-' + descPct + '%</span></span>'
         : '';
 
       // nombre seguro
