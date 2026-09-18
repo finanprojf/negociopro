@@ -576,6 +576,7 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
       initialDate: _fecha,
       firstDate: DateTime.now().subtract(const Duration(days: 1)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      locale: const Locale('es'),
     );
     if (picked != null) setState(() => _fecha = picked);
   }

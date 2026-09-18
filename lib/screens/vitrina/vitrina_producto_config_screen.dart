@@ -99,6 +99,7 @@ class _VitrinaProductoConfigSheetState extends State<VitrinaProductoConfigSheet>
       initialDate: _fechaDisponibilidad ?? now.add(const Duration(days: 1)),
       firstDate: now,
       lastDate: now.add(const Duration(days: 365)),
+      locale: const Locale('es'),
     );
     if (picked != null) setState(() => _fechaDisponibilidad = picked);
   }
