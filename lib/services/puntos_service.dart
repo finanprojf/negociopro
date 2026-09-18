@@ -36,7 +36,7 @@ class PuntosService {
       'synced': 0, 'created_at': ahora,
     });
 
-    if (SupabaseService.isOnline) {
+    if (await SupabaseService.isOnlineAsync) {
       try {
         await SupabaseService.client.from('movimientos_puntos').insert({
           'id': id, 'empresa_id': empresaId,
@@ -68,7 +68,7 @@ class PuntosService {
       'synced': 0, 'created_at': ahora,
     });
 
-    if (SupabaseService.isOnline) {
+    if (await SupabaseService.isOnlineAsync) {
       try {
         await SupabaseService.client.from('movimientos_puntos').insert({
           'id': id, 'empresa_id': empresaId,

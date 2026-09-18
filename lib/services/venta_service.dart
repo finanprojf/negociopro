@@ -10,9 +10,16 @@ class VentaService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
- // Cargar local primero
+    // Cargar local primero (con detalles desde detalle_ventas)
     final local = await LocalDatabase.consultar('ventas', empresaId);
-    final ventasLocal = local.map((m) => VentaModel.fromMap(m)).toList();
+    final db = await LocalDatabase.database;
+    final ventasLocal = await Future.wait(local.map((m) async {
+      final map = Map<String, dynamic>.from(m);
+      final detalles = await db.query('detalle_ventas',
+          where: 'venta_id = ?', whereArgs: [m['id']]);
+      map['detalle_ventas'] = detalles;
+      return VentaModel.fromMap(map);
+    }));
 
     if (await SupabaseService.isOnlineAsync) {
       try {
@@ -54,7 +61,13 @@ class VentaService {
         }).toList();
 // Releer SQLite completo después de guardar
         final localActualizado = await LocalDatabase.consultar('ventas', empresaId);
-        final todasLocal = localActualizado.map((m) => VentaModel.fromMap(m)).toList();
+        final todasLocal = await Future.wait(localActualizado.map((m) async {
+          final map = Map<String, dynamic>.from(m);
+          final detalles = await db.query('detalle_ventas',
+              where: 'venta_id = ?', whereArgs: [m['id']]);
+          map['detalle_ventas'] = detalles;
+          return VentaModel.fromMap(map);
+        }));
         final idsOnline = ventasOnline.map((v) => v.id).toSet();
         final ventasNoEnOnline = todasLocal
             .where((v) => !idsOnline.contains(v.id))

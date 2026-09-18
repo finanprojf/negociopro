@@ -179,6 +179,20 @@ class LocalDatabase {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS recordatorios (
+        id TEXT PRIMARY KEY,
+        empresa_id TEXT NOT NULL,
+        titulo TEXT NOT NULL,
+        cliente_id TEXT,
+        cliente_nombre TEXT,
+        fecha TEXT NOT NULL,
+        hora TEXT,
+        completado INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
     // Índices para consultas rápidas por empresa y fecha
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_productos_empresa ON productos(empresa_id, activo)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_empresa_fecha ON ventas(empresa_id, created_at)'); } catch (_) {}
@@ -191,6 +205,7 @@ class LocalDatabase {
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_apartados_empresa ON apartados(empresa_id, estado)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_cierres_empresa_fecha ON cierres_dia(empresa_id, fecha)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_synced ON ventas(synced)'); } catch (_) {}
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_recordatorios_empresa_fecha ON recordatorios(empresa_id, fecha)'); } catch (_) {}
   }
 
   // Migraciones por versión — agregar aquí cuando suba dbVersion
@@ -204,6 +219,24 @@ class LocalDatabase {
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_clientes_empresa ON clientes(empresa_id, activo)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_cierres_empresa_fecha ON cierres_dia(empresa_id, fecha)'); } catch (_) {}
     // v1 → v2: encargos ya está en _onCreate desde v2
+    if (oldV < 8) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS recordatorios (
+            id TEXT PRIMARY KEY,
+            empresa_id TEXT NOT NULL,
+            titulo TEXT NOT NULL,
+            cliente_id TEXT,
+            cliente_nombre TEXT,
+            fecha TEXT NOT NULL,
+            hora TEXT,
+            completado INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+          )
+        ''');
+      } catch (_) {}
+      try { await db.execute('CREATE INDEX IF NOT EXISTS idx_recordatorios_empresa_fecha ON recordatorios(empresa_id, fecha)'); } catch (_) {}
+    }
     if (oldV < 7) {
       try { await db.execute('ALTER TABLE cierres_dia ADD COLUMN ganancia_real REAL DEFAULT 0'); } catch (_) {}
     }
