@@ -240,9 +240,6 @@ class LocalDatabase {
     if (oldV < 7) {
       try { await db.execute('ALTER TABLE cierres_dia ADD COLUMN ganancia_real REAL DEFAULT 0'); } catch (_) {}
     }
-    if (oldV < 5) {
-      try { await db.execute('ALTER TABLE cierres_dia ADD COLUMN ganancia_real REAL DEFAULT 0'); } catch (_) {}
-    }
     if (oldV < 4) {
       try { await db.execute('ALTER TABLE productos ADD COLUMN es_elaborado INTEGER DEFAULT 0'); } catch (_) {}
       try { await db.execute('ALTER TABLE productos ADD COLUMN costo_produccion REAL DEFAULT 0'); } catch (_) {}

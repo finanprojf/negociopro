@@ -38,6 +38,7 @@ class _PosScreenState extends State<PosScreen> {
   Timer? _debounceSearch;
   bool _loading = true;
   String _tipoPago = 'efectivo';
+  bool _procesandoVenta = false; // guard anti double-tap
 String? _clienteSeleccionado;
 List<Map<String, String>> _clientesFiltrados = [];
 List<Map<String, String>> _clientesDemo = [];
@@ -106,6 +107,8 @@ Future<void> _agregarClienteRapido() async {
         ],
       ),
     );
+    nombreCtrl.dispose();
+    telefonoCtrl.dispose();
 
     if (resultado != null) {
       try {
@@ -118,8 +121,6 @@ Future<void> _agregarClienteRapido() async {
         ));
        await _cargarClientes();
         // Seleccionar el cliente recién creado y continuar con la venta
-        // Recargar lista y encontrar el nuevo cliente
-        await _cargarClientes();
         final clienteNuevo = _clientesDemo.firstWhere(
             (c) => c['nombre'] == resultado['nombre'],
             orElse: () => _clientesDemo.isNotEmpty ? _clientesDemo.last : {'id': '', 'nombre': ''});
@@ -472,10 +473,10 @@ Future<void> _cargarClientes() async {
     );
   }
 
-  void _mostrarCobro() {
+  Future<void> _mostrarCobro() async {
     final ctrl = TextEditingController(
         text: _tipoPago == 'efectivo' ? _total.toStringAsFixed(2) : '');
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -647,7 +648,10 @@ Future<void> _cargarClientes() async {
             const SizedBox(height: 16),
             SizedBox(width: double.infinity, height: 50,
               child: ElevatedButton(
-              onPressed: () async {
+              onPressed: _procesandoVenta ? null : () async {
+                 if (_procesandoVenta) return;
+                 setState(() => _procesandoVenta = true);
+                 try {
                  final montoIngresado = ctrl.text.trim().isEmpty ? 0.0 : (double.tryParse(ctrl.text) ?? _total);
                   
                   // Si el monto es menor al total
@@ -848,6 +852,9 @@ Future<void> _cargarClientes() async {
                       backgroundColor: AppColors.success,
                     ));
                   }
+                 } finally {
+                   if (mounted) setState(() => _procesandoVenta = false);
+                 }
                 },
                 child: Text('Confirmar venta', style: GoogleFonts.poppins(
                     fontSize: 16, fontWeight: FontWeight.w700)),
@@ -857,6 +864,7 @@ Future<void> _cargarClientes() async {
         ),
       ),
     );
+    ctrl.dispose();
   }
 }
 

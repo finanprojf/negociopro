@@ -13,13 +13,20 @@ class VentaService {
     // Cargar local primero (con detalles desde detalle_ventas)
     final local = await LocalDatabase.consultar('ventas', empresaId);
     final db = await LocalDatabase.database;
-    final ventasLocal = await Future.wait(local.map((m) async {
+    // Batch load detalles (1 query instead of N)
+    final ids1 = local.map((m) => "'${m['id']}'").join(',');
+    final detallesAll1 = ids1.isEmpty ? <Map<String,Object?>>[] :
+        await db.rawQuery('SELECT * FROM detalle_ventas WHERE venta_id IN ($ids1)');
+    final detallesMap1 = <String, List<Map<String,Object?>>>{};
+    for (final d in detallesAll1) {
+      final vid = d['venta_id'] as String;
+      detallesMap1.putIfAbsent(vid, () => []).add(d);
+    }
+    final ventasLocal = local.map((m) {
       final map = Map<String, dynamic>.from(m);
-      final detalles = await db.query('detalle_ventas',
-          where: 'venta_id = ?', whereArgs: [m['id']]);
-      map['detalle_ventas'] = detalles;
+      map['detalle_ventas'] = detallesMap1[m['id']] ?? [];
       return VentaModel.fromMap(map);
-    }));
+    }).toList();
 
     if (await SupabaseService.isOnlineAsync) {
       try {
@@ -61,13 +68,20 @@ class VentaService {
         }).toList();
 // Releer SQLite completo después de guardar
         final localActualizado = await LocalDatabase.consultar('ventas', empresaId);
-        final todasLocal = await Future.wait(localActualizado.map((m) async {
+        // Batch load detalles (1 query instead of N)
+        final ids2 = localActualizado.map((m) => "'${m['id']}'").join(',');
+        final detallesAll2 = ids2.isEmpty ? <Map<String,Object?>>[] :
+            await db.rawQuery('SELECT * FROM detalle_ventas WHERE venta_id IN ($ids2)');
+        final detallesMap2 = <String, List<Map<String,Object?>>>{};
+        for (final d in detallesAll2) {
+          final vid = d['venta_id'] as String;
+          detallesMap2.putIfAbsent(vid, () => []).add(d);
+        }
+        final todasLocal = localActualizado.map((m) {
           final map = Map<String, dynamic>.from(m);
-          final detalles = await db.query('detalle_ventas',
-              where: 'venta_id = ?', whereArgs: [m['id']]);
-          map['detalle_ventas'] = detalles;
+          map['detalle_ventas'] = detallesMap2[m['id']] ?? [];
           return VentaModel.fromMap(map);
-        }));
+        }).toList();
         final idsOnline = ventasOnline.map((v) => v.id).toSet();
         final ventasNoEnOnline = todasLocal
             .where((v) => !idsOnline.contains(v.id))

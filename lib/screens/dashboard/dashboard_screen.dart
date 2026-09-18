@@ -107,8 +107,9 @@ Future<void> _cargarVersion() async {
       _empresaId = empresaId;
       // Sincronizar ventas pendientes
       await VentaService.sincronizarPendientes();
+      final online = await SupabaseService.isOnlineAsync;
 // Verificar suscripción
-      if (await SupabaseService.isOnlineAsync) {
+      if (online) {
         final sus = await SupabaseService.getSuscripcion();
         if (sus != null && sus['suscripcion_vence'] != null) {
           final vence = DateTime.parse(sus['suscripcion_vence']);
@@ -122,7 +123,7 @@ Future<void> _cargarVersion() async {
         }
       }
     // Si no hay internet cargar desde SQLite
-      if (!await SupabaseService.isOnlineAsync) {
+      if (!online) {
         final db = await LocalDatabase.database;
 
         // Filtrar desde el último cierre (no desde medianoche)
@@ -142,16 +143,21 @@ Future<void> _cargarVersion() async {
         double totalVentas = 0;
         double gananciaReal = 0;
 
+        // Batch load: 1 query for all detalles, 1 query for all productos
         for (final v in ventasHoy) {
           totalVentas += (v['total'] as num).toDouble();
-          final detalles = await db.query('detalle_ventas',
-              where: 'venta_id = ?', whereArgs: [v['id']]);
-          for (final d in detalles) {
-            final productos = await db.query('productos',
-                where: 'id = ?', whereArgs: [d['producto_id']]);
-            if (productos.isNotEmpty) {
+        }
+        if (ventasHoy.isNotEmpty) {
+          final ventaIds = ventasHoy.map((v) => "'${v['id']}'").join(',');
+          final todosDetalles = await db.rawQuery(
+              'SELECT dv.cantidad, dv.precio_unitario, dv.producto_id, '
+              'p.precio_compra FROM detalle_ventas dv '
+              'LEFT JOIN productos p ON p.id = dv.producto_id '
+              'WHERE dv.venta_id IN ($ventaIds)');
+          for (final d in todosDetalles) {
+            if (d['precio_compra'] != null) {
               final precioVenta = (d['precio_unitario'] as num).toDouble();
-              final precioCompra = (productos.first['precio_compra'] as num).toDouble();
+              final precioCompra = (d['precio_compra'] as num).toDouble();
               final cantidad = (d['cantidad'] as num).toDouble();
               gananciaReal += (precioVenta - precioCompra) * cantidad;
             }
@@ -244,20 +250,20 @@ Future<void> _cargarVersion() async {
           }
         }
 
-        // Ganancias de ventas offline
+        // Ganancias de ventas offline — batch query
         if (idsOffline.isNotEmpty) {
-          for (final ventaId in idsOffline) {
-            final detalles = await db.query('detalle_ventas',
-                where: 'venta_id = ?', whereArgs: [ventaId]);
-            for (final d in detalles) {
-              final productos = await db.query('productos',
-                  where: 'id = ?', whereArgs: [d['producto_id']]);
-              if (productos.isNotEmpty) {
-                final precioVenta = (d['precio_unitario'] as num).toDouble();
-                final precioCompra = (productos.first['precio_compra'] as num).toDouble();
-                final cantidad = (d['cantidad'] as num).toDouble();
-                gananciaReal += (precioVenta - precioCompra) * cantidad;
-              }
+          final offlineIds = idsOffline.map((id) => "'$id'").join(',');
+          final offlineDetalles = await db.rawQuery(
+              'SELECT dv.cantidad, dv.precio_unitario, p.precio_compra '
+              'FROM detalle_ventas dv '
+              'LEFT JOIN productos p ON p.id = dv.producto_id '
+              'WHERE dv.venta_id IN ($offlineIds)');
+          for (final d in offlineDetalles) {
+            if (d['precio_compra'] != null) {
+              final precioVenta = (d['precio_unitario'] as num).toDouble();
+              final precioCompra = (d['precio_compra'] as num).toDouble();
+              final cantidad = (d['cantidad'] as num).toDouble();
+              gananciaReal += (precioVenta - precioCompra) * cantidad;
             }
           }
         }
