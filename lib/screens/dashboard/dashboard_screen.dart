@@ -586,10 +586,6 @@ Widget _buildVitrinaWidget() {
                 _buildRecordatoriosHoy(),
                 const SizedBox(height: 16),
               ],
-              if (_vitrinaUrl.isNotEmpty) ...[
-                _buildVitrinaWidget(),
-                const SizedBox(height: 16),
-              ],
               _buildStatCards(),
               const SizedBox(height: 24),
               _buildAlertSection(),
@@ -788,8 +784,58 @@ Widget _buildVitrinaWidget() {
         ),
       ]),
       const SizedBox(height: 4),
-      Text(AppFormatters.fechaHora(DateTime.now()),
-          style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textMuted)),
+      Row(children: [
+        Expanded(child: Text(AppFormatters.fechaHora(DateTime.now()),
+            style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textMuted))),
+        if (_vitrinaUrl.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const VitrinaConfigScreen()))
+                    .then((_) => _cargarVitrina()),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: _vitrinaActiva
+                    ? AppColors.primary.withValues(alpha: 0.1)
+                    : AppColors.cardBorder.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.storefront_rounded,
+                    size: 11,
+                    color: _vitrinaActiva ? AppColors.primary : AppColors.textMuted),
+                const SizedBox(width: 4),
+                Text(_vitrinaActiva ? 'Vitrina activa' : 'Vitrina inactiva',
+                    style: GoogleFonts.poppins(
+                        fontSize: 10, fontWeight: FontWeight.w600,
+                        color: _vitrinaActiva ? AppColors.primary : AppColors.textMuted)),
+                if (_vitrinaActiva) ...[
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => VitrinaQrScreen(
+                          url: _vitrinaUrl,
+                          empresaNombre: _nombreNegocio,
+                        ))),
+                    child: Icon(Icons.qr_code_rounded,
+                        size: 14, color: AppColors.primary),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () => Share.share(
+                      '🛍️ Mira el catálogo de $_nombreNegocio:\n$_vitrinaUrl',
+                      subject: 'Catálogo de $_nombreNegocio',
+                    ),
+                    child: Icon(Icons.share_rounded,
+                        size: 14, color: AppColors.primary),
+                  ),
+                ],
+              ]),
+            ),
+          ),
+        ],
+      ]),
     ]);
   }
 
