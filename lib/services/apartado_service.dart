@@ -73,6 +73,7 @@ class ApartadoService {
     double abonoInicial = 0,
     DateTime? fechaEstimada,
     String? notas,
+    List<Map<String, dynamic>> lineas = const [],
   }) async {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return false;
@@ -100,6 +101,24 @@ class ApartadoService {
 
     await LocalDatabase.insertar('apartados', map);
 
+    // Guardar líneas del apartado
+    final db = await LocalDatabase.database;
+    for (final linea in lineas) {
+      await db.insert('apartado_productos', {
+        'id': _uuid.v4(),
+        'apartado_id': id,
+        'empresa_id': empresaId,
+        'producto_id': linea['producto_id'],
+        'nombre': linea['nombre'],
+        'cantidad': linea['cantidad'] ?? 1.0,
+        'precio': linea['precio'] ?? 0.0,
+        'costo': linea['costo'],
+        'entregado': 0,
+        'fecha_entrega': null,
+        'synced': 0,
+      });
+    }
+
     if (abonoInicial > 0) {
       await LocalDatabase.insertar('abonos_apartado', {
         'id': _uuid.v4(),
@@ -108,6 +127,7 @@ class ApartadoService {
         'cliente_id': clienteId,
         'monto': abonoInicial,
         'metodo_pago': 'efectivo',
+        'tipo': 'inicial',
         'synced': 0,
         'created_at': ahora,
       });
@@ -202,6 +222,7 @@ class ApartadoService {
       'cliente_id': clienteId,
       'monto': monto,
       'metodo_pago': metodoPago,
+      'tipo': 'abono',
       'usuario_id': SupabaseService.userId,
       'synced': 0,
       'created_at': ahora,
@@ -256,4 +277,20 @@ class ApartadoService {
     }
     return true;
   }
+  static Future<List<Map<String, dynamic>>> getLineasApartado(String apartadoId) async {
+    final db = await LocalDatabase.database;
+    return db.query('apartado_productos',
+        where: 'apartado_id = ?', whereArgs: [apartadoId],
+        orderBy: 'rowid ASC');
+  }
+
+  static Future<void> marcarLineaEntregada(String lineaId, bool entregada) async {
+    final db = await LocalDatabase.database;
+    await db.update('apartado_productos', {
+      'entregado': entregada ? 1 : 0,
+      'fecha_entrega': entregada ? DateTime.now().toIso8601String() : null,
+      'synced': 0,
+    }, where: 'id = ?', whereArgs: [lineaId]);
+  }
+
 }

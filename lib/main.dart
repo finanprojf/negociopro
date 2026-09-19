@@ -9,6 +9,8 @@ import 'utils/constants.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'services/cuadre_automatico_service.dart';
+import 'services/pin_service.dart';
+import 'screens/seguridad/pin_lock_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,12 +34,58 @@ Future<void> main() async {
   runApp(const NegocioProApp());
 }
 
-class NegocioProApp extends StatelessWidget {
+class NegocioProApp extends StatefulWidget {
   const NegocioProApp({super.key});
+  @override State<NegocioProApp> createState() => _NegocioProAppState();
+}
+
+class _NegocioProAppState extends State<NegocioProApp>
+    with WidgetsBindingObserver {
+  bool _bloqueado = false;
+  bool _pinActivo = false;
+  String _modoBloqueo = PinService.modoBloqueado;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _verificarPin();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _verificarPin() async {
+    final activo = await PinService.habilitado;
+    final modo = await PinService.modo;
+    if (mounted) setState(() { _pinActivo = activo; _modoBloqueo = modo; });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (!_pinActivo) return;
+    final modo = await PinService.modo;
+    // Bloquear según modo configurado
+    if (state == AppLifecycleState.paused &&
+        modo == PinService.modoBloqueado) {
+      setState(() => _bloqueado = true);
+    }
+    if (state == AppLifecycleState.detached) {
+      // Al cerrar completamente, siempre bloqueamos
+      setState(() => _bloqueado = true);
+    }
+    if (state == AppLifecycleState.resumed) {
+      // Recargar configuración por si cambió
+      await _verificarPin();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    final app = MaterialApp(
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       localizationsDelegates: const [
@@ -50,8 +98,11 @@ class NegocioProApp extends StatelessWidget {
         Locale('en'),
       ],
       theme: AppTheme.light,
-      home: const AuthWrapper(),
+      home: _bloqueado
+          ? PinLockScreen(onUnlocked: () => setState(() => _bloqueado = false))
+          : const AuthWrapper(),
     );
+    return app;
   }
 }
 

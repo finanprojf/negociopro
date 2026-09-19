@@ -222,6 +222,13 @@ class _ApartadoFormScreenState extends State<ApartadoFormScreen> {
       abonoInicial: _abonoInicial,
       fechaEstimada: _fechaEstimada,
       notas: _notasCtrl.text.trim().isEmpty ? null : _notasCtrl.text.trim(),
+      lineas: _lineas.map((l) => {
+        'producto_id': l.productoId,
+        'nombre': l.nombre,
+        'cantidad': l.cantidad,
+        'precio': l.precio,
+        'costo': l.costoUnitario,
+      }).toList(),
     );
 
     if (mounted) {

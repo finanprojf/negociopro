@@ -11,6 +11,7 @@ import '../apartados/apartados_screen.dart';
 import '../gastos/gastos_screen.dart';
 import '../reportes/reportes_screen.dart';
 import '../empresa/empresa_screen.dart';
+import '../seguridad/pin_configuracion_screen.dart';
 import '../vitrina/vitrina_config_screen.dart';
 import '../vitrina/vitrina_qr_screen.dart';
 import 'package:flutter/services.dart';
@@ -678,6 +679,16 @@ Widget _buildVitrinaWidget() {
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const SuscripcionScreen()));
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.lock_rounded, color: AppColors.textSecondary),
+                  title: Text('Seguridad y PIN', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                  subtitle: Text('PIN de acceso y acciones rápidas',
+                      style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PinConfiguracionScreen()));
                   },
                 ),
               ]),

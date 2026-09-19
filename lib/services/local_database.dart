@@ -203,6 +203,22 @@ class LocalDatabase {
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_abonos_fiado ON abonos_fiado(fiado_id)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_abonos_apartado ON abonos_apartado(apartado_id)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_apartados_empresa ON apartados(empresa_id, estado)'); } catch (_) {}
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS apartado_productos (
+        id TEXT PRIMARY KEY, apartado_id TEXT NOT NULL,
+        empresa_id TEXT NOT NULL,
+        producto_id TEXT,
+        nombre TEXT NOT NULL,
+        cantidad REAL NOT NULL DEFAULT 1,
+        precio REAL NOT NULL DEFAULT 0,
+        costo REAL,
+        entregado INTEGER DEFAULT 0,
+        fecha_entrega TEXT,
+        synced INTEGER DEFAULT 0
+      )
+    ''');
+    try { await db.execute('CREATE INDEX IF NOT EXISTS idx_apartado_prods ON apartado_productos(apartado_id)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_cierres_empresa_fecha ON cierres_dia(empresa_id, fecha)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_synced ON ventas(synced)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_recordatorios_empresa_fecha ON recordatorios(empresa_id, fecha)'); } catch (_) {}
@@ -219,6 +235,28 @@ class LocalDatabase {
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_clientes_empresa ON clientes(empresa_id, activo)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_cierres_empresa_fecha ON cierres_dia(empresa_id, fecha)'); } catch (_) {}
     // v1 → v2: encargos ya está en _onCreate desde v2
+    if (oldV < 9) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS apartado_productos (
+            id TEXT PRIMARY KEY, apartado_id TEXT NOT NULL,
+            empresa_id TEXT NOT NULL,
+            producto_id TEXT,
+            nombre TEXT NOT NULL,
+            cantidad REAL NOT NULL DEFAULT 1,
+            precio REAL NOT NULL DEFAULT 0,
+            costo REAL,
+            entregado INTEGER DEFAULT 0,
+            fecha_entrega TEXT,
+            synced INTEGER DEFAULT 0
+          )
+        ''');
+      } catch (_) {}
+      try { await db.execute('CREATE INDEX IF NOT EXISTS idx_apartado_prods ON apartado_productos(apartado_id)'); } catch (_) {}
+    }
+    if (oldV < 10) {
+      try { await db.execute('ALTER TABLE abonos_apartado ADD COLUMN tipo TEXT DEFAULT \'abono\''); } catch (_) {}
+    }
     if (oldV < 8) {
       try {
         await db.execute('''

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../seguridad/pin_entrada_dialog.dart';
 import '../../theme/app_colors.dart';
 import '../../models/cliente_model.dart';
 import '../../models/apartado_model.dart';
@@ -8,6 +9,7 @@ import '../../services/local_database.dart';
 import '../../services/apartado_service.dart';
 import 'abono_apartado_screen.dart';
 import 'apartado_form_screen.dart';
+import 'entregar_articulos_sheet.dart';
 
 class ApartadosClienteScreen extends StatefulWidget {
   final ClienteModel cliente;
@@ -99,25 +101,48 @@ void _mostrarHistorial() async {
                           final apartadoId = p['apartados'] != null
                               ? p['apartados']['id'] as String
                               : (p['apartado_id'] as String? ?? '');
+                          final esInicial = (p['tipo'] as String? ?? 'abono') == 'inicial';
                           return Row(children: [
                             Container(
                               width: 40, height: 40,
                               decoration: BoxDecoration(
-                                color: AppColors.accentSurface,
+                                color: esInicial
+                                    ? AppColors.colorApartados.withValues(alpha: 0.12)
+                                    : AppColors.accentSurface,
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(Icons.payments_rounded,
-                                  color: AppColors.colorApartados, size: 20),
+                              child: Icon(
+                                esInicial
+                                    ? Icons.bookmark_added_rounded
+                                    : Icons.payments_rounded,
+                                color: AppColors.colorApartados, size: 20),
                             ),
                             const SizedBox(width: 12),
                             Expanded(child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                              Text(descripcion,
-                                  style: const TextStyle(fontFamily: 'Poppins',
-                                      fontSize: 13, fontWeight: FontWeight.w600,
-                                      color: AppColors.textPrimary),
-                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                              Row(children: [
+                                Expanded(child: Text(descripcion,
+                                    style: const TextStyle(fontFamily: 'Poppins',
+                                        fontSize: 13, fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: esInicial
+                                        ? AppColors.colorApartados.withValues(alpha: 0.12)
+                                        : AppColors.successSurface,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(esInicial ? 'Inicial' : 'Abono',
+                                      style: TextStyle(fontFamily: 'Poppins',
+                                          fontSize: 10, fontWeight: FontWeight.w600,
+                                          color: esInicial
+                                              ? AppColors.colorApartados : AppColors.success)),
+                                ),
+                              ]),
                               Text(AppFormatters.fechaHora(
                                   DateTime.parse(p['created_at'])),
                                   style: const TextStyle(fontFamily: 'Poppins',
@@ -155,6 +180,9 @@ void _mostrarHistorial() async {
                                   ),
                                 );
                                 if (ok == true) {
+                                  final pinOkC = await mostrarDialogoPinRapido(context,
+                                      titulo: 'Autorizar cancelación de abono');
+                                  if (!pinOkC) return;
                                   await ApartadoService.cancelarAbono(
                                       p['id'] as String,
                                       apartadoId,
@@ -175,6 +203,21 @@ void _mostrarHistorial() async {
       );
     } catch (_) {}
   }
+  Future<void> _mostrarEntrega(ApartadoModel apartado) async {
+    final lineas = await ApartadoService.getLineasApartado(apartado.id);
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => EntregarArticulosSheet(
+        apartado: apartado,
+        lineas: lineas,
+        onCambio: _cargar,
+      ),
+    );
+  }
+
   Future<void> _cargar() async {
     setState(() => _loading = true);
     try {
@@ -284,6 +327,7 @@ void _mostrarHistorial() async {
                                   AbonoApartadoScreen(apartado: _apartados[i])));
                           _cargar();
                         },
+                        onEntregar: () => _mostrarEntrega(_apartados[i]),
                       ),
                     ),
         ),
@@ -304,7 +348,8 @@ void _mostrarHistorial() async {
 class _ApartadoCard extends StatelessWidget {
   final ApartadoModel apartado;
   final VoidCallback onAbonar;
-  const _ApartadoCard({required this.apartado, required this.onAbonar});
+  final VoidCallback onEntregar;
+  const _ApartadoCard({required this.apartado, required this.onAbonar, required this.onEntregar});
 
   @override
   Widget build(BuildContext context) {
@@ -410,17 +455,33 @@ class _ApartadoCard extends StatelessWidget {
                 )
               : apartado.estaCancelado
                   ? const SizedBox.shrink()
-                  : TextButton.icon(
-                      onPressed: onAbonar,
-                      icon: const Icon(Icons.payments_rounded,
-                          size: 16, color: AppColors.colorApartados),
-                      label: const Text('Registrar abono',
-                          style: TextStyle(fontFamily: 'Poppins',
-                              fontSize: 13, fontWeight: FontWeight.w600,
-                              color: AppColors.colorApartados)),
-                      style: TextButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 42)),
-                    ),
+                  : Row(children: [
+                      Expanded(
+                        child: TextButton.icon(
+                          onPressed: onAbonar,
+                          icon: const Icon(Icons.payments_rounded,
+                              size: 15, color: AppColors.colorApartados),
+                          label: const Text('Abonar',
+                              style: TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 12, fontWeight: FontWeight.w600,
+                                  color: AppColors.colorApartados)),
+                          style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+                        ),
+                      ),
+                      Container(width: 1, height: 32, color: AppColors.cardBorder),
+                      Expanded(
+                        child: TextButton.icon(
+                          onPressed: onEntregar,
+                          icon: const Icon(Icons.inventory_2_rounded,
+                              size: 15, color: AppColors.success),
+                          label: const Text('Entregar',
+                              style: TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 12, fontWeight: FontWeight.w600,
+                                  color: AppColors.success)),
+                          style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+                        ),
+                      ),
+                    ]),
         ),
       ]),
     );
