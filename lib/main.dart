@@ -10,6 +10,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'services/cuadre_automatico_service.dart';
 import 'services/pin_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/seguridad/pin_lock_screen.dart';
 
 Future<void> main() async {
@@ -43,13 +44,14 @@ class _NegocioProAppState extends State<NegocioProApp>
     with WidgetsBindingObserver {
   bool _bloqueado = false;
   bool _pinActivo = false;
-  String _modoBloqueo = PinService.modoBloqueado;
+
+  static const _keyPendingLock = 'pin_pending_lock';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _verificarPin();
+    _iniciarPin();
   }
 
   @override
@@ -58,28 +60,57 @@ class _NegocioProAppState extends State<NegocioProApp>
     super.dispose();
   }
 
-  Future<void> _verificarPin() async {
+  /// Al iniciar la app: si el PIN está activo y quedó una marca de bloqueo
+  /// pendiente (la app fue cerrada/matada), mostramos la pantalla de PIN.
+  Future<void> _iniciarPin() async {
     final activo = await PinService.habilitado;
+    if (!activo) { if (mounted) setState(() => _pinActivo = false); return; }
+
+    final prefs = await SharedPreferences.getInstance();
+    final pendiente = prefs.getBool(_keyPendingLock) ?? false;
     final modo = await PinService.modo;
-    if (mounted) setState(() { _pinActivo = activo; _modoBloqueo = modo; });
+
+    // modoBloqueado: siempre bloquea al iniciar
+    // modoCerrar: solo bloquea si la app fue matada (flag pendiente)
+    final bloqueado = (modo == PinService.modoBloqueado) || pendiente;
+
+    if (mounted) setState(() {
+      _pinActivo = true;
+      _bloqueado = bloqueado;
+    });
+  }
+
+  /// Marca que la app está en background/cerrada para que al volver se bloquee.
+  Future<void> _marcarPendiente() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyPendingLock, true);
+  }
+
+  /// Limpia la marca (app volvió al frente normalmente).
+  Future<void> _limpiarPendiente() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyPendingLock, false);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (!_pinActivo) return;
     final modo = await PinService.modo;
-    // Bloquear según modo configurado
-    if (state == AppLifecycleState.paused &&
-        modo == PinService.modoBloqueado) {
-      setState(() => _bloqueado = true);
+
+    if (state == AppLifecycleState.paused) {
+      // Siempre marcamos pendiente al ir al fondo (persiste si la app muere)
+      await _marcarPendiente();
+      // Modo "suspender": bloquea de inmediato también
+      if (modo == PinService.modoBloqueado) {
+        if (mounted) setState(() => _bloqueado = true);
+      }
     }
-    if (state == AppLifecycleState.detached) {
-      // Al cerrar completamente, siempre bloqueamos
-      setState(() => _bloqueado = true);
-    }
+
     if (state == AppLifecycleState.resumed) {
-      // Recargar configuración por si cambió
-      await _verificarPin();
+      // NO limpiamos el flag aquí — solo se limpia al desbloquear exitosamente
+      // Así si la app fue matada y relanzada, el flag persiste hasta el unlock
+      final activo = await PinService.habilitado;
+      if (mounted) setState(() => _pinActivo = activo);
     }
   }
 
@@ -99,7 +130,10 @@ class _NegocioProAppState extends State<NegocioProApp>
       ],
       theme: AppTheme.light,
       home: _bloqueado
-          ? PinLockScreen(onUnlocked: () => setState(() => _bloqueado = false))
+          ? PinLockScreen(onUnlocked: () async {
+            await _limpiarPendiente(); // limpiamos aquí, no en resumed
+            if (mounted) setState(() => _bloqueado = false);
+          })
           : const AuthWrapper(),
     );
     return app;
