@@ -601,9 +601,9 @@ Widget _buildVitrinaWidget() {
                 const SizedBox(height: 16),
               ],
               _buildStatCards(),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               _buildAlertSection(),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               _buildModulesGrid(),
               const SizedBox(height: 24),
               _buildRecentActivity(),
@@ -922,7 +922,7 @@ Widget _buildVitrinaWidget() {
       GridView.count(
         crossAxisCount: 3, shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 0.95,
+        crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.05,
         children: modules.map((m) => GestureDetector(
           onTap: () => Navigator.push(context,
               MaterialPageRoute(builder: (_) => m.screen)),
@@ -932,12 +932,12 @@ Widget _buildVitrinaWidget() {
                 border: Border.all(color: AppColors.cardBorder)),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(
-                width: 48, height: 48,
+                width: 44, height: 44,
                 decoration: BoxDecoration(
                   color: m.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14)),
-                child: Icon(m.icon, color: m.color, size: 26)),
-              const SizedBox(height: 10),
+                  borderRadius: BorderRadius.circular(12)),
+                child: Icon(m.icon, color: m.color, size: 24)),
+              const SizedBox(height: 6),
               Text(m.name, style: GoogleFonts.poppins(
                   fontSize: 12, fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary), textAlign: TextAlign.center),

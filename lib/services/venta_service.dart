@@ -22,11 +22,21 @@ class VentaService {
       final vid = d['venta_id'] as String;
       detallesMap1.putIfAbsent(vid, () => []).add(d);
     }
-    final ventasLocal = local.map((m) {
+    var ventasLocal = local.map((m) {
       final map = Map<String, dynamic>.from(m);
       map['detalle_ventas'] = detallesMap1[m['id']] ?? [];
       return VentaModel.fromMap(map);
     }).toList();
+    // Filtrar por fecha en modo offline también
+    if (fecha != null) {
+      final inicioFiltroLocal = DateTime(fecha.year, fecha.month, fecha.day);
+      final finFiltroLocal = inicioFiltroLocal.add(const Duration(days: 1));
+      ventasLocal = ventasLocal.where((v) {
+        if (v.createdAt == null) return false;
+        final fl = v.createdAt!.toLocal();
+        return fl.isAfter(inicioFiltroLocal) && fl.isBefore(finFiltroLocal);
+      }).toList();
+    }
 
     if (await SupabaseService.isOnlineAsync) {
       try {
@@ -83,10 +93,20 @@ class VentaService {
           return VentaModel.fromMap(map);
         }).toList();
         final idsOnline = ventasOnline.map((v) => v.id).toSet();
-        final ventasNoEnOnline = todasLocal
+        var ventasNoEnOnline = todasLocal
             .where((v) => !idsOnline.contains(v.id))
             .toList();
-        
+        // Aplicar filtro de fecha también a las ventas locales no sincronizadas
+        if (fecha != null) {
+          final inicioFiltro = DateTime(fecha.year, fecha.month, fecha.day);
+          final finFiltro = inicioFiltro.add(const Duration(days: 1));
+          ventasNoEnOnline = ventasNoEnOnline.where((v) {
+            if (v.createdAt == null) return false;
+            final fechaLocal = v.createdAt!.toLocal();
+            return fechaLocal.isAfter(inicioFiltro) && fechaLocal.isBefore(finFiltro);
+          }).toList();
+        }
+
         return [...ventasOnline, ...ventasNoEnOnline]
           ..sort((a, b) => (b.createdAt ?? DateTime.now())
               .compareTo(a.createdAt ?? DateTime.now()));
