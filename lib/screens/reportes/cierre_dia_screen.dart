@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../seguridad/pin_entrada_dialog.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
@@ -112,6 +113,10 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
 
   Future<void> _realizarCierre() async {
     if (!_formKey.currentState!.validate()) return;
+    // PIN requerido para cerrar el día
+    final pinOk = await mostrarDialogoPinRapido(context,
+        titulo: 'Autorizar cierre del día');
+    if (!pinOk) return;
     setState(() => _guardando = true);
     try {
       final cierre = await CierreDiaService.guardarCierre(
@@ -294,6 +299,8 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
 
           // Fecha
           _chipFecha(),
+          const SizedBox(height: 8),
+          _chipUltimoCuadre(),
           const SizedBox(height: 16),
 
           // ── VENTAS ──
@@ -818,6 +825,53 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
   }
 
   // ─── Helpers UI ──────────────────────────────────────────────
+  Widget _chipUltimoCuadre() {
+    if (_historial.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.cardBorder)),
+        child: Row(children: [
+          Icon(Icons.history_rounded, color: AppColors.textMuted, size: 16),
+          const SizedBox(width: 8),
+          Text('Sin cuadres anteriores',
+              style: GoogleFonts.poppins(
+                  color: AppColors.textMuted, fontSize: 12)),
+        ]),
+      );
+    }
+    final ultimo = _historial.first;
+    final diasDesde = DateTime.now().difference(ultimo.fecha).inDays;
+    final label = diasDesde == 0
+        ? 'hoy'
+        : diasDesde == 1
+            ? 'ayer'
+            : 'hace $diasDesde días';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+          color: diasDesde > 1 ? AppColors.warningSurface : AppColors.successSurface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: diasDesde > 1 ? AppColors.warning : AppColors.success)),
+      child: Row(children: [
+        Icon(Icons.history_rounded,
+            color: diasDesde > 1 ? AppColors.warning : AppColors.success,
+            size: 16),
+        const SizedBox(width: 8),
+        Text(
+          'Último cuadre: ${AppFormatters.fecha(ultimo.fecha)} ($label)',
+          style: GoogleFonts.poppins(
+              color: diasDesde > 1 ? AppColors.warning : AppColors.success,
+              fontWeight: FontWeight.w600,
+              fontSize: 12),
+        ),
+      ]),
+    );
+  }
+
   Widget _chipFecha() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     decoration: BoxDecoration(

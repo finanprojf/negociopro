@@ -3,6 +3,7 @@ import '../../theme/app_colors.dart';
 import '../../models/cliente_model.dart';
 import '../../utils/formatters.dart';
 import 'cliente_form_screen.dart';
+import '../../widgets/avatar_cliente.dart';
 import 'cliente_detalle_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/cliente_service.dart';
@@ -213,15 +214,7 @@ class _ClienteTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Avatar con iniciales
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: AppColors.colorClientes.withValues(alpha: 0.12),
-              child: Text(cliente.iniciales,
-                  style: const TextStyle(fontFamily: 'Poppins',
-                      fontSize: 16, fontWeight: FontWeight.w700,
-                      color: AppColors.colorClientes)),
-            ),
+            AvatarCliente(iniciales: cliente.iniciales, fotoUrl: cliente.fotoUrl, radius: 24),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

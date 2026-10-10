@@ -26,6 +26,12 @@ class InventarioService {
             .select()
             .eq('empresa_id', empresaId)
             .order('nombre');
+        // Cachear en SQLite para uso offline
+        for (final m in res) {
+          final map = Map<String, dynamic>.from(m);
+          map['synced'] = 1;
+          try { await LocalDatabase.insertar('categorias', map); } catch (_) {}
+        }
         return res.map((m) => CategoriaModel.fromMap(m)).toList();
       } catch (_) {}
     }
@@ -77,10 +83,8 @@ class InventarioService {
 
         for (final m in res) {
           final map = Map<String, dynamic>.from(m);
-          if (m['categorias'] != null) {
-            map['categoria_nombre'] = m['categorias']['nombre'];
-          }
-          map.remove('categorias');
+          map.remove('categorias');          // quitar join antes de SQLite
+          map.remove('categoria_nombre');    // no existe en schema SQLite
           map['synced'] = 1;
           map['activo'] = m['activo'] == true ? 1 : 0;         // bool → int para SQLite
           map['es_elaborado'] = m['es_elaborado'] == true ? 1 : 0; // bool → int para SQLite

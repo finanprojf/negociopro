@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import '../seguridad/pin_entrada_dialog.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_colors.dart';
 import '../../models/cliente_model.dart';
+import '../../widgets/avatar_cliente.dart';
 import '../../utils/formatters.dart';
 import '../../services/fiado_service.dart';
 import '../../services/supabase_service.dart';
@@ -223,14 +225,7 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
       ),
       child: Column(children: [
         Row(children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: AppColors.colorClientes.withValues(alpha: 0.12),
-            child: Text(widget.cliente.iniciales,
-                style: const TextStyle(fontFamily: 'Poppins',
-                    fontSize: 18, fontWeight: FontWeight.w700,
-                    color: AppColors.colorClientes)),
-          ),
+          AvatarCliente(iniciales: widget.cliente.iniciales, fotoUrl: widget.cliente.fotoUrl, radius: 24),
           const SizedBox(width: 14),
           Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -853,6 +848,9 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
                                 ),
                               );
                               if (confirm == true) {
+                                final pinOkF = await mostrarDialogoPinRapido(context,
+                                    titulo: 'Autorizar cancelación de abono');
+                                if (!pinOkF) return;
                                 await FiadoService.cancelarAbono(
                                   p['id'] as String,
                                   p['fiado_id'] as String,

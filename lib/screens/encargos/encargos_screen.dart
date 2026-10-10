@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_colors.dart';
 import '../../models/encargo_model.dart';
 import '../../models/cliente_model.dart';
+import '../../widgets/avatar_cliente.dart';
 import '../../utils/formatters.dart';
 import '../../services/encargo_service.dart';
 import '../../services/cliente_service.dart';
@@ -258,8 +259,35 @@ class _EncargosScreenState extends State<EncargosScreen>
             _cargar();
           },
           onEliminar: () async {
-            await EncargoService.eliminarEncargo(_encargos[i].id);
-            _cargar();
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (_) => AlertDialog(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                title: Text('¿Eliminar encargo?',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+                content: Text(
+                    '¿Seguro que deseas eliminar "${_encargos[i].descripcion}"? Esta acción no se puede deshacer.',
+                    style: GoogleFonts.poppins(fontSize: 14)),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text('Cancelar',
+                        style: GoogleFonts.poppins(
+                            color: AppColors.textMuted))),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text('Eliminar',
+                        style: GoogleFonts.poppins(
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w700))),
+                ],
+              ),
+            );
+            if (ok == true) {
+              await EncargoService.eliminarEncargo(_encargos[i].id);
+              _cargar();
+            }
           },
           onEntregar: () => _mostrarCobroEncargo(_encargos[i]),
         ),
@@ -304,8 +332,35 @@ class _EncargosScreenState extends State<EncargosScreen>
             _cargar();
           },
           onEliminar: () async {
-            await EncargoService.eliminarEncargo(_lista[i].id);
-            _cargar();
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (_) => AlertDialog(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                title: Text('¿Eliminar item?',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+                content: Text(
+                    '¿Seguro que deseas eliminar "${_lista[i].descripcion}"? Esta acción no se puede deshacer.',
+                    style: GoogleFonts.poppins(fontSize: 14)),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text('Cancelar',
+                        style: GoogleFonts.poppins(
+                            color: AppColors.textMuted))),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text('Eliminar',
+                        style: GoogleFonts.poppins(
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w700))),
+                ],
+              ),
+            );
+            if (ok == true) {
+              await EncargoService.eliminarEncargo(_lista[i].id);
+              _cargar();
+            }
           },
         ),
       ),
@@ -404,14 +459,10 @@ class _EncargosScreenState extends State<EncargosScreen>
                         child: ListView.builder(
                           itemCount: clientes.length,
                           itemBuilder: (_, i) => ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: AppColors.colorClientes
-                                  .withValues(alpha: 0.1),
-                              child: Text(clientes[i].iniciales,
-                                  style: const TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.colorClientes)),
+                            leading: AvatarCliente(
+                              iniciales: clientes[i].iniciales,
+                              fotoUrl: clientes[i].fotoUrl,
+                              radius: 20,
                             ),
                             title: Text(clientes[i].nombre,
                                 style: GoogleFonts.poppins(fontSize: 14)),

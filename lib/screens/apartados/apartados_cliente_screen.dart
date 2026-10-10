@@ -4,6 +4,7 @@ import '../../theme/app_colors.dart';
 import '../../models/cliente_model.dart';
 import '../../models/apartado_model.dart';
 import '../../utils/formatters.dart';
+import '../../widgets/avatar_cliente.dart';
 import '../../services/supabase_service.dart';
 import '../../services/local_database.dart';
 import '../../services/apartado_service.dart';
@@ -279,14 +280,7 @@ void _mostrarHistorial() async {
             border: Border.all(color: AppColors.colorApartados.withValues(alpha: 0.2)),
           ),
           child: Row(children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: AppColors.colorClientes.withValues(alpha: 0.12),
-              child: Text(widget.cliente.iniciales,
-                  style: const TextStyle(fontFamily: 'Poppins',
-                      fontSize: 20, fontWeight: FontWeight.w700,
-                      color: AppColors.colorClientes)),
-            ),
+            AvatarCliente(iniciales: widget.cliente.iniciales, fotoUrl: widget.cliente.fotoUrl, radius: 28),
             const SizedBox(width: 16),
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start, children: [

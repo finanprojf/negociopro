@@ -11,6 +11,7 @@ import '../../services/inventario_service.dart';
 import '../../utils/constants.dart';
 import '../../models/categoria_model.dart';
 import 'vitrina_producto_config_screen.dart';
+import 'vitrina_resenas_screen.dart';
 
 class VitrinaConfigScreen extends StatefulWidget {
   const VitrinaConfigScreen({super.key});
@@ -132,7 +133,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
       try {
         final vitrinaProds = await SupabaseService.client
             .from('vitrina_productos')
-            .select('producto_id, visible, precio_oferta, descuento_porcentaje, disponibilidad, fecha_disponibilidad')
+            .select('producto_id, visible, precio_oferta, descuento_porcentaje, disponibilidad, fecha_disponibilidad, permitir_resenas')
             .eq('empresa_id', empresaId);
         vitrinaMap = {
           for (final v in vitrinaProds)
@@ -161,6 +162,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
           'descuento_porcentaje': vp?['descuento_porcentaje'],
           'disponibilidad':       vp?['disponibilidad'] ?? 'stock',
           'fecha_disponibilidad': vp?['fecha_disponibilidad'],
+          'permitir_resenas':     vp?['permitir_resenas'] ?? false,
         };
       }).toList();
 
@@ -214,6 +216,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
               'descuento_porcentaje': p['descuento_porcentaje'],
               'disponibilidad':       p['disponibilidad'] ?? 'stock',
               'fecha_disponibilidad': p['fecha_disponibilidad'],
+              'permitir_resenas':     p['permitir_resenas'] ?? false,
             }, onConflict: 'empresa_id,producto_id');
       }
 
@@ -604,6 +607,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
                   ).map((p) => _ProductoVitrinaRow(
                     producto: p,
                     onChanged: (v) => setState(() => p['en_vitrina'] = v),
+                    onChangedResenas: (v) => setState(() => p['permitir_resenas'] = v),
                     onTap: () => _abrirConfigProducto(p),
                   )),
                 ])),
@@ -659,6 +663,29 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
                   'Sube las fotos de tus productos al servidor para que aparezcan en la vitrina.',
                   style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                   textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+
+                // Botón ver reseñas
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(context,
+                        MaterialPageRoute(
+                            builder: (_) => const VitrinaResenasScreen())),
+                    icon: const Icon(Icons.star_rounded,
+                        color: Color(0xFFf59e0b)),
+                    label: Text('Ver reseñas de clientes',
+                        style: GoogleFonts.poppins(
+                            fontSize: 14, fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFf59e0b)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 40),
               ],
@@ -720,10 +747,14 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
 class _ProductoVitrinaRow extends StatelessWidget {
   final Map<String, dynamic> producto;
   final ValueChanged<bool> onChanged;
+  final ValueChanged<bool> onChangedResenas;
   final VoidCallback onTap;
 
   const _ProductoVitrinaRow({
-    required this.producto, required this.onChanged, required this.onTap,
+    required this.producto,
+    required this.onChanged,
+    required this.onChangedResenas,
+    required this.onTap,
   });
 
   static const _dispLabels = {
@@ -742,10 +773,11 @@ class _ProductoVitrinaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final nombre    = producto['nombre'] as String? ?? '';
-    final precio    = (producto['precio_venta'] as num?)?.toDouble() ?? 0;
-    final stock     = (producto['stock_actual'] as num?)?.toDouble() ?? 0;
-    final visible   = producto['en_vitrina'] as bool? ?? true;
+    final nombre          = producto['nombre'] as String? ?? '';
+    final precio          = (producto['precio_venta'] as num?)?.toDouble() ?? 0;
+    final stock           = (producto['stock_actual'] as num?)?.toDouble() ?? 0;
+    final visible         = producto['en_vitrina'] as bool? ?? true;
+    final permitirResenas = producto['permitir_resenas'] as bool? ?? false;
     final enOferta  = producto['precio_oferta'] != null;
     final pct       = (producto['descuento_porcentaje'] as num?)?.toDouble();
     final disp      = producto['disponibilidad'] as String? ?? 'stock';
@@ -831,11 +863,46 @@ class _ProductoVitrinaRow extends StatelessWidget {
               ],
             ]),
           ])),
-          Switch(
-            value: visible,
-            onChanged: onChanged,
-            activeColor: AppColors.primary,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Switch visible en vitrina
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.visibility_rounded,
+                    size: 13, color: visible ? AppColors.primary : AppColors.textMuted),
+                const SizedBox(width: 4),
+                Transform.scale(
+                  scale: 0.8,
+                  child: Switch(
+                    value: visible,
+                    onChanged: onChanged,
+                    activeColor: AppColors.primary,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ]),
+              // Switch permitir reseñas (solo si está visible)
+              if (visible)
+                GestureDetector(
+                  onTap: () => onChangedResenas(!permitirResenas),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text('⭐',
+                        style: TextStyle(fontSize: 11,
+                            color: permitirResenas ? const Color(0xFFf59e0b) : AppColors.textMuted)),
+                    const SizedBox(width: 2),
+                    Transform.scale(
+                      scale: 0.7,
+                      child: Switch(
+                        value: permitirResenas,
+                        onChanged: onChangedResenas,
+                        activeColor: const Color(0xFFf59e0b),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ]),
+                ),
+            ],
           ),
         ]),
       ),

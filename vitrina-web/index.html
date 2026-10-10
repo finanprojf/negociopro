@@ -58,6 +58,10 @@
     .cat-chip.inactive   { background-color:#f3f4f6; color:#6b7280; }
     .cat-chip.inactive:hover { background-color:#e5e7eb; }
     .no-disp-overlay    { position:absolute; inset:0; background:rgba(255,255,255,0.65); display:flex; align-items:center; justify-content:center; }
+    .star-filled  { color:#f59e0b; }
+    .star-empty   { color:#d1d5db; }
+    .star-pick    { font-size:1.8rem; cursor:pointer; transition:transform .1s, color .1s; display:inline-block; }
+    .star-pick:hover { transform:scale(1.25); }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -112,6 +116,59 @@
     <p id="errorMsg" class="text-xs mt-2 text-red-400 px-4"></p>
   </div>
   <div id="productosGrid" class="grid grid-cols-2 gap-3 hidden"></div>
+</div>
+
+<!-- SECCIÓN RESEÑAS DEL NEGOCIO -->
+<div id="seccionResenas" class="max-w-xl mx-auto px-4 pb-8 hidden">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-base font-bold text-gray-800">⭐ Reseñas del negocio</h2>
+    <button onclick="abrirResenas('__negocio__')"
+      class="text-xs font-semibold theme-text bg-gray-50 border border-gray-200 rounded-full px-3 py-1 hover:bg-gray-100">
+      + Dejar reseña
+    </button>
+  </div>
+  <div id="resumenResenas" class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm mb-3 hidden">
+    <div class="flex items-center gap-4">
+      <div class="text-center">
+        <div id="promedioGlobal" class="text-4xl font-bold theme-text-dark">0</div>
+        <div id="starsGlobal" class="text-lg"></div>
+        <div id="totalGlobal" class="text-xs text-gray-400"></div>
+      </div>
+      <div id="barrasResenas" class="flex-1 space-y-1"></div>
+    </div>
+  </div>
+  <div id="listaResenasNegocio" class="space-y-3"></div>
+</div>
+
+<!-- MODAL RESEÑAS -->
+<div id="modalResenas" class="fixed inset-0 bg-black/50 z-50 hidden" onclick="cerrarResenasFuera(event)">
+  <div class="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[88vh] overflow-y-auto slide-up" onclick="event.stopPropagation()">
+    <div class="px-4 py-3 border-b flex items-center justify-between sticky top-0 bg-white z-10">
+      <h2 id="tituloModalResenas" class="font-bold text-base text-gray-800">Reseñas</h2>
+      <button onclick="cerrarResenas()" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+    <div id="listaResenasModal" class="px-4 py-3 space-y-3 min-h-[60px]"></div>
+    <div class="px-4 pb-6 border-t pt-4">
+      <p class="text-sm font-bold text-gray-700 mb-3">✍️ Deja tu reseña</p>
+      <div class="flex gap-1 mb-3" id="starSelector">
+        <span class="star-pick" id="si1" onclick="seleccionarEstrella(1)">☆</span>
+        <span class="star-pick" id="si2" onclick="seleccionarEstrella(2)">☆</span>
+        <span class="star-pick" id="si3" onclick="seleccionarEstrella(3)">☆</span>
+        <span class="star-pick" id="si4" onclick="seleccionarEstrella(4)">☆</span>
+        <span class="star-pick" id="si5" onclick="seleccionarEstrella(5)">☆</span>
+      </div>
+      <input id="rNombre" type="text" placeholder="Tu nombre (opcional)"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mb-2 focus:outline-none theme-focus" />
+      <textarea id="rComentario" placeholder="Comparte tu experiencia con este producto..." rows="3"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none theme-focus resize-none"></textarea>
+      <button onclick="enviarResena()"
+        class="w-full theme-bg text-white rounded-xl py-3 font-bold text-sm transition-opacity">
+        📝 Publicar reseña
+      </button>
+      <p id="rMensaje" class="text-center text-xs text-green-600 mt-2 hidden">¡Gracias por tu reseña! 🎉</p>
+      <p id="rError" class="text-center text-xs text-red-500 mt-2 hidden"></p>
+    </div>
+  </div>
 </div>
 
 <!-- CARRITO FAB -->
@@ -187,13 +244,16 @@
   const SUPABASE_URL      = 'https://ljsjysphifhbyhhfxbyb.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxqc2p5c3BoaWZoYnloaGZ4YnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MDA1NzQsImV4cCI6MjA5ODE3NjU3NH0.RP9mpDSAiqSakBRvFY5AGYqFEo68JioUyvnvmlL6bV0';
 
-  let empresa          = null;
-  let config           = null;
-  let productos        = [];       // lista enriquecida (con precio_oferta, disponibilidad, etc.)
-  let categorias       = [];
-  let carrito          = {};
-  let tipoEntrega      = 'recoger';
-  let categoriaActiva  = 'todas';
+  let empresa               = null;
+  let config                = null;
+  let productos             = [];
+  let categorias            = [];
+  let carrito               = {};
+  let tipoEntrega           = 'recoger';
+  let categoriaActiva       = 'todas';
+  let resenas               = {};   // { [productoId|'__negocio__']: [...] }
+  let resenaProductoActual  = null;
+  let estrellaSeleccionada  = 0;
 
   // ─── TEMA ──────────────────────────────────────────────────────────────────
   function aplicarTema(hex) {
@@ -262,7 +322,7 @@
       // vitrina_productos (con nuevos campos, fallback a solo visible)
       let vitrinaMap = {};
       try {
-        const vpRes = await fetchSB(`vitrina_productos?empresa_id=eq.${config.empresa_id}&visible=eq.true&select=producto_id,precio_oferta,descuento_porcentaje,disponibilidad,fecha_disponibilidad`);
+        const vpRes = await fetchSB(`vitrina_productos?empresa_id=eq.${config.empresa_id}&visible=eq.true&select=producto_id,precio_oferta,descuento_porcentaje,disponibilidad,fecha_disponibilidad,permitir_resenas`);
         for (const v of vpRes) vitrinaMap[v.producto_id] = v;
       } catch(_) {
         try {
@@ -286,12 +346,25 @@
         descuento_porcentaje: vitrinaMap[p.id]?.descuento_porcentaje ?? null,
         disponibilidad:       vitrinaMap[p.id]?.disponibilidad       ?? 'stock',
         fecha_disponibilidad: vitrinaMap[p.id]?.fecha_disponibilidad ?? null,
+        permitir_resenas:     vitrinaMap[p.id]?.permitir_resenas     ?? false,
       }));
+
+      // Cargar reseñas
+      try {
+        const rRes = await fetchSB(`vitrina_resenas?empresa_id=eq.${config.empresa_id}&select=*&order=created_at.desc`);
+        resenas = {};
+        for (const r of rRes) {
+          const key = r.producto_id || '__negocio__';
+          if (!resenas[key]) resenas[key] = [];
+          resenas[key].push(r);
+        }
+      } catch(_) {}
 
       renderHeader();
       renderInfoBar();
       renderCategorias();
       renderProductos(productosFiltrados());
+      renderResenasPagina();
       document.getElementById('loadingState').classList.add('hidden');
       document.getElementById('productosGrid').classList.remove('hidden');
       document.title = `${empresa.nombre} — Catálogo`;
@@ -458,13 +531,40 @@
       let badgeDispHtml = badgeDisp ? '<div class="mt-1">' + badgeDisp + '</div>' : '';
       let stockHtml = (disponible && !sinStock) ? '<p class="text-xs text-gray-400 mt-0.5">Stock: ' + Math.floor(p.stock_actual || 0) + '</p>' : '';
 
+      // Estrellas (solo si el negocio habilitó reseñas para este producto)
+      const prodResenas = resenas[p.id] || [];
+      let starsHtml = '';
+      if (p.permitir_resenas) {
+        if (prodResenas.length > 0) {
+          const prom = prodResenas.reduce((s,r) => s + r.estrellas, 0) / prodResenas.length;
+          const llenas = Math.round(prom);
+          let starsStr = '';
+          for (let i = 1; i <= 5; i++) starsStr += `<span class="${i<=llenas?'star-filled':'star-empty'}">★</span>`;
+          const latest = prodResenas[0];
+          const snippet = latest.comentario
+            ? '"' + latest.comentario.substring(0, 50) + (latest.comentario.length > 50 ? '…' : '') + '"'
+            : '';
+          const masLabel = prodResenas.length > 1 ? ` · <span class="theme-text font-semibold">+${prodResenas.length-1} más</span>` : '';
+          starsHtml = `<div class="mt-1 cursor-pointer" onclick="abrirResenas('${p.id}')">
+            <div class="flex items-center gap-0.5 text-xs">
+              <span style="letter-spacing:-1px">${starsStr}</span>
+              <span class="text-gray-400 ml-1">(${prodResenas.length})</span>
+            </div>
+            ${snippet ? `<p class="text-xs text-gray-500 italic line-clamp-1 mt-0.5">${snippet}</p>
+            <p class="text-xs text-gray-400">— ${(latest.nombre||'Anónimo').replace(/</g,'&lt;')}${masLabel}</p>` : ''}
+          </div>`;
+        } else {
+          starsHtml = `<div class="text-gray-300 text-xs mt-1 cursor-pointer" onclick="abrirResenas('${p.id}')">☆☆☆☆☆ <span class="text-gray-300">Opinar</span></div>`;
+        }
+      }
+
       card.innerHTML =
         '<div class="relative">' +
           imgHtml + overlayHtml + badgeStockHtml + badgeOfertaHtml +
         '</div>' +
         '<div class="p-3 flex flex-col flex-1">' +
           '<p class="text-sm font-semibold text-gray-900 leading-tight">' + nombreSafe + '</p>' +
-          descHtml + precioHtml + badgeDispHtml + stockHtml +
+          descHtml + precioHtml + starsHtml + badgeDispHtml + stockHtml +
           '<div class="mt-auto pt-2" id="ctrl-' + p.id + '">' +
             renderCtrl(p, enCarrito, disponible) +
           '</div>' +
@@ -636,6 +736,199 @@
     if (numero.length === 10 && (numero.startsWith('8') || numero.startsWith('9'))) numero = '1' + numero;
     if (numero.length === 7) numero = '1809' + numero;
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+
+  // ─── RESEÑAS ───────────────────────────────────────────────────────────────
+  function abrirResenas(productoId) {
+    resenaProductoActual = productoId;
+    estrellaSeleccionada = 0;
+    actualizarStarSelector();
+    document.getElementById('rNombre').value = '';
+    document.getElementById('rComentario').value = '';
+    document.getElementById('rMensaje').classList.add('hidden');
+    document.getElementById('rError').classList.add('hidden');
+
+    // Si es '__negocio__', mostrar TODAS las reseñas ordenadas por fecha
+    let lista, titulo;
+    if (productoId === '__negocio__') {
+      lista = Object.values(resenas).flat()
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      titulo = 'Todas las reseñas';
+    } else {
+      lista = resenas[productoId] || [];
+      const p = productos.find(x => x.id === productoId);
+      titulo = p ? `⭐ ${p.nombre}` : 'Reseñas';
+    }
+    document.getElementById('tituloModalResenas').textContent = titulo;
+    renderListaResenasModal(lista);
+    document.getElementById('modalResenas').classList.remove('hidden');
+  }
+
+  function cerrarResenas() { document.getElementById('modalResenas').classList.add('hidden'); }
+  function cerrarResenasFuera(e) { if (e.target === document.getElementById('modalResenas')) cerrarResenas(); }
+
+  function renderListaResenasModal(lista) {
+    const el = document.getElementById('listaResenasModal');
+    if (!lista.length) {
+      el.innerHTML = '<p class="text-center text-gray-400 text-sm py-4">Sé el primero en dejar una reseña 👇</p>';
+      return;
+    }
+    el.innerHTML = lista.map(r => {
+      const stars = Array.from({length:5}, (_,i) =>
+        `<span class="${i < r.estrellas ? 'star-filled' : 'star-empty'}">★</span>`).join('');
+      const fecha = new Date(r.created_at).toLocaleDateString('es-DO', {day:'numeric', month:'short', year:'numeric'});
+      const com = r.comentario ? `<p class="text-sm text-gray-600 mt-1">${r.comentario.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>` : '';
+      const resp = r.respuesta ? `<div class="mt-2 bg-gray-50 border-l-2 border-indigo-300 rounded-r-lg px-2 py-1.5">
+        <p class="text-xs font-semibold text-gray-500">💬 Respuesta del negocio:</p>
+        <p class="text-xs text-gray-600 mt-0.5">${r.respuesta.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
+      </div>` : '';
+      return `<div class="border border-gray-100 rounded-xl p-3">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-sm text-gray-800">${(r.nombre||'Anónimo').replace(/</g,'&lt;')}</span>
+          <span class="text-xs text-gray-400">${fecha}</span>
+        </div>
+        <div class="flex text-base my-0.5">${stars}</div>
+        ${com}${resp}
+      </div>`;
+    }).join('');
+  }
+
+  function seleccionarEstrella(n) {
+    estrellaSeleccionada = n;
+    actualizarStarSelector();
+  }
+
+  function actualizarStarSelector() {
+    for (let i = 1; i <= 5; i++) {
+      const el = document.getElementById('si' + i);
+      if (!el) continue;
+      el.textContent = i <= estrellaSeleccionada ? '★' : '☆';
+      el.style.color = i <= estrellaSeleccionada ? '#f59e0b' : '#d1d5db';
+    }
+  }
+
+  async function enviarResena() {
+    document.getElementById('rError').classList.add('hidden');
+    if (!estrellaSeleccionada) {
+      document.getElementById('rError').textContent = 'Selecciona al menos una estrella ⭐';
+      document.getElementById('rError').classList.remove('hidden');
+      return;
+    }
+    const nombre    = document.getElementById('rNombre').value.trim() || 'Anónimo';
+    const comentario= document.getElementById('rComentario').value.trim();
+    try {
+      const body = {
+        empresa_id: config.empresa_id,
+        nombre,
+        estrellas: estrellaSeleccionada,
+        comentario: comentario || null,
+      };
+      if (resenaProductoActual !== '__negocio__') body.producto_id = resenaProductoActual;
+      await postSB('vitrina_resenas', body);
+
+      const key = resenaProductoActual;
+      if (!resenas[key]) resenas[key] = [];
+      resenas[key].unshift({ ...body, id: 'new', created_at: new Date().toISOString() });
+
+      document.getElementById('rMensaje').classList.remove('hidden');
+      document.getElementById('rNombre').value = '';
+      document.getElementById('rComentario').value = '';
+      estrellaSeleccionada = 0;
+      actualizarStarSelector();
+
+      renderListaResenasModal(resenas[key]);
+      renderProductos(productosFiltrados()); // actualiza estrellas en cards
+      renderResenasPagina();
+    } catch(e) {
+      document.getElementById('rError').textContent = 'Error al publicar: ' + e.message;
+      document.getElementById('rError').classList.remove('hidden');
+    }
+  }
+
+  async function postSB(table, body) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(await res.text());
+  }
+
+  function renderResenasPagina() {
+    // Unir TODAS las reseñas (de productos y del negocio) para la sección principal
+    const todasResenas = Object.values(resenas).flat()
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    const seccion = document.getElementById('seccionResenas');
+    seccion.classList.remove('hidden');
+
+    if (todasResenas.length === 0) {
+      document.getElementById('resumenResenas').classList.add('hidden');
+      document.getElementById('listaResenasNegocio').innerHTML =
+        '<p class="text-sm text-gray-400 text-center py-3">Sin reseñas todavía. ¡Sé el primero!</p>';
+      return;
+    }
+
+    // Resumen con todas las reseñas
+    const prom = todasResenas.reduce((s,r) => s + r.estrellas, 0) / todasResenas.length;
+    document.getElementById('promedioGlobal').textContent = prom.toFixed(1);
+    const starsStr = Array.from({length:5}, (_,i) =>
+      `<span class="${i < Math.round(prom) ? 'star-filled' : 'star-empty'}">★</span>`).join('');
+    document.getElementById('starsGlobal').innerHTML = starsStr;
+    document.getElementById('totalGlobal').textContent = todasResenas.length + ' reseña' + (todasResenas.length !== 1 ? 's' : '');
+
+    // Barras con todas las reseñas
+    const barras = document.getElementById('barrasResenas');
+    barras.innerHTML = [5,4,3,2,1].map(n => {
+      const cnt = todasResenas.filter(r => r.estrellas === n).length;
+      const pct = todasResenas.length ? Math.round(cnt / todasResenas.length * 100) : 0;
+      return `<div class="flex items-center gap-2 text-xs">
+        <span class="text-gray-500 w-3">${n}</span>
+        <span class="star-filled text-xs">★</span>
+        <div class="flex-1 bg-gray-100 rounded-full h-1.5">
+          <div class="theme-bg h-1.5 rounded-full" style="width:${pct}%"></div>
+        </div>
+        <span class="text-gray-400 w-4">${cnt}</span>
+      </div>`;
+    }).join('');
+
+    document.getElementById('resumenResenas').classList.remove('hidden');
+
+    // Lista (máx 5 más recientes de todas las fuentes)
+    const lista = todasResenas.slice(0, 5);
+    document.getElementById('listaResenasNegocio').innerHTML = lista.map(r => {
+      const stars = Array.from({length:5}, (_,i) =>
+        `<span class="${i < r.estrellas ? 'star-filled' : 'star-empty'}">★</span>`).join('');
+      const fecha = new Date(r.created_at).toLocaleDateString('es-DO', {day:'numeric', month:'short'});
+      const com = r.comentario ? `<p class="text-sm text-gray-600 mt-1">${r.comentario.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>` : '';
+      // Mostrar de qué producto es la reseña si aplica
+      const prodId = r.producto_id;
+      const prodNombre = prodId && productos.find(p => p.id === prodId)?.nombre;
+      const prodTag = prodNombre
+        ? `<span class="text-xs theme-text font-semibold">${prodNombre.replace(/</g,'&lt;')}</span>`
+        : '';
+      return `<div class="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-sm text-gray-800">${(r.nombre||'Anónimo').replace(/</g,'&lt;')}</span>
+          <span class="text-xs text-gray-400">${fecha}</span>
+        </div>
+        <div class="flex text-base my-0.5">${stars}</div>
+        ${prodTag ? `<div class="mb-1">${prodTag}</div>` : ''}
+        ${com}
+      </div>`;
+    }).join('');
+
+    if (todasResenas.length > 5) {
+      document.getElementById('listaResenasNegocio').innerHTML +=
+        `<button onclick="abrirResenas('__negocio__')" class="w-full text-sm theme-text font-semibold py-2">
+          Ver las ${todasResenas.length} reseñas →
+        </button>`;
+    }
   }
 
   function mostrarError() {

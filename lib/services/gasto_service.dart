@@ -37,9 +37,11 @@ class GastoService {
         }
         // Guardar en local
         for (final m in res) {
-          final map = Map<String, dynamic>.from(m);
-          map['synced'] = 1;
-          await LocalDatabase.insertar('gastos', map);
+          try {
+            final map = Map<String, dynamic>.from(m);
+            map['synced'] = 1;
+            await LocalDatabase.insertar('gastos', map);
+          } catch (_) {}
         }
        final gastosOnline = res.map((m) => GastoModel.fromMap(m)).toList();
         final idsOnline = gastosOnline.map((g) => g.id).toSet();

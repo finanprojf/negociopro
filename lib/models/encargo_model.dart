@@ -41,7 +41,7 @@ class EncargoModel {
       estado: map['estado'] ?? 'pendiente',
       esListaPropia: map['es_lista_propia'] == true || map['es_lista_propia'] == 1,
       notas: map['notas'],
-      clienteNombre: map['clientes']?['nombre'],
+      clienteNombre: map['clientes']?['nombre'] ?? map['cliente_nombre'],
       createdAt: map['created_at'] != null
           ? DateTime.parse(map['created_at']) : null,
     );

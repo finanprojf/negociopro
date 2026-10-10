@@ -73,3 +73,36 @@ CREATE POLICY "empresas_public_vitrina" ON empresas
   FOR SELECT USING (
     id IN (SELECT empresa_id FROM vitrina_config WHERE activa = true)
   );
+
+-- 6. Columna permitir_resenas en vitrina_productos
+ALTER TABLE vitrina_productos ADD COLUMN IF NOT EXISTS permitir_resenas BOOLEAN DEFAULT false;
+
+-- 7. Tabla de reseñas de clientes (vitrina)
+CREATE TABLE IF NOT EXISTS vitrina_resenas (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  empresa_id UUID NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  producto_id UUID REFERENCES productos(id) ON DELETE SET NULL,
+  nombre TEXT NOT NULL DEFAULT 'Anónimo',
+  estrellas INTEGER NOT NULL CHECK (estrellas BETWEEN 1 AND 5),
+  comentario TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE vitrina_resenas ENABLE ROW LEVEL SECURITY;
+
+-- Cualquiera puede leer reseñas
+CREATE POLICY "resenas_public_read" ON vitrina_resenas
+  FOR SELECT TO anon USING (true);
+
+-- Cualquiera puede publicar una reseña
+CREATE POLICY "resenas_public_insert" ON vitrina_resenas
+  FOR INSERT TO anon WITH CHECK (true);
+
+-- El dueño (auth) puede eliminar reseñas ofensivas
+CREATE POLICY "resenas_owner_delete" ON vitrina_resenas
+  FOR DELETE TO authenticated USING (
+    empresa_id IN (SELECT empresa_id FROM usuarios WHERE id = auth.uid())
+  );
+
+GRANT SELECT, INSERT ON vitrina_resenas TO anon;
+GRANT ALL ON vitrina_resenas TO authenticated;

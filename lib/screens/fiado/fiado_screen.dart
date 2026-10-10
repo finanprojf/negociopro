@@ -3,6 +3,7 @@ import '../../theme/app_colors.dart';
 import '../../models/cliente_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/supabase_service.dart';
+import '../../widgets/avatar_cliente.dart';
 import 'fiado_cliente_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/cliente_service.dart';
@@ -315,14 +316,7 @@ class _ClienteFiadoCard extends StatelessWidget {
           border: Border.all(color: AppColors.cardBorder),
         ),
         child: Row(children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: AppColors.colorFiado.withValues(alpha: 0.1),
-            child: Text(item.cliente.iniciales,
-                style: const TextStyle(fontFamily: 'Poppins',
-                    fontSize: 18, fontWeight: FontWeight.w700,
-                    color: AppColors.colorFiado)),
-          ),
+          AvatarCliente(iniciales: item.cliente.iniciales, fotoUrl: item.cliente.fotoUrl, radius: 24),
           const SizedBox(width: 14),
           Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start, children: [

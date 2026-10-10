@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../theme/app_colors.dart';
-import '../services/pin_service.dart';
+import '../../theme/app_colors.dart';
+import '../../services/pin_service.dart';
 
 /// Pantalla de desbloqueo con PIN.
 /// Se usa como overlay cuando la app está bloqueada.
@@ -36,9 +36,9 @@ class _PinLockScreenState extends State<PinLockScreen>
   void dispose() { _shakeCtrl.dispose(); super.dispose(); }
 
   void _press(String digit) {
-    if (_entrada.length >= 6) return;
+    if (_entrada.length >= 4) return;
     setState(() { _entrada += digit; _error = false; });
-    if (_entrada.length == 4 || _entrada.length == 6) _verificar();
+    if (_entrada.length == 4) _verificar();
   }
 
   void _borrar() {
@@ -83,10 +83,8 @@ class _PinLockScreenState extends State<PinLockScreen>
             builder: (_, child) => Transform.translate(
                 offset: Offset(_shakeAnim.value, 0), child: child),
             child: Row(mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(6, (i) {
+                children: List.generate(4, (i) {
                   final lleno = i < _entrada.length;
-                  // Si el PIN es de 4, solo mostramos 4 dots
-                  if (i >= 4 && !lleno) return const SizedBox.shrink();
                   return Container(
                     margin: const EdgeInsets.symmetric(horizontal: 8),
                     width: 16, height: 16,

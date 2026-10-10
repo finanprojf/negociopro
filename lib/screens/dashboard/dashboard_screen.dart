@@ -17,6 +17,7 @@ import '../vitrina/vitrina_qr_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:sqflite/sqflite.dart';
 import '../../services/supabase_service.dart';
 import 'dart:async';
 import '../../services/local_database.dart';
@@ -201,11 +202,30 @@ Future<void> _cargarVersion() async {
 
       var qVentas = SupabaseService.client
           .from('ventas')
-          .select('id, total, tipo_pago')
+          .select('id, total, subtotal, descuento, tipo_pago, monto_pagado, numero_venta, created_at')
           .eq('empresa_id', empresaId)
           .eq('estado', 'completada')
           .gte('created_at', desdeStr);
       final ventas = await qVentas;
+
+      // Cachear ventas en SQLite para uso offline
+      for (final v in ventas as List) {
+        try {
+          await db.insert('ventas', {
+            'id': v['id'] as String,
+            'empresa_id': empresaId,
+            'numero_venta': v['numero_venta'],
+            'total': (v['total'] as num).toDouble(),
+            'subtotal': (v['subtotal'] as num? ?? v['total'] as num).toDouble(),
+            'descuento': (v['descuento'] as num? ?? 0).toDouble(),
+            'monto_pagado': (v['monto_pagado'] as num? ?? 0).toDouble(),
+            'tipo_pago': v['tipo_pago'] as String? ?? 'efectivo',
+            'estado': 'completada',
+            'created_at': v['created_at'] as String,
+            'synced': 1,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        } catch (_) {}
+      }
 
       double totalVentas = 0;
       final ventasIds = <String>[];
@@ -229,43 +249,21 @@ Future<void> _cargarVersion() async {
       }
 
     double gananciaReal = 0;
+      // Usar SQLite para TODAS las ganancias (online y offline) para consistencia.
+      // getVentas() ya cachea los detalle_ventas de Supabase en SQLite.
       if (ventasIds.isNotEmpty) {
-        // IDs de ventas online
-        final idsOnlineVentas = (ventas as List).map((v) => v['id'] as String).toSet();
-        final idsOffline = ventasIds.where((id) => !idsOnlineVentas.contains(id)).toList();
-
-        // Ganancias de ventas online
-        if (idsOnlineVentas.isNotEmpty) {
-          final detalles = await SupabaseService.client
-              .from('detalle_ventas')
-              .select('cantidad, precio_unitario, productos(precio_compra)')
-              .inFilter('venta_id', idsOnlineVentas.toList());
-
-          for (final d in detalles) {
+        final allIds = ventasIds.map((id) => "'$id'").join(',');
+        final todosDetalles = await db.rawQuery(
+            'SELECT dv.cantidad, dv.precio_unitario, p.precio_compra '
+            'FROM detalle_ventas dv '
+            'LEFT JOIN productos p ON p.id = dv.producto_id '
+            'WHERE dv.venta_id IN ($allIds)');
+        for (final d in todosDetalles) {
+          if (d['precio_compra'] != null) {
             final precioVenta = (d['precio_unitario'] as num).toDouble();
-            final precioCompra = d['productos'] != null
-                ? (d['productos']['precio_compra'] as num).toDouble()
-                : 0.0;
+            final precioCompra = (d['precio_compra'] as num).toDouble();
             final cantidad = (d['cantidad'] as num).toDouble();
             gananciaReal += (precioVenta - precioCompra) * cantidad;
-          }
-        }
-
-        // Ganancias de ventas offline — batch query
-        if (idsOffline.isNotEmpty) {
-          final offlineIds = idsOffline.map((id) => "'$id'").join(',');
-          final offlineDetalles = await db.rawQuery(
-              'SELECT dv.cantidad, dv.precio_unitario, p.precio_compra '
-              'FROM detalle_ventas dv '
-              'LEFT JOIN productos p ON p.id = dv.producto_id '
-              'WHERE dv.venta_id IN ($offlineIds)');
-          for (final d in offlineDetalles) {
-            if (d['precio_compra'] != null) {
-              final precioVenta = (d['precio_unitario'] as num).toDouble();
-              final precioCompra = (d['precio_compra'] as num).toDouble();
-              final cantidad = (d['cantidad'] as num).toDouble();
-              gananciaReal += (precioVenta - precioCompra) * cantidad;
-            }
           }
         }
       }
@@ -1023,11 +1021,12 @@ Widget _buildVitrinaWidget() {
 
     if (await SupabaseService.isOnlineAsync) {
       try {
+        final db2 = await LocalDatabase.database;
         var qVentas   = SupabaseService.client.from('ventas')
-            .select('id, numero_venta, total, tipo_pago, monto_pagado, created_at')
+            .select('id, numero_venta, total, subtotal, descuento, tipo_pago, monto_pagado, created_at')
             .eq('empresa_id', empresaId).eq('estado', 'completada');
         var qGastos   = SupabaseService.client.from('gastos')
-            .select('id, descripcion, monto, created_at')
+            .select('id, descripcion, categoria, monto, created_at')
             .eq('empresa_id', empresaId);
         var qFiado    = SupabaseService.client.from('abonos_fiado')
             .select('id, monto, created_at, clientes(nombre)')
@@ -1049,6 +1048,39 @@ Widget _buildVitrinaWidget() {
           qFiado.order('created_at', ascending: false).limit(10),
           qApartado.order('created_at', ascending: false).limit(10),
         ]);
+        // Cachear ventas en SQLite para uso offline
+        for (final v in results[0] as List) {
+          try {
+            await db2.insert('ventas', {
+              'id': v['id'] as String,
+              'empresa_id': empresaId,
+              'numero_venta': v['numero_venta'],
+              'total': (v['total'] as num).toDouble(),
+              'subtotal': (v['subtotal'] as num? ?? v['total'] as num).toDouble(),
+              'descuento': (v['descuento'] as num? ?? 0).toDouble(),
+              'monto_pagado': (v['monto_pagado'] as num? ?? 0).toDouble(),
+              'tipo_pago': v['tipo_pago'] as String? ?? 'efectivo',
+              'estado': 'completada',
+              'created_at': v['created_at'] as String,
+              'synced': 1,
+            }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          } catch (_) {}
+        }
+        // Cachear gastos en SQLite para uso offline
+        for (final g in results[1] as List) {
+          try {
+            await db2.insert('gastos', {
+              'id': g['id'] as String,
+              'empresa_id': empresaId,
+              'descripcion': g['descripcion'] as String? ?? '',
+              'categoria': g['categoria'] as String? ?? 'general',
+              'monto': (g['monto'] as num).toDouble(),
+              'created_at': g['created_at'] as String,
+              'synced': 1,
+            }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          } catch (_) {}
+        }
+
         for (final v in results[0] as List) {
           final esCredito = v['tipo_pago'] == 'fiado';
           final montoMostrar = esCredito

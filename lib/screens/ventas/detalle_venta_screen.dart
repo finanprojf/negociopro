@@ -141,23 +141,27 @@ class _DetalleVentaScreenState extends State<DetalleVentaScreen> {
               else if (v == 'wifi') await ReciboService.imprimirWifi(venta);
               else if (v == 'bt')   await _imprimirBluetooth();
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'texto', child: Row(children: [
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'texto', child: Row(children: const [
                 Icon(Icons.message_rounded, size: 20),
-                SizedBox(width: 10), Text('Compartir por WhatsApp / SMS'),
+                SizedBox(width: 10),
+                Flexible(child: Text('Compartir por WhatsApp / SMS', overflow: TextOverflow.ellipsis)),
               ])),
-              PopupMenuItem(value: 'pdf', child: Row(children: [
+              PopupMenuItem(value: 'pdf', child: Row(children: const [
                 Icon(Icons.picture_as_pdf_rounded, size: 20),
-                SizedBox(width: 10), Text('Compartir como PDF'),
+                SizedBox(width: 10),
+                Flexible(child: Text('Compartir como PDF', overflow: TextOverflow.ellipsis)),
               ])),
-              PopupMenuDivider(),
-              PopupMenuItem(value: 'wifi', child: Row(children: [
+              const PopupMenuDivider(),
+              PopupMenuItem(value: 'wifi', child: Row(children: const [
                 Icon(Icons.print_rounded, size: 20),
-                SizedBox(width: 10), Text('Imprimir (WiFi / Normal)'),
+                SizedBox(width: 10),
+                Flexible(child: Text('Imprimir (WiFi / Normal)', overflow: TextOverflow.ellipsis)),
               ])),
-              PopupMenuItem(value: 'bt', child: Row(children: [
+              PopupMenuItem(value: 'bt', child: Row(children: const [
                 Icon(Icons.bluetooth_rounded, size: 20),
-                SizedBox(width: 10), Text('Imprimir (Térmica Bluetooth)'),
+                SizedBox(width: 10),
+                Flexible(child: Text('Imprimir (Térmica Bluetooth)', overflow: TextOverflow.ellipsis)),
               ])),
             ],
           ),

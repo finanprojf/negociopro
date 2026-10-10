@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../theme/app_colors.dart';
-import '../services/pin_service.dart';
+import '../../theme/app_colors.dart';
+import '../../services/pin_service.dart';
 
-/// Pantalla de configuración de PINs (seguridad y acciones rápidas).
+/// Pantalla de configuración de PINs (seguridad y acciones críticas).
 class PinConfiguracionScreen extends StatefulWidget {
   const PinConfiguracionScreen({super.key});
   @override State<PinConfiguracionScreen> createState() => _PinConfiguracionScreenState();
@@ -152,7 +152,7 @@ class _PinConfiguracionScreenState extends State<PinConfiguracionScreen> {
           const SizedBox(height: 20),
 
           // ── PIN DE ACCIONES RÁPIDAS ──
-          _Section('PIN de acciones rápidas', Icons.flash_on_rounded),
+          _Section('PIN de acciones críticas', Icons.flash_on_rounded),
           const SizedBox(height: 4),
           Padding(
             padding: const EdgeInsets.only(bottom: 10),

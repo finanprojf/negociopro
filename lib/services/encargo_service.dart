@@ -30,6 +30,10 @@ class EncargoService {
 
         for (final m in res) {
           final map = Map<String, dynamic>.from(m);
+          // Guardar nombre del cliente antes de quitar el join
+          if (m['clientes'] != null) {
+            map['cliente_nombre'] = m['clientes']['nombre'];
+          }
           map.remove('clientes');
           map['es_lista_propia'] = m['es_lista_propia'] == true ? 1 : 0;
           map['synced'] = 1;

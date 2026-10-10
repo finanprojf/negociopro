@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 import '../../models/fiado_model.dart';
 import '../../utils/formatters.dart';
@@ -205,10 +206,21 @@ class _FiadoDetalleScreenState extends State<FiadoDetalleScreen> {
     );
   }
 
-  void _compartirWhatsApp(BuildContext context) {
-    // TODO: url_launcher para WhatsApp
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Abriendo WhatsApp...')),
-    );
+  Future<void> _compartirWhatsApp(BuildContext context) async {
+    final telefono = widget.fiado.clienteTelefono ?? '';
+    final nombre   = widget.fiado.clienteNombre ?? 'Cliente';
+    final saldo    = AppFormatters.moneda(widget.fiado.saldoPendiente);
+    final msg = Uri.encodeComponent(
+        'Hola $nombre, te recordamos que tienes un saldo pendiente de $saldo. '
+        '¡Gracias por tu preferencia!');
+    final numero = telefono.replaceAll(RegExp(r'[^0-9]'), '');
+    final url = Uri.parse('https://wa.me/$numero?text=$msg');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir WhatsApp')),
+      );
+    }
   }
 }

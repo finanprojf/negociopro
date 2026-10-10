@@ -207,6 +207,16 @@ class SyncService {
       Map<String, dynamic> row) {
     final data = Map<String, dynamic>.from(row);
     data.remove('synced');
+    // SQLite guarda booleanos como 0/1 (INTEGER).
+    // Supabase (PostgreSQL) espera true/false. Convertir campos conocidos.
+    for (final campo in ['activo', 'completado', 'entregado',
+        'es_elaborado', 'visible', 'permitir_resenas']) {
+      if (data.containsKey(campo) && data[campo] is int) {
+        data[campo] = data[campo] == 1;
+      }
+    }
+    // Quitar numero_venta si es null para que Supabase use su DEFAULT (secuencia)
+    if (data['numero_venta'] == null) data.remove('numero_venta');
     return data;
   }
 }

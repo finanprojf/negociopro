@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../seguridad/pin_entrada_dialog.dart';
 import '../inventario/scanner_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -755,6 +756,12 @@ Future<void> _cargarClientes() async {
                       ),
                     );
                     if (opcion == null || opcion == 'cancelar') return;
+                    // PIN requerido para descuentos
+                    if (opcion == 'descuento') {
+                      final pinOk = await mostrarDialogoPinRapido(context,
+                          titulo: 'Autorizar descuento');
+                      if (!pinOk) return;
+                    }
                   if (opcion == 'fiado') {
       // Si no tiene cliente seleccionado, pedir que elija uno
       if (_clienteSeleccionado == null) {
@@ -864,7 +871,9 @@ Future<void> _cargarClientes() async {
         ),
       ),
     );
-    ctrl.dispose();
+    // Esperar a que termine la animación de cierre antes de disponer
+    // (evita _dependents.isEmpty assertion en Flutter framework)
+    Future.delayed(const Duration(milliseconds: 350), ctrl.dispose);
   }
 }
 

@@ -34,6 +34,13 @@
 -keepattributes Exceptions
 -keepattributes SourceFile,LineNumberTable
 
+# UCrop (image_cropper) - evitar que ProGuard elimine clases nativas
+-keep class com.yalantis.ucrop.** { *; }
+-dontwarn com.yalantis.ucrop.**
+
+# FileProvider (requerido por image_picker e image_cropper en Android 7+)
+-keep class androidx.core.content.FileProvider { *; }
+
 # Evitar warnings de librerías que no usamos directamente
 -dontwarn com.google.android.play.**
 -dontwarn javax.annotation.**

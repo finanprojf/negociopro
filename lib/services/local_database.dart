@@ -97,6 +97,7 @@ class LocalDatabase {
       CREATE TABLE IF NOT EXISTS fiados (
         id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
         cliente_id TEXT NOT NULL, venta_id TEXT,
+        cliente_nombre TEXT, cliente_telefono TEXT,
         monto_original REAL NOT NULL, saldo_pendiente REAL NOT NULL,
         fecha_limite TEXT, estado TEXT DEFAULT 'activo', notas TEXT,
         synced INTEGER DEFAULT 0, created_at TEXT, updated_at TEXT
@@ -117,6 +118,7 @@ class LocalDatabase {
       CREATE TABLE IF NOT EXISTS apartados (
         id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
         cliente_id TEXT NOT NULL, usuario_id TEXT,
+        cliente_nombre TEXT, cliente_telefono TEXT,
         numero_apartado INTEGER, descripcion TEXT NOT NULL,
         monto_total REAL NOT NULL, monto_pagado REAL DEFAULT 0,
         saldo_pendiente REAL NOT NULL, fecha_estimada TEXT,
@@ -130,6 +132,7 @@ class LocalDatabase {
         id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
         apartado_id TEXT NOT NULL, cliente_id TEXT NOT NULL,
         monto REAL NOT NULL, metodo_pago TEXT DEFAULT 'efectivo',
+        tipo TEXT DEFAULT 'abono',
         notas TEXT, usuario_id TEXT,
         synced INTEGER DEFAULT 0, created_at TEXT
       )
@@ -148,7 +151,8 @@ class LocalDatabase {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS encargos (
         id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
-        cliente_id TEXT, descripcion TEXT NOT NULL,
+        cliente_id TEXT, cliente_nombre TEXT,
+        descripcion TEXT NOT NULL,
         cantidad REAL DEFAULT 1, precio_estimado REAL DEFAULT 0,
         estado TEXT DEFAULT 'pendiente',
         es_lista_propia INTEGER DEFAULT 0,
@@ -234,7 +238,48 @@ class LocalDatabase {
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_fiados_empresa ON fiados(empresa_id, estado)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_clientes_empresa ON clientes(empresa_id, activo)'); } catch (_) {}
     try { await db.execute('CREATE INDEX IF NOT EXISTS idx_cierres_empresa_fecha ON cierres_dia(empresa_id, fecha)'); } catch (_) {}
-    // v1 → v2: encargos ya está en _onCreate desde v2
+    // IMPORTANTE: bloques en orden ASCENDENTE para migraciones en cadena correctas
+    if (oldV < 3) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS cierres_dia (
+            id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
+            fecha TEXT NOT NULL,
+            total_ventas REAL DEFAULT 0, cantidad_ventas INTEGER DEFAULT 0,
+            total_gastos REAL DEFAULT 0, ganancia REAL DEFAULT 0,
+            efectivo_esperado REAL DEFAULT 0, efectivo_contado REAL DEFAULT 0,
+            diferencia REAL DEFAULT 0,
+            notas TEXT, synced INTEGER DEFAULT 0, created_at TEXT
+          )
+        ''');
+      } catch (_) {}
+    }
+    if (oldV < 4) {
+      try { await db.execute('ALTER TABLE productos ADD COLUMN es_elaborado INTEGER DEFAULT 0'); } catch (_) {}
+      try { await db.execute('ALTER TABLE productos ADD COLUMN costo_produccion REAL DEFAULT 0'); } catch (_) {}
+      try { await db.execute('ALTER TABLE productos ADD COLUMN unidades_producidas REAL DEFAULT 1'); } catch (_) {}
+    }
+    if (oldV < 7) {
+      try { await db.execute('ALTER TABLE cierres_dia ADD COLUMN ganancia_real REAL DEFAULT 0'); } catch (_) {}
+    }
+    if (oldV < 8) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS recordatorios (
+            id TEXT PRIMARY KEY,
+            empresa_id TEXT NOT NULL,
+            titulo TEXT NOT NULL,
+            cliente_id TEXT,
+            cliente_nombre TEXT,
+            fecha TEXT NOT NULL,
+            hora TEXT,
+            completado INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+          )
+        ''');
+      } catch (_) {}
+      try { await db.execute('CREATE INDEX IF NOT EXISTS idx_recordatorios_empresa_fecha ON recordatorios(empresa_id, fecha)'); } catch (_) {}
+    }
     if (oldV < 9) {
       try {
         await db.execute('''
@@ -257,44 +302,12 @@ class LocalDatabase {
     if (oldV < 10) {
       try { await db.execute('ALTER TABLE abonos_apartado ADD COLUMN tipo TEXT DEFAULT \'abono\''); } catch (_) {}
     }
-    if (oldV < 8) {
-      try {
-        await db.execute('''
-          CREATE TABLE IF NOT EXISTS recordatorios (
-            id TEXT PRIMARY KEY,
-            empresa_id TEXT NOT NULL,
-            titulo TEXT NOT NULL,
-            cliente_id TEXT,
-            cliente_nombre TEXT,
-            fecha TEXT NOT NULL,
-            hora TEXT,
-            completado INTEGER DEFAULT 0,
-            created_at TEXT NOT NULL
-          )
-        ''');
-      } catch (_) {}
-      try { await db.execute('CREATE INDEX IF NOT EXISTS idx_recordatorios_empresa_fecha ON recordatorios(empresa_id, fecha)'); } catch (_) {}
-    }
-    if (oldV < 7) {
-      try { await db.execute('ALTER TABLE cierres_dia ADD COLUMN ganancia_real REAL DEFAULT 0'); } catch (_) {}
-    }
-    if (oldV < 4) {
-      try { await db.execute('ALTER TABLE productos ADD COLUMN es_elaborado INTEGER DEFAULT 0'); } catch (_) {}
-      try { await db.execute('ALTER TABLE productos ADD COLUMN costo_produccion REAL DEFAULT 0'); } catch (_) {}
-      try { await db.execute('ALTER TABLE productos ADD COLUMN unidades_producidas REAL DEFAULT 1'); } catch (_) {}
-    }
-    if (oldV < 3) {
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS cierres_dia (
-          id TEXT PRIMARY KEY, empresa_id TEXT NOT NULL,
-          fecha TEXT NOT NULL,
-          total_ventas REAL DEFAULT 0, cantidad_ventas INTEGER DEFAULT 0,
-          total_gastos REAL DEFAULT 0, ganancia REAL DEFAULT 0,
-          efectivo_esperado REAL DEFAULT 0, efectivo_contado REAL DEFAULT 0,
-          diferencia REAL DEFAULT 0,
-          notas TEXT, synced INTEGER DEFAULT 0, created_at TEXT
-        )
-      ''');
+    if (oldV < 11) {
+      try { await db.execute('ALTER TABLE encargos ADD COLUMN cliente_nombre TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE fiados ADD COLUMN cliente_nombre TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE fiados ADD COLUMN cliente_telefono TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE apartados ADD COLUMN cliente_nombre TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE apartados ADD COLUMN cliente_telefono TEXT'); } catch (_) {}
     }
   }
 

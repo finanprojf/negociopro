@@ -46,8 +46,8 @@ class FiadoModel {
       estado: map['estado'] ?? 'activo',
       notas: map['notas'],
       createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : null,
-      clienteNombre: map['clientes']?['nombre'],
-      clienteTelefono: map['clientes']?['telefono'],
+      clienteNombre: map['clientes']?['nombre'] ?? map['cliente_nombre'],
+      clienteTelefono: map['clientes']?['telefono'] ?? map['cliente_telefono'],
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import 'package:sqflite/sqflite.dart';
 import '../models/venta_model.dart';
 import '../models/producto_model.dart';
 import 'supabase_service.dart';
@@ -43,7 +44,7 @@ class VentaService {
         List<dynamic> res;
 
         if (fecha != null) {
-        final inicioLocal = DateTime(fecha.year, fecha.month, fecha.day);
+          final inicioLocal = DateTime(fecha.year, fecha.month, fecha.day);
           final finLocal = inicioLocal.add(const Duration(days: 1));
           res = await SupabaseService.client
               .from('ventas')
@@ -59,62 +60,92 @@ class VentaService {
               .eq('empresa_id', empresaId)
               .order('created_at', ascending: false);
         }
-// Guardar en local
+
+        // Guardar en local (ventas + detalles para consistencia offline)
         for (final m in res) {
           final map = Map<String, dynamic>.from(m);
+          final detallesRemoto = List<dynamic>.from(map['detalle_ventas'] ?? []);
           map.remove('clientes');
           map.remove('detalle_ventas');
           map['synced'] = 1;
-          try {
-            await LocalDatabase.insertar('ventas', map);
-          } catch (_) {}
+          try { await LocalDatabase.insertar('ventas', map); } catch (_) {}
+          for (final d in detallesRemoto) {
+            try {
+              await LocalDatabase.insertar(
+                  'detalle_ventas', Map<String, dynamic>.from(d as Map));
+            } catch (_) {}
+          }
         }
-       final ventasOnline = res.map((m) {
+
+        final ventasOnline = res.map((m) {
           final map = Map<String, dynamic>.from(m);
           if (m['clientes'] != null) {
             map['cliente_nombre'] = m['clientes']['nombre'];
           }
           return VentaModel.fromMap(map);
         }).toList();
-// Releer SQLite completo después de guardar
-        final localActualizado = await LocalDatabase.consultar('ventas', empresaId);
-        // Batch load detalles (1 query instead of N)
-        final ids2 = localActualizado.map((m) => "'${m['id']}'").join(',');
-        final detallesAll2 = ids2.isEmpty ? <Map<String,Object?>>[] :
-            await db.rawQuery('SELECT * FROM detalle_ventas WHERE venta_id IN ($ids2)');
-        final detallesMap2 = <String, List<Map<String,Object?>>>{};
-        for (final d in detallesAll2) {
-          final vid = d['venta_id'] as String;
-          detallesMap2.putIfAbsent(vid, () => []).add(d);
-        }
-        final todasLocal = localActualizado.map((m) {
-          final map = Map<String, dynamic>.from(m);
-          map['detalle_ventas'] = detallesMap2[m['id']] ?? [];
-          return VentaModel.fromMap(map);
-        }).toList();
-        final idsOnline = ventasOnline.map((v) => v.id).toSet();
-        var ventasNoEnOnline = todasLocal
-            .where((v) => !idsOnline.contains(v.id))
-            .toList();
-        // Aplicar filtro de fecha también a las ventas locales no sincronizadas
-        if (fecha != null) {
-          final inicioFiltro = DateTime(fecha.year, fecha.month, fecha.day);
-          final finFiltro = inicioFiltro.add(const Duration(days: 1));
-          ventasNoEnOnline = ventasNoEnOnline.where((v) {
-            if (v.createdAt == null) return false;
-            final fechaLocal = v.createdAt!.toLocal();
-            return fechaLocal.isAfter(inicioFiltro) && fechaLocal.isBefore(finFiltro);
-          }).toList();
-        }
 
-        return [...ventasOnline, ...ventasNoEnOnline]
+        // PASO FINAL: añadir explícitamente ventas offline (synced=0) no en el resultado.
+        // Esto garantiza que ventas hechas sin internet siempre aparezcan al volver en línea.
+        final idsYaEnResultado = ventasOnline.map((v) => v.id).toSet();
+        final pendientesOffline = await _getVentasPendientes(
+            db, empresaId, fecha, idsYaEnResultado);
+
+        final resultado = [...ventasOnline, ...pendientesOffline]
           ..sort((a, b) => (b.createdAt ?? DateTime.now())
               .compareTo(a.createdAt ?? DateTime.now()));
-       
+        return resultado;
+
       } catch (_) {}
     }
 
-  return ventasLocal;
+    // Modo offline: devolver todas las locales + garantizar pendientes synced=0
+    return ventasLocal;
+  }
+
+  /// Busca ventas synced=0 en SQLite no incluidas en [idsExcluir].
+  /// Usa comparación UTC de strings para el filtro de fecha.
+  static Future<List<VentaModel>> _getVentasPendientes(
+    Database db,
+    String empresaId,
+    DateTime? fecha,
+    Set<String> idsExcluir,
+  ) async {
+    List<Map<String, Object?>> rows;
+    if (fecha != null) {
+      final inicioUtc = DateTime(fecha.year, fecha.month, fecha.day)
+          .toUtc()
+          .toIso8601String();
+      final finUtc = DateTime(fecha.year, fecha.month, fecha.day + 1)
+          .toUtc()
+          .toIso8601String();
+      rows = await db.query(
+        'ventas',
+        where: 'empresa_id = ? AND synced = 0 AND created_at >= ? AND created_at < ?',
+        whereArgs: [empresaId, inicioUtc, finUtc],
+        orderBy: 'created_at DESC',
+      );
+    } else {
+      rows = await db.query(
+        'ventas',
+        where: 'empresa_id = ? AND synced = 0',
+        whereArgs: [empresaId],
+        orderBy: 'created_at DESC',
+      );
+    }
+
+    final result = <VentaModel>[];
+    for (final row in rows) {
+      final id = row['id'] as String? ?? '';
+      if (idsExcluir.contains(id)) continue;
+      // Cargar detalles de la venta offline
+      final detalles = await db.query(
+          'detalle_ventas', where: 'venta_id = ?', whereArgs: [id]);
+      final map = Map<String, dynamic>.from(row);
+      map['detalle_ventas'] = detalles;
+      try { result.add(VentaModel.fromMap(map)); } catch (_) {}
+    }
+    return result;
   }
 
   static Future<double> getTotalVentasHoy() async {
@@ -135,6 +166,12 @@ static Future<void> sincronizarPendientes() async {
       try {
         // 1. Subir la venta
         final ventaData = Map<String, dynamic>.from(v)..remove('synced');
+        // Si numero_venta es null, quitar el campo para que Supabase use su DEFAULT (secuencia)
+        // Si se envía null explícito, PostgreSQL NO aplica el DEFAULT y falla en columna NOT NULL
+        if (ventaData['numero_venta'] == null) ventaData.remove('numero_venta');
+        // Limpiar campos nulos que puedan causar error en columnas NOT NULL
+        ventaData.removeWhere((k, v) => v == null &&
+            ['itbis', 'notas', 'updated_at'].contains(k));
         await SupabaseService.client.from('ventas').upsert(ventaData);
 
         // 2. Subir los detalles y actualizar stock con el valor ACTUAL remoto

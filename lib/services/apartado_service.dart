@@ -41,7 +41,13 @@ class ApartadoService {
         // Cachear en SQLite los registros de Supabase
         for (final m in res) {
           if (idsPendientes.contains(m['id'] as String?)) continue;
-          final map = Map<String, dynamic>.from(m)..remove('clientes');
+          final map = Map<String, dynamic>.from(m);
+          // Guardar nombre y teléfono del cliente antes de quitar el join
+          if (m['clientes'] != null) {
+            map['cliente_nombre'] = m['clientes']['nombre'];
+            map['cliente_telefono'] = m['clientes']['telefono'];
+          }
+          map.remove('clientes');
           map['synced'] = 1;
           try { await LocalDatabase.insertar('apartados', map); } catch (_) {}
         }
@@ -255,6 +261,7 @@ class ApartadoService {
           'cliente_id': clienteId,
           'monto': monto,
           'metodo_pago': metodoPago,
+          'tipo': 'abono',
         });
 
         // Usar el saldo ya leído de SQLite para evitar race condition

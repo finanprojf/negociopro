@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../seguridad/pin_entrada_dialog.dart';
 import '../../theme/app_colors.dart';
 import '../../models/venta_model.dart';
 import '../../utils/formatters.dart';
@@ -30,18 +31,24 @@ class _HistorialVentasScreenState extends State<HistorialVentasScreen> {
 
   Future<void> _cargar() async {
     setState(() => _loading = true);
-    DateTime? fecha;
-    if (_filtro == 'hoy') fecha = DateTime.now();
-    var ventas = await VentaService.getVentas(fecha: fecha);
+    try {
+      // Sincronizar ventas offline antes de cargar para que aparezcan en Supabase
+      await VentaService.sincronizarPendientes();
+      DateTime? fecha;
+      if (_filtro == 'hoy') fecha = DateTime.now();
+      var ventas = await VentaService.getVentas(fecha: fecha);
 
-    // Filtro semana: últimos 7 días
-    if (_filtro == 'semana') {
-      final inicio = DateTime.now().subtract(const Duration(days: 7));
-      ventas = ventas.where((v) =>
-          v.createdAt != null && v.createdAt!.isAfter(inicio)).toList();
+      // Filtro semana: últimos 7 días
+      if (_filtro == 'semana') {
+        final inicio = DateTime.now().subtract(const Duration(days: 7));
+        ventas = ventas.where((v) =>
+            v.createdAt != null && v.createdAt!.isAfter(inicio)).toList();
+      }
+
+      if (mounted) setState(() { _ventas = ventas; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
     }
-
-    if (mounted) setState(() { _ventas = ventas; _loading = false; });
   }
 
   @override
@@ -251,6 +258,9 @@ class _VentaTile extends StatelessWidget {
                     ),
                   );
                   if (confirm == true) {
+                    final pinOk = await mostrarDialogoPinRapido(context,
+                        titulo: 'Autorizar eliminación de venta');
+                    if (!pinOk) return;
                     // Actualizar local primero (funciona offline)
                     await LocalDatabase.actualizar(
                       'ventas',

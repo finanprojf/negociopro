@@ -38,6 +38,11 @@ class FiadoService {
         // Guardar en local
         for (final m in res) {
           final map = Map<String, dynamic>.from(m);
+          // Guardar nombre y teléfono del cliente antes de quitar el join
+          if (m['clientes'] != null) {
+            map['cliente_nombre'] = m['clientes']['nombre'];
+            map['cliente_telefono'] = m['clientes']['telefono'];
+          }
           map.remove('clientes');
           map['synced'] = 1;
           try { await LocalDatabase.insertar('fiados', map); } catch (_) {}

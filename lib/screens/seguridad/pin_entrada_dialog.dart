@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../theme/app_colors.dart';
-import '../services/pin_service.dart';
+import '../../theme/app_colors.dart';
+import '../../services/pin_service.dart';
 
-/// Diálogo de PIN para acciones rápidas (requiere autorización del dueño).
+/// Diálogo de PIN para acciones críticas (requiere autorización del dueño).
 /// Retorna true si el PIN fue correcto, false si canceló.
 Future<bool> mostrarDialogoPinRapido(BuildContext context, {String titulo = 'Autorización requerida'}) async {
+  // Si el PIN de acciones no está configurado, permitir la acción directamente
+  final habilitado = await PinService.rapidoHabilitado;
+  if (!habilitado) return true;
+  
   final result = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
@@ -42,9 +46,9 @@ class _PinRapidoDialogState extends State<_PinRapidoDialog>
   @override void dispose() { _shakeCtrl.dispose(); super.dispose(); }
 
   void _press(String d) {
-    if (_entrada.length >= 6) return;
+    if (_entrada.length >= 4) return;
     setState(() { _entrada += d; _error = false; });
-    if (_entrada.length == 4 || _entrada.length == 6) _verificar();
+    if (_entrada.length == 4) _verificar();
   }
 
   void _borrar() {

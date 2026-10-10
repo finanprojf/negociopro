@@ -1,7 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
 import '../../models/cliente_model.dart';
 import '../../services/cliente_service.dart';
+import '../../services/supabase_service.dart';
+
 class ClienteFormScreen extends StatefulWidget {
   final ClienteModel? cliente;
   const ClienteFormScreen({super.key, this.cliente});
@@ -19,6 +25,8 @@ class _ClienteFormScreenState extends State<ClienteFormScreen> {
   final _direccionCtrl = TextEditingController();
   final _notasCtrl = TextEditingController();
   bool _loading = false;
+  File? _fotoFile;
+  String? _fotoUrl;
   bool get _esEdicion => widget.cliente != null;
 
   @override
@@ -32,6 +40,100 @@ class _ClienteFormScreenState extends State<ClienteFormScreen> {
       _correoCtrl.text = c.correo ?? '';
       _direccionCtrl.text = c.direccion ?? '';
       _notasCtrl.text = c.notas ?? '';
+      _fotoUrl = c.fotoUrl;
+    }
+  }
+
+  Future<void> _seleccionarFoto() async {
+    final picker = ImagePicker();
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 8),
+          Container(width: 40, height: 4,
+              decoration: BoxDecoration(color: AppColors.cardBorder,
+                  borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 16),
+          ListTile(
+            leading: const Icon(Icons.camera_alt_rounded, color: AppColors.primary),
+            title: const Text('Tomar foto', style: TextStyle(fontFamily: 'Poppins')),
+            onTap: () => Navigator.pop(context, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
+            title: const Text('Elegir de galería', style: TextStyle(fontFamily: 'Poppins')),
+            onTap: () => Navigator.pop(context, ImageSource.gallery),
+          ),
+          if (_fotoUrl != null || _fotoFile != null)
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),
+              title: const Text('Quitar foto', style: TextStyle(fontFamily: 'Poppins',
+                  color: AppColors.danger)),
+              onTap: () {
+                setState(() { _fotoFile = null; _fotoUrl = null; });
+                Navigator.pop(context);
+              },
+            ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (source == null) return;
+    try {
+      final picked = await picker.pickImage(
+          source: source, maxWidth: 1200, maxHeight: 1200, imageQuality: 90);
+      if (picked == null) return;
+
+      CroppedFile? cropped;
+      try {
+        cropped = await ImageCropper().cropImage(
+          sourcePath: picked.path,
+          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+          uiSettings: [
+            AndroidUiSettings(
+              toolbarTitle: 'Recortar foto',
+              toolbarColor: AppColors.primary,
+              statusBarColor: AppColors.primaryDark,
+              toolbarWidgetColor: Colors.white,
+              activeControlsWidgetColor: AppColors.primary,
+              initAspectRatio: CropAspectRatioPreset.square,
+              lockAspectRatio: false,
+              hideBottomControls: false,
+            ),
+          ],
+        );
+      } catch (_) {
+        // Si el recorte falla, usar la imagen original
+        cropped = null;
+      }
+      // Si recortó, usar recorte; si no (canceló o falló), usar original
+      setState(() => _fotoFile = File(cropped?.path ?? picked.path));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('No se pudo seleccionar la foto: $e'),
+          backgroundColor: AppColors.danger,
+        ));
+      }
+    }
+  }
+
+  Future<String?> _subirFoto(String clienteId) async {
+    if (_fotoFile == null) return _fotoUrl;
+    try {
+      final empresaId = await SupabaseService.getEmpresaId();
+      final path = 'clientes/$empresaId/$clienteId.jpg';
+      await SupabaseService.client.storage
+          .from('fotos')
+          .upload(path, _fotoFile!,
+              fileOptions: FileOptions(upsert: true, contentType: 'image/jpeg'));
+      return SupabaseService.client.storage.from('fotos').getPublicUrl(path);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -46,9 +148,13 @@ Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
+      final clienteId = _esEdicion ? widget.cliente!.id : '';
+      // Subir foto si hay una nueva seleccionada
+      final fotoFinal = await _subirFoto(clienteId);
+
       await ClienteService.guardarCliente(
         ClienteModel(
-          id: _esEdicion ? widget.cliente!.id : '',
+          id: clienteId,
           empresaId: _esEdicion ? widget.cliente!.empresaId : '',
           nombre: _nombreCtrl.text.trim(),
           telefono: _telefonoCtrl.text.trim().isEmpty ? null : _telefonoCtrl.text.trim(),
@@ -57,6 +163,7 @@ Future<void> _guardar() async {
           direccion: _direccionCtrl.text.trim().isEmpty ? null : _direccionCtrl.text.trim(),
           notas: _notasCtrl.text.trim().isEmpty ? null : _notasCtrl.text.trim(),
           puntosFidelidad: _esEdicion ? widget.cliente!.puntosFidelidad : 0,
+          fotoUrl: fotoFinal,
         ),
         esNuevo: !_esEdicion,
       );
@@ -91,28 +198,42 @@ Future<void> _guardar() async {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar placeholder
+              // Avatar con foto
               Center(
-                child: Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 44,
-                      backgroundColor: AppColors.colorClientes.withValues(alpha: 0.12),
-                      child: const Icon(Icons.person_rounded,
-                          size: 44, color: AppColors.colorClientes),
-                    ),
-                    Positioned(
-                      bottom: 0, right: 0,
-                      child: Container(
-                        width: 30, height: 30,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary, shape: BoxShape.circle),
-                        child: const Icon(Icons.camera_alt_rounded,
-                            color: Colors.white, size: 16),
+                child: GestureDetector(
+                  onTap: _seleccionarFoto,
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 50,
+                        backgroundColor: AppColors.colorClientes.withValues(alpha: 0.12),
+                        backgroundImage: _fotoFile != null
+                            ? FileImage(_fotoFile!) as ImageProvider
+                            : (_fotoUrl != null ? NetworkImage(_fotoUrl!) : null),
+                        child: (_fotoFile == null && _fotoUrl == null)
+                            ? const Icon(Icons.person_rounded,
+                                size: 50, color: AppColors.colorClientes)
+                            : null,
                       ),
-                    ),
-                  ],
+                      Positioned(
+                        bottom: 0, right: 0,
+                        child: Container(
+                          width: 32, height: 32,
+                          decoration: const BoxDecoration(
+                              color: AppColors.primary, shape: BoxShape.circle),
+                          child: const Icon(Icons.camera_alt_rounded,
+                              color: Colors.white, size: 17),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+              ),
+              const SizedBox(height: 6),
+              Center(
+                child: Text('Toca para agregar foto',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                        color: AppColors.textMuted)),
               ),
               const SizedBox(height: 24),
               _seccion('Información personal'),

@@ -63,8 +63,8 @@ class ApartadoModel {
       estado: map['estado'] ?? 'activo',
       notas: map['notas'],
       createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : null,
-      clienteNombre: map['clientes']?['nombre'],
-      clienteTelefono: map['clientes']?['telefono'],
+      clienteNombre: map['clientes']?['nombre'] ?? map['cliente_nombre'],
+      clienteTelefono: map['clientes']?['telefono'] ?? map['cliente_telefono'],
       productos: (map['apartado_productos'] as List<dynamic>? ?? [])
           .map((p) => ApartadoProducto.fromMap(p as Map<String, dynamic>))
           .toList(),
@@ -110,7 +110,7 @@ class ApartadoProducto {
       id: map['id'] ?? '',
       apartadoId: map['apartado_id'] ?? '',
       productoId: map['producto_id'],
-      nombreProducto: map['nombre_producto'] ?? '',
+      nombreProducto: map['nombre'] ?? map['nombre_producto'] ?? '',
       cantidad: (map['cantidad'] ?? 0).toDouble(),
       precioUnitario: (map['precio_unitario'] ?? 0).toDouble(),
       subtotal: (map['subtotal'] ?? 0).toDouble(),

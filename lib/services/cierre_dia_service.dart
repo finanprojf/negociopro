@@ -333,8 +333,43 @@ class CierreDiaService {
       final empresaId = await SupabaseService.getEmpresaId()
           .timeout(const Duration(seconds: 10));
       if (empresaId == null) return [];
+
+      // Leer local primero
       final rows = await LocalDatabase.consultar('cierres_dia', empresaId);
-      return rows.map((m) => CierreDiaModel.fromMap(m)).toList();
+      final idsLocal = rows.map((r) => r['id'] as String).toSet();
+
+      // Si hay internet, traer de Supabase los que no estén en local
+      if (await SupabaseService.isOnlineAsync) {
+        try {
+          final res = await SupabaseService.client
+              .from('cierres_dia')
+              .select()
+              .eq('empresa_id', empresaId)
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 15));
+
+          final db = await LocalDatabase.database;
+          for (final r in (res as List)) {
+            final m = Map<String, dynamic>.from(r as Map);
+            if (!idsLocal.contains(m['id'] as String?)) {
+              // Guardarlo en SQLite para la próxima vez (offline)
+              try {
+                m['synced'] = 1;
+                await db.insert('cierres_dia', m,
+                    conflictAlgorithm: ConflictAlgorithm.ignore);
+                rows.add(m);
+              } catch (_) {}
+            }
+          }
+        } catch (_) {
+          // Si Supabase falla, usamos solo el local
+        }
+      }
+
+      final lista = rows.map((m) => CierreDiaModel.fromMap(m)).toList();
+      lista.sort((a, b) => (b.createdAt ?? b.fecha)
+          .compareTo(a.createdAt ?? a.fecha));
+      return lista;
     } catch (_) {
       return [];
     }
