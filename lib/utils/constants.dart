@@ -5,7 +5,7 @@ static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJp
 
   // App info
   static const String appName = 'NegocioPro';
-  static const String appVersion = '1.3.0';
+  static const String appVersion = '1.0.0';
   static const String company = 'FinanPro Solutions';
 
   // Storage buckets
