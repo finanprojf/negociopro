@@ -610,17 +610,106 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
   }
 
   Future<void> _seleccionarHora() async {
-    final picked = await showTimePicker(
+    // Selector personalizado 12h — no depende del locale del dispositivo
+    final initial = _hora ?? TimeOfDay.now();
+    int initHour = initial.hour % 12;
+    if (initHour == 0) initHour = 12;
+    final initMinute = (initial.minute ~/ 5) * 5; // redondear a 5 min
+    final initAmPm = initial.hour < 12 ? 0 : 1; // 0=AM, 1=PM
+
+    final FixedExtentScrollController hourCtrl =
+        FixedExtentScrollController(initialItem: initHour - 1);
+    final FixedExtentScrollController minCtrl =
+        FixedExtentScrollController(initialItem: initMinute ~/ 5);
+    int selAmPm = initAmPm;
+
+    final picked = await showModalBottomSheet<TimeOfDay>(
       context: context,
-      initialTime: _hora ?? TimeOfDay.now(),
-      builder: (context, child) {
-        // Forzar formato 12 horas (AM/PM) sin importar configuración del dispositivo
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
-          child: child!,
-        );
-      },
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Center(child: Container(width: 40, height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            Text('Seleccionar hora',
+                style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 160,
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                // Horas 1–12
+                SizedBox(
+                  width: 70,
+                  child: ListWheelScrollView.useDelegate(
+                    controller: hourCtrl,
+                    itemExtent: 44,
+                    physics: const FixedExtentScrollPhysics(),
+                    perspective: 0.003,
+                    childDelegate: ListWheelChildLoopingListDelegate(
+                      children: List.generate(12, (i) => Center(
+                        child: Text('${i + 1}',
+                            style: GoogleFonts.poppins(fontSize: 26,
+                                fontWeight: FontWeight.w600)),
+                      )),
+                    ),
+                  ),
+                ),
+                Text(':', style: GoogleFonts.poppins(
+                    fontSize: 28, fontWeight: FontWeight.w700)),
+                // Minutos 00–55 (paso 5)
+                SizedBox(
+                  width: 70,
+                  child: ListWheelScrollView.useDelegate(
+                    controller: minCtrl,
+                    itemExtent: 44,
+                    physics: const FixedExtentScrollPhysics(),
+                    perspective: 0.003,
+                    childDelegate: ListWheelChildLoopingListDelegate(
+                      children: List.generate(12, (i) => Center(
+                        child: Text((i * 5).toString().padLeft(2, '0'),
+                            style: GoogleFonts.poppins(fontSize: 26,
+                                fontWeight: FontWeight.w600)),
+                      )),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // AM / PM
+                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  _AmPmBtn('AM', selAmPm == 0, () => setS(() => selAmPm = 0)),
+                  const SizedBox(height: 8),
+                  _AmPmBtn('PM', selAmPm == 1, () => setS(() => selAmPm = 1)),
+                ]),
+              ]),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity, height: 50,
+              child: ElevatedButton(
+                onPressed: () {
+                  final h = hourCtrl.selectedItem % 12 + 1;
+                  final m = minCtrl.selectedItem % 12 * 5;
+                  int hour24 = h % 12 + (selAmPm == 1 ? 12 : 0);
+                  Navigator.pop(ctx, TimeOfDay(hour: hour24, minute: m));
+                },
+                child: Text('Confirmar',
+                    style: GoogleFonts.poppins(fontSize: 15,
+                        fontWeight: FontWeight.w700, color: Colors.white)),
+              ),
+            ),
+          ]),
+        ),
+      ),
     );
+    hourCtrl.dispose();
+    minCtrl.dispose();
     if (picked != null) setState(() => _hora = picked);
   }
 
@@ -802,6 +891,39 @@ class _CampoSelector extends StatelessWidget {
         else const Icon(Icons.chevron_right_rounded,
             size: 16, color: AppColors.textMuted),
       ]),
+    );
+  }
+}
+
+// ── Botón AM/PM para selector de hora personalizado ───────────────────────
+class _AmPmBtn extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _AmPmBtn(this.label, this.selected, this.onTap);
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 56, height: 40,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.cardBorder,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(label,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: selected ? Colors.white : AppColors.textMuted,
+            )),
+      ),
     );
   }
 }
