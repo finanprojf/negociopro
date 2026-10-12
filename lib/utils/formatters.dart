@@ -21,10 +21,10 @@ class AppFormatters {
     return _fecha.format(date);
   }
 
-  /// 15/06/2025 02:30 PM
+  /// 15/06/2025 02:30 PM (hora local)
   static String fechaHora(DateTime? date) {
     if (date == null) return '—';
-    return _fechaHora.format(date);
+    return _fechaHora.format(date.toLocal());
   }
 
   /// 15 Jun

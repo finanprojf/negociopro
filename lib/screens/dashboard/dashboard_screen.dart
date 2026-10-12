@@ -84,9 +84,9 @@ Future<void> _cargarVersion() async {
       final utcStr = dateStr
           .replaceAll('+00:00', 'Z')
           .replaceAll('+0000', 'Z');
-      return DateTime.parse(utcStr);
+      return DateTime.parse(utcStr).toLocal();
     } catch (_) {
-      return DateTime.now().toUtc();
+      return DateTime.now();
     }
   }
   Future<void> _cargarNombre() async {
@@ -224,6 +224,23 @@ Future<void> _cargarVersion() async {
             'created_at': v['created_at'] as String,
             'synced': 1,
           }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        } catch (_) {}
+      }
+
+      // Cachear detalle_ventas de Supabase en SQLite para que ganancias funcione
+      if ((ventas as List).isNotEmpty) {
+        final ids = ventas.map((v) => v['id'] as String).toList();
+        try {
+          final detallesRemoto = await SupabaseService.client
+              .from('detalle_ventas')
+              .select()
+              .inFilter('venta_id', ids);
+          for (final d in detallesRemoto as List) {
+            try {
+              await db.insert('detalle_ventas', Map<String, dynamic>.from(d),
+                  conflictAlgorithm: ConflictAlgorithm.ignore);
+            } catch (_) {}
+          }
         } catch (_) {}
       }
 
@@ -1034,12 +1051,16 @@ Widget _buildVitrinaWidget() {
         var qApartado = SupabaseService.client.from('abonos_apartado')
             .select('id, monto, created_at, apartados(descripcion)')
             .eq('empresa_id', empresaId);
+        var qApartadoNew = SupabaseService.client.from('apartados')
+            .select('id, descripcion, monto_total, created_at')
+            .eq('empresa_id', empresaId);
 
         if (desdeCierre != null) {
-          qVentas   = qVentas.gte('created_at', desdeCierre);
-          qGastos   = qGastos.gte('created_at', desdeCierre);
-          qFiado    = qFiado.gte('created_at', desdeCierre);
-          qApartado = qApartado.gte('created_at', desdeCierre);
+          qVentas       = qVentas.gte('created_at', desdeCierre);
+          qGastos       = qGastos.gte('created_at', desdeCierre);
+          qFiado        = qFiado.gte('created_at', desdeCierre);
+          qApartado     = qApartado.gte('created_at', desdeCierre);
+          qApartadoNew  = qApartadoNew.gte('created_at', desdeCierre);
         }
 
         final results = await Future.wait([
@@ -1047,6 +1068,7 @@ Widget _buildVitrinaWidget() {
           qGastos.order('created_at', ascending: false).limit(10),
           qFiado.order('created_at', ascending: false).limit(10),
           qApartado.order('created_at', ascending: false).limit(10),
+          qApartadoNew.order('created_at', ascending: false).limit(10),
         ]);
         // Cachear ventas en SQLite para uso offline
         for (final v in results[0] as List) {
@@ -1089,11 +1111,12 @@ Widget _buildVitrinaWidget() {
           final saldoFiado = esCredito
               ? (v['total'] as num).toDouble() - (v['monto_pagado'] as num).toDouble()
               : 0.0;
+          final numVenta = v['numero_venta']?.toString() ?? '—';
           actividad.add({
             'tipo': 'venta',
             'titulo': saldoFiado > 0
-                ? 'Venta #${v['numero_venta']} (+${AppFormatters.moneda(saldoFiado)} fiado)'
-                : 'Venta #${v['numero_venta']}',
+                ? 'Venta #$numVenta (+${AppFormatters.moneda(saldoFiado)} fiado)'
+                : 'Venta #$numVenta',
             'monto': montoMostrar, 'fecha': _toLocal(v['created_at'] as String), 'positivo': true,
           });
         }
@@ -1102,18 +1125,65 @@ Widget _buildVitrinaWidget() {
               'monto': (g['monto'] as num).toDouble(),
               'fecha': _toLocal(g['created_at'] as String), 'positivo': false});
         }
+        // Abonos fiado desde Supabase
+        final idsAbonosFiadoOnline = <String>{};
         for (final f in results[2] as List) {
+          idsAbonosFiadoOnline.add(f['id'] as String);
           actividad.add({'tipo': 'fiado',
               'titulo': 'Abono fiado — ${f['clientes']?['nombre'] ?? 'Cliente'}',
               'monto': (f['monto'] as num).toDouble(),
               'fecha': _toLocal(f['created_at'] as String), 'positivo': true});
         }
+        // Abonos apartado desde Supabase
+        final idsAbonosApartadoOnline = <String>{};
         for (final a in results[3] as List) {
+          idsAbonosApartadoOnline.add(a['id'] as String);
           actividad.add({'tipo': 'apartado',
               'titulo': 'Abono apartado — ${a['apartados']?['descripcion'] ?? 'Apartado'}',
               'monto': (a['monto'] as num).toDouble(),
               'fecha': _toLocal(a['created_at'] as String), 'positivo': true});
         }
+        // Nuevos apartados creados
+        final idsApartadosOnline = <String>{};
+        for (final a in results[4] as List) {
+          idsApartadosOnline.add(a['id'] as String);
+          actividad.add({'tipo': 'apartado',
+              'titulo': 'Nuevo apartado — ${a['descripcion'] ?? ''}',
+              'monto': (a['monto_total'] as num).toDouble(),
+              'fecha': _toLocal(a['created_at'] as String), 'positivo': true});
+        }
+
+        // Merge abonos pendientes (offline) no incluidos en Supabase aún
+        final abonosFiadoLocal = await db2.query('abonos_fiado',
+            where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId],
+            orderBy: 'created_at DESC', limit: 10);
+        for (final f in abonosFiadoLocal) {
+          if (idsAbonosFiadoOnline.contains(f['id'] as String)) continue;
+          actividad.add({'tipo': 'fiado', 'titulo': 'Abono fiado',
+              'monto': (f['monto'] as num).toDouble(),
+              'fecha': _toLocal(f['created_at'] as String), 'positivo': true});
+        }
+        final abonosApartadoLocal = await db2.query('abonos_apartado',
+            where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId],
+            orderBy: 'created_at DESC', limit: 10);
+        for (final a in abonosApartadoLocal) {
+          if (idsAbonosApartadoOnline.contains(a['id'] as String)) continue;
+          actividad.add({'tipo': 'apartado', 'titulo': 'Abono apartado',
+              'monto': (a['monto'] as num).toDouble(),
+              'fecha': _toLocal(a['created_at'] as String), 'positivo': true});
+        }
+        // Apartados locales pendientes
+        final apartadosLocal = await db2.query('apartados',
+            where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId],
+            orderBy: 'created_at DESC', limit: 10);
+        for (final a in apartadosLocal) {
+          if (idsApartadosOnline.contains(a['id'] as String)) continue;
+          actividad.add({'tipo': 'apartado',
+              'titulo': 'Nuevo apartado — ${a['descripcion'] ?? ''}',
+              'monto': (a['monto_total'] as num? ?? 0).toDouble(),
+              'fecha': _toLocal(a['created_at'] as String), 'positivo': true});
+        }
+
         actividad.sort((a, b) => (b['fecha'] as DateTime).compareTo(a['fecha'] as DateTime));
         return actividad;
       } catch (_) {}
@@ -1134,8 +1204,9 @@ Widget _buildVitrinaWidget() {
       final esCredito = v['tipo_pago'] == 'fiado';
       final total = (v['total'] as num).toDouble();
       final pagado = (v['monto_pagado'] as num? ?? total).toDouble();
+      final numVenta = v['numero_venta']?.toString() ?? '—';
       actividad.add({'tipo': 'venta',
-          'titulo': 'Venta #${v['numero_venta']}',
+          'titulo': 'Venta #$numVenta',
           'monto': esCredito ? pagado : total,
           'fecha': _toLocal(v['created_at'] as String), 'positivo': true});
     }
@@ -1147,7 +1218,7 @@ Widget _buildVitrinaWidget() {
         where: whereOtros, whereArgs: argsOtros,
         orderBy: 'created_at DESC', limit: 10);
     for (final g in gastos) {
-      actividad.add({'tipo': 'gasto', 'titulo': g['descripcion'] as String,
+      actividad.add({'tipo': 'gasto', 'titulo': g['descripcion'] as String? ?? 'Gasto',
           'monto': (g['monto'] as num).toDouble(),
           'fecha': _toLocal(g['created_at'] as String), 'positivo': false});
     }
@@ -1165,6 +1236,16 @@ Widget _buildVitrinaWidget() {
     for (final a in abonosApartado) {
       actividad.add({'tipo': 'apartado', 'titulo': 'Abono apartado',
           'monto': (a['monto'] as num).toDouble(),
+          'fecha': _toLocal(a['created_at'] as String), 'positivo': true});
+    }
+    // Nuevos apartados creados (offline)
+    final apartadosOff = await db.query('apartados',
+        where: whereOtros, whereArgs: argsOtros,
+        orderBy: 'created_at DESC', limit: 10);
+    for (final a in apartadosOff) {
+      actividad.add({'tipo': 'apartado',
+          'titulo': 'Nuevo apartado — ${a['descripcion'] ?? ''}',
+          'monto': (a['monto_total'] as num? ?? 0).toDouble(),
           'fecha': _toLocal(a['created_at'] as String), 'positivo': true});
     }
     actividad.sort((a, b) => (b['fecha'] as DateTime).compareTo(a['fecha'] as DateTime));

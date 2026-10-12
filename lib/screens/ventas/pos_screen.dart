@@ -398,7 +398,7 @@ Future<void> _cargarClientes() async {
       padding: const EdgeInsets.all(8),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio: 1.3,
+        childAspectRatio: 1.05,
         crossAxisSpacing: 8,
         mainAxisSpacing: 8,
       ),
@@ -902,81 +902,126 @@ class _ProdCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final agotado = producto.sinStock;
 
-    // ── Foto / ícono ─────────────────────────────────────────────
-    Widget foto = Container(
-      width: 28, height: 28,
+    // ── Imagen (lado izquierdo) ───────────────────────────────────
+    Widget imagen = Container(
       decoration: BoxDecoration(
-        color: AppColors.colorVentas.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(7)),
+        color: AppColors.colorVentas.withValues(alpha: 0.07),
+        borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+      ),
       child: producto.fotoUrl != null
-          ? ClipRRect(borderRadius: BorderRadius.circular(7),
+          ? ClipRRect(
+              borderRadius:
+                  const BorderRadius.horizontal(left: Radius.circular(12)),
               child: producto.fotoUrl!.startsWith('http')
-                  ? Image.network(producto.fotoUrl!, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
-                          Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 15))
-                  : Image.file(File(producto.fotoUrl!), fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
-                          Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 15)))
-          : const Icon(Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 15),
+                  ? Image.network(producto.fotoUrl!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (_, __, ___) => Center(
+                          child: Icon(Icons.inventory_2_rounded,
+                              color: AppColors.colorVentas.withValues(alpha: 0.4),
+                              size: 32)))
+                  : Image.file(File(producto.fotoUrl!),
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (_, __, ___) => Center(
+                          child: Icon(Icons.inventory_2_rounded,
+                              color: AppColors.colorVentas.withValues(alpha: 0.4),
+                              size: 32))))
+          : Center(
+              child: Icon(Icons.inventory_2_rounded,
+                  color: AppColors.colorVentas.withValues(alpha: 0.35), size: 34)),
     );
 
-    // ── Contenido de la tarjeta (siempre igual) ──────────────────
-    Widget info = Padding(
-      padding: const EdgeInsets.all(10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(children: [
-            foto,
-            const Spacer(),
-            // Badge stock o cantidad
-            if (enCarrito)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+    // ── Badge (stock o cantidad en carrito) ───────────────────────
+    Widget badge = enCarrito
+        ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+                color: AppColors.primary, borderRadius: BorderRadius.circular(8)),
+            child: Text('$cantidadEnCarrito',
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white)))
+        : agotado
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(8)),
-                child: Text('$cantidadEnCarrito',
-                    style: const TextStyle(fontFamily: 'Poppins',
-                        fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)))
-            else if (agotado)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(color: AppColors.dangerSurface,
+                    color: AppColors.dangerSurface,
                     borderRadius: BorderRadius.circular(4)),
-                child: Text('Agotado', style: GoogleFonts.poppins(
-                    fontSize: 8, color: AppColors.danger, fontWeight: FontWeight.w600)))
-            else
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                child: Text('Agotado',
+                    style: GoogleFonts.poppins(
+                        fontSize: 7,
+                        color: AppColors.danger,
+                        fontWeight: FontWeight.w600)))
+            : Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: producto.stockBajo ? AppColors.warning : AppColors.textMuted,
-                  borderRadius: BorderRadius.circular(8)),
+                    color: (producto.stockBajo
+                            ? AppColors.warning
+                            : AppColors.textMuted)
+                        .withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(8)),
                 child: Text('${producto.stockActual.toInt()}',
-                    style: const TextStyle(fontFamily: 'Poppins',
-                        fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white))),
-          ]),
-          const SizedBox(height: 8),
-          Text(producto.nombre,
-              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600,
-                  color: agotado ? AppColors.textMuted : AppColors.textPrimary),
-              maxLines: 2, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 3),
-          Text(AppFormatters.moneda(producto.precioVenta),
-              style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700,
-                  color: agotado ? AppColors.textMuted : AppColors.primary)),
-          // Íconos −/+ solo visibles cuando está en carrito
-          if (enCarrito) ...[
-            const Spacer(),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Icon(Icons.remove_rounded, size: 18, color: _rojo.withValues(alpha: 0.7)),
-              Icon(Icons.add_rounded,    size: 18, color: _verde.withValues(alpha: 0.7)),
-            ]),
-          ],
-        ],
-      ),
-    );
+                    style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white)));
+
+    // ── Contenido (imagen izquierda | texto derecha) ─────────────
+    Widget info = Stack(children: [
+      Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // Imagen: 45% del ancho
+        Expanded(flex: 45, child: imagen),
+        // Texto: 55% del ancho
+        Expanded(
+          flex: 55,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(producto.nombre,
+                    style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: agotado
+                            ? AppColors.textMuted
+                            : AppColors.textPrimary),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(AppFormatters.moneda(producto.precioVenta),
+                      style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: agotado
+                              ? AppColors.textMuted
+                              : AppColors.primary)),
+                  if (enCarrito)
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                      Icon(Icons.remove_rounded,
+                          size: 16,
+                          color: _rojo.withValues(alpha: 0.7)),
+                      Icon(Icons.add_rounded,
+                          size: 16,
+                          color: _verde.withValues(alpha: 0.7)),
+                    ]),
+                ]),
+              ],
+            ),
+          ),
+        ),
+      ]),
+      // Badge esquina superior derecha
+      Positioned(top: 6, right: 6, child: badge),
+    ]);
 
     // ══════════════════════════════════════════════════════════════
     // ESTADO NORMAL — tarjeta completa = agregar

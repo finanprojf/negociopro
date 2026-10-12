@@ -154,6 +154,7 @@ class LocalDatabase {
         cliente_id TEXT, cliente_nombre TEXT,
         descripcion TEXT NOT NULL,
         cantidad REAL DEFAULT 1, precio_estimado REAL DEFAULT 0,
+        costo_pedido REAL DEFAULT 0,
         estado TEXT DEFAULT 'pendiente',
         es_lista_propia INTEGER DEFAULT 0,
         notas TEXT, synced INTEGER DEFAULT 0,
@@ -309,6 +310,9 @@ class LocalDatabase {
       try { await db.execute('ALTER TABLE apartados ADD COLUMN cliente_nombre TEXT'); } catch (_) {}
       try { await db.execute('ALTER TABLE apartados ADD COLUMN cliente_telefono TEXT'); } catch (_) {}
     }
+    if (oldV < 12) {
+      try { await db.execute('ALTER TABLE encargos ADD COLUMN costo_pedido REAL DEFAULT 0'); } catch (_) {}
+    }
   }
 
 
@@ -359,5 +363,20 @@ class LocalDatabase {
     final db = await database;
     await db.close();
     _db = null;
+  }
+
+  /// Limpia todos los datos locales al cerrar sesión o cambiar de cuenta.
+  /// Preserva la estructura de la BD pero borra todos los registros.
+  static Future<void> limpiarDatosLocales() async {
+    final db = await database;
+    const tablas = [
+      'empresas', 'categorias', 'productos', 'clientes', 'ventas',
+      'detalle_ventas', 'fiados', 'abonos_fiado', 'apartados',
+      'abonos_apartado', 'apartado_productos', 'gastos', 'encargos',
+      'movimientos_puntos', 'cierres_dia', 'recordatorios',
+    ];
+    for (final tabla in tablas) {
+      try { await db.delete(tabla); } catch (_) {}
+    }
   }
 }

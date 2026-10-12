@@ -70,6 +70,7 @@ class EncargoService {
       ...encargo.toMap(),
       'id': id,
       'empresa_id': empresaId,
+      'cliente_nombre': encargo.clienteNombre,
       'synced': 0,
       'created_at': ahora,
       'updated_at': ahora,
@@ -88,7 +89,9 @@ class EncargoService {
           'id': id,
           'empresa_id': empresaId,
           'es_lista_propia': encargo.esListaPropia,
+          // costo_pedido ya va en toMap(); cliente_nombre NO existe en Supabase
         };
+        dataOnline.remove('cliente_nombre'); // campo solo local
         if (esNuevo) {
           await SupabaseService.client.from('encargos').insert(dataOnline);
         } else {

@@ -4,7 +4,8 @@ class EncargoModel {
   final String? clienteId;
   final String descripcion;
   final double cantidad;
-  final double precioEstimado;
+  final double precioEstimado; // precio de venta al cliente
+  final double costoPedido;    // costo de compra (opcional)
   final String estado;
   final bool esListaPropia;
   final String? notas;
@@ -18,6 +19,7 @@ class EncargoModel {
     required this.descripcion,
     this.cantidad = 1,
     this.precioEstimado = 0,
+    this.costoPedido = 0,
     this.estado = 'pendiente',
     this.esListaPropia = false,
     this.notas,
@@ -30,6 +32,10 @@ class EncargoModel {
   bool get entregado => estado == 'entregado';
   bool get comprado => estado == 'comprado';
 
+  /// Ganancia estimada (solo si se tienen ambos montos)
+  double get gananciaEstimada =>
+      (precioEstimado > 0 && costoPedido > 0) ? precioEstimado - costoPedido : 0;
+
   factory EncargoModel.fromMap(Map<String, dynamic> map) {
     return EncargoModel(
       id: map['id'] ?? '',
@@ -38,6 +44,7 @@ class EncargoModel {
       descripcion: map['descripcion'] ?? '',
       cantidad: (map['cantidad'] ?? 1).toDouble(),
       precioEstimado: (map['precio_estimado'] ?? 0).toDouble(),
+      costoPedido: (map['costo_pedido'] ?? 0).toDouble(),
       estado: map['estado'] ?? 'pendiente',
       esListaPropia: map['es_lista_propia'] == true || map['es_lista_propia'] == 1,
       notas: map['notas'],
@@ -54,6 +61,7 @@ class EncargoModel {
       'descripcion': descripcion,
       'cantidad': cantidad,
       'precio_estimado': precioEstimado,
+      'costo_pedido': costoPedido,
       'estado': estado,
       'es_lista_propia': esListaPropia ? 1 : 0,
       'notas': notas,

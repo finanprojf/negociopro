@@ -33,10 +33,14 @@ class ApartadoService {
         }
 
         // IDs con cambios locales pendientes — NO sobreescribir
-        final idsPendientes = local
-            .where((m) => m['synced'] == 0)
-            .map((m) => m['id'] as String)
-            .toSet();
+        // Incluye apartados que tienen abonos sin sincronizar
+        final db2 = await LocalDatabase.database;
+        final abonosPend = await db2.query('abonos_apartado',
+            where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId]);
+        final idsPendientes = {
+          ...local.where((m) => m['synced'] == 0).map((m) => m['id'] as String),
+          ...abonosPend.map((a) => a['apartado_id'] as String),
+        };
 
         // Cachear en SQLite los registros de Supabase
         for (final m in res) {
@@ -53,8 +57,10 @@ class ApartadoService {
         }
 
         // Combinar: online tiene prioridad salvo pendientes locales
+        // IMPORTANTE: usar idsPendientes (no solo synced==0) para que
+        // apartados con abonos offline también usen la versión local
         final localPendientes = Map.fromEntries(
-          local.where((m) => m['synced'] == 0)
+          local.where((m) => idsPendientes.contains(m['id'] as String))
                .map((m) => MapEntry(m['id'] as String, ApartadoModel.fromMap(m))),
         );
         final idsOnline = res.map((m) => m['id'] as String).toSet();
@@ -249,6 +255,7 @@ class ApartadoService {
         'monto_pagado': nuevoPagado,
         'estado': nuevoEstado,
         'updated_at': ahora,
+        'synced': 0, // marcar como pendiente hasta sincronizar con Supabase
       }, 'id', apartadoId);
     }
 

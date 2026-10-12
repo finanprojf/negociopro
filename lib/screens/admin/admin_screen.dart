@@ -29,7 +29,7 @@ class _AdminScreenState extends State<AdminScreen> {
     try {
      final res = await SupabaseService.client
           .from('empresas')
-          .select('id, nombre, telefono, whatsapp, plan_activo, suscripcion_vence, created_at, usuario_id, usuarios(id, correo)')
+          .select('id, nombre, telefono, whatsapp, plan_activo, suscripcion_vence, created_at, usuarios(id, correo)')
           .order('created_at', ascending: false);
 
       if (mounted) {
@@ -384,11 +384,13 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _editarUsuario(Map<String, dynamic> empresa) async {
-    final correoActual = empresa['usuarios'] != null &&
-            (empresa['usuarios'] as List).isNotEmpty
-        ? (empresa['usuarios'] as List).first['correo'] ?? ''
+    final usuarios = empresa['usuarios'] as List? ?? [];
+    final correoActual = usuarios.isNotEmpty
+        ? (usuarios.first['correo'] ?? '')
         : '';
-    final usuarioId = empresa['usuario_id'] as String?;
+    final usuarioId = usuarios.isNotEmpty
+        ? usuarios.first['id'] as String?
+        : null;
     if (usuarioId == null || usuarioId.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -517,7 +519,10 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _eliminarUsuario(Map<String, dynamic> empresa) async {
-    final usuarioId = empresa['usuario_id'] as String?;
+    final usuarios = empresa['usuarios'] as List? ?? [];
+    final usuarioId = usuarios.isNotEmpty
+        ? usuarios.first['id'] as String?
+        : null;
     if (usuarioId == null || usuarioId.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

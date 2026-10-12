@@ -46,12 +46,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       final userId = res.user!.id;
 
-      // 2. Crear empresa
+      // 2. Crear empresa con trial de 30 días incluido en el insert
+      final ahora = DateTime.now().toUtc();
+      final fechaFin = ahora.add(const Duration(days: 30));
       final empresaRes = await Supabase.instance.client
           .from('empresas')
           .insert({
             'nombre': _nombreNegocioCtrl.text.trim(),
             'telefono': _telefonoCtrl.text.trim(),
+            'plan_activo': 'trial',
+            'suscripcion_vence': fechaFin.toIso8601String(),
           })
           .select()
           .single();
@@ -67,12 +71,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'rol': 'admin',
       });
 
-      // 4. Crear suscripción básica gratuita
-      await Supabase.instance.client.from('suscripciones').insert({
-        'empresa_id': empresaId,
-        'plan': 'basico',
-        'estado': 'activo',
-      });
+      // 4. Crear registro de suscripción
+      try {
+        await Supabase.instance.client.from('suscripciones').insert({
+          'empresa_id': empresaId,
+          'plan': 'trial',
+          'estado': 'activo',
+          'fecha_inicio': ahora.toIso8601String(),
+          'fecha_fin': fechaFin.toIso8601String(),
+        });
+      } catch (_) {} // No crítico — empresas ya tiene el trial
 if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const DashboardScreen()),

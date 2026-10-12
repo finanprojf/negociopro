@@ -44,55 +44,33 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
 
       if (await SupabaseService.isOnlineAsync) {
         try {
+          // Traer fiados sin join (el join de ventas falla si no hay FK en Supabase)
           final res = await SupabaseService.client
               .from('fiados')
-              .select('''
-                *,
-                ventas(
-                  numero_venta,
-                  detalle_ventas(nombre_producto, cantidad, precio_unitario)
-                )
-              ''')
+              .select('*')
               .eq('cliente_id', widget.cliente.id)
               .order('created_at', ascending: false);
 
-          // Guardar en local
+          // Guardar en local (cache)
           for (final m in res) {
-            final map = Map<String, dynamic>.from(m);
-            map.remove('ventas');
-            map['synced'] = 1;
+            final map = Map<String, dynamic>.from(m)..['synced'] = 1;
             try { await LocalDatabase.insertar('fiados', map); } catch (_) {}
           }
 
-        // Combinar online con locales no sincronizados
+          // Combinar online + locales pendientes
           final idsOnline = res.map((m) => m['id'] as String).toSet();
           final localesPendientes = localFiados
               .where((m) => !idsOnline.contains(m['id'] as String))
               .toList();
-         // Agregar detalles de venta a los locales pendientes
-          final pendientesConDetalles = await Future.wait(
-            localesPendientes.map((f) async {
-              final map = Map<String, dynamic>.from(f);
-              final ventaId = f['venta_id'] as String?;
-              if (ventaId != null) {
-                final db = await LocalDatabase.database;
-                final detalles = await db.query('detalle_ventas',
-                    where: 'venta_id = ?', whereArgs: [ventaId]);
-                if (detalles.isNotEmpty) {
-                  map['ventas'] = {
-                    'numero_venta': null,
-                    'detalle_ventas': detalles,
-                  };
-                }
-              }
-              return map;
-            }).toList(),
-          );
 
-          final combinados = [
+          final todosLosMapas = [
             ...List<Map<String, dynamic>>.from(res),
-            ...pendientesConDetalles,
+            ...localesPendientes,
           ];
+
+          // Enriquecer con detalle_ventas desde SQLite local
+          final combinados = await _enriquecerConDetalles(db, todosLosMapas);
+
           if (mounted) {
             setState(() {
               _fiados = combinados;
@@ -104,25 +82,7 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
       }
 
     // Sin internet usar local con detalles de venta
-      final fiadosConDetalles = await Future.wait(
-        localFiados.map((f) async {
-          final map = Map<String, dynamic>.from(f);
-          final ventaId = f['venta_id'] as String?;
-          if (ventaId != null) {
-            final db = await LocalDatabase.database;
-            final detalles = await db.query('detalle_ventas',
-                where: 'venta_id = ?', whereArgs: [ventaId]);
-            if (detalles.isNotEmpty) {
-              map['ventas'] = {
-                'numero_venta': null,
-                'detalle_ventas': detalles,
-              };
-            }
-          }
-          return map;
-        }).toList(),
-      );
-
+      final fiadosConDetalles = await _enriquecerConDetalles(db, localFiados);
       if (mounted) {
         setState(() {
           _fiados = fiadosConDetalles;
@@ -130,9 +90,29 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
         });
       }
     } catch (e) {
-      // Error cargando fiados
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Adjunta detalle_ventas y notas a cada fiado desde SQLite local.
+  /// Funciona tanto online como offline (sin depender de FK en Supabase).
+  Future<List<Map<String, dynamic>>> _enriquecerConDetalles(
+      dynamic db, List<Map<String, dynamic>> fiados) async {
+    return Future.wait(fiados.map((f) async {
+      final map = Map<String, dynamic>.from(f);
+      final ventaId = f['venta_id'] as String?;
+      if (ventaId != null) {
+        final detalles = await db.query('detalle_ventas',
+            where: 'venta_id = ?', whereArgs: [ventaId]);
+        if (detalles.isNotEmpty) {
+          map['ventas'] = {
+            'numero_venta': null,
+            'detalle_ventas': List<Map<String, dynamic>>.from(detalles),
+          };
+        }
+      }
+      return map;
+    }).toList());
   }
 
   Future<void> _eliminarFiado(Map<String, dynamic> fiado) async {
@@ -347,8 +327,8 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
                         color: AppColors.textMuted, size: 18),
                   ),
                 ]),
-                // Productos
-                if (detalles.isNotEmpty) ...[
+                // Productos de la venta (o notas del encargo)
+                if (detalles.isNotEmpty || f['notas'] != null) ...[
                   const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
@@ -357,19 +337,26 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
                       color: AppColors.surfaceAlt,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: detalles.map((d) {
-                        final nombre = d['nombre_producto'] as String;
-                        final cantidad = (d['cantidad'] as num).toDouble();
-                        final precio = (d['precio_unitario'] as num).toDouble();
-                        return Text(
-                          '• $nombre x${cantidad.toStringAsFixed(0)} — ${AppFormatters.moneda(precio * cantidad)}',
+                    child: detalles.isNotEmpty
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: detalles.map((d) {
+                            final nombre = d['nombre_producto'] as String? ?? '—';
+                            final cantidad = (d['cantidad'] as num? ?? 1).toDouble();
+                            final precio = (d['precio_unitario'] as num? ?? 0).toDouble();
+                            return Text(
+                              '• $nombre x${cantidad.toStringAsFixed(0)} — ${AppFormatters.moneda(precio * cantidad)}',
+                              style: const TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 11, color: AppColors.textSecondary),
+                            );
+                          }).toList(),
+                        )
+                      : Text(
+                          f['notas'] as String,
                           style: const TextStyle(fontFamily: 'Poppins',
-                              fontSize: 11, color: AppColors.textSecondary),
-                        );
-                      }).toList(),
-                    ),
+                              fontSize: 11, color: AppColors.textSecondary,
+                              fontStyle: FontStyle.italic),
+                        ),
                   ),
                 ],
                 const SizedBox(height: 12),
