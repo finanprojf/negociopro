@@ -138,10 +138,10 @@ class _ReportesScreenState extends State<ReportesScreen> {
           ventasIds.add(v['id'] as String);
         }
 
-        // ── Ventas locales NO sincronizadas (offline o sync pendiente) ──
-        // Si una venta se hizo sin internet y no subió aún, Supabase no la tiene.
-        // Las sumamos aquí para que el reporte siempre sea completo.
+        // ── Ventas offline (synced=0) que Supabase no tiene aún ──
+        // Añadirlas a ventasContado/ventasFiado para que el total sea correcto.
         double gananciaBruta = 0;
+        final Set<String> idsOfflineContados = {};
         try {
           final dbLocal = await LocalDatabase.database;
           final ventasNoSync = await dbLocal.query(
@@ -152,41 +152,55 @@ class _ReportesScreenState extends State<ReportesScreen> {
           for (final v in ventasNoSync) {
             final t    = (v['total'] as num? ?? 0).toDouble();
             final tipo = (v['tipo_pago'] as String? ?? 'efectivo').toLowerCase();
-            final vid  = v['id'] as String?;
+            final vid  = v['id'] as String? ?? '';
             if (tipo == 'fiado') { ventasFiado += t; } else { ventasContado += t; }
-            // Ganancia bruta desde detalle_ventas local para ventas no sincronizadas
-            if (vid != null) {
-              final detallesLocal = await dbLocal.query(
-                'detalle_ventas',
-                where: 'venta_id = ?',
-                whereArgs: [vid],
-              );
-              for (final d in detallesLocal) {
-                final pv  = (d['precio_unitario'] as num? ?? 0).toDouble();
-                // precio_compra no está en detalle_ventas; aproximar con 0 si no hay dato
-                final pc  = (d['precio_compra']  as num? ?? 0).toDouble();
-                gananciaBruta += (pv - pc) * (d['cantidad'] as num? ?? 1).toDouble();
-              }
-            }
+            if (vid.isNotEmpty) idsOfflineContados.add(vid);
           }
         } catch (_) {}
 
-        // Ganancia bruta de ventas sincronizadas
-        // Usa precio_compra de detalle_ventas (denormalizado al momento de venta),
-        // con fallback a productos.precio_compra si no tiene.
-        if (ventasIds.isNotEmpty) {
+        // ── Ganancia desde SQLite (cubre TODOS los registros: offline + cacheados) ──
+        // Usa CASE WHEN: precio_compra del detalle primero, fallback a productos.
+        // Esto evita depender de que la columna precio_compra exista en Supabase.
+        final todosVentaIds = {...ventasIds, ...idsOfflineContados};
+        if (todosVentaIds.isNotEmpty) {
           try {
-            final detalles = await SupabaseService.client
-                .from('detalle_ventas')
-                .select('cantidad, precio_unitario, precio_compra, productos(precio_compra)')
-                .inFilter('venta_id', ventasIds);
-            for (final d in detalles) {
-              final pv    = (d['precio_unitario'] as num).toDouble();
-              final pcDV  = (d['precio_compra']   as num? ?? 0).toDouble();
-              final pcProd = d['productos'] != null
-                  ? (d['productos']['precio_compra'] as num? ?? 0).toDouble() : 0.0;
-              final pc    = pcDV > 0 ? pcDV : pcProd;
-              gananciaBruta += (pv - pc) * (d['cantidad'] as num).toDouble();
+            final dbLocal = await LocalDatabase.database;
+            final ph = todosVentaIds.map((_) => '?').join(',');
+            final detallesLocal = await dbLocal.rawQuery(
+              'SELECT d.cantidad, d.precio_unitario, '
+              '  CASE WHEN d.precio_compra > 0 THEN d.precio_compra '
+              '       ELSE COALESCE(p.precio_compra, 0) END AS costo '
+              'FROM detalle_ventas d '
+              'LEFT JOIN productos p ON p.id = d.producto_id '
+              'WHERE d.venta_id IN ($ph)',
+              todosVentaIds.toList(),
+            );
+            for (final d in detallesLocal) {
+              final pv = (d['precio_unitario'] as num? ?? 0).toDouble();
+              final pc = (d['costo']           as num? ?? 0).toDouble();
+              gananciaBruta += (pv - pc) * (d['cantidad'] as num? ?? 1).toDouble();
+            }
+            // Si hay ventas de Supabase que aún no están en SQLite,
+            // intentar obtener sus detalles desde Supabase (sin precio_compra → pc=0)
+            final idsEnSqlite = <String>{};
+            final idsCheck = await dbLocal.rawQuery(
+              'SELECT DISTINCT venta_id FROM detalle_ventas WHERE venta_id IN ($ph)',
+              todosVentaIds.toList(),
+            );
+            for (final r in idsCheck) idsEnSqlite.add(r['venta_id'] as String);
+            final idsFaltantes = ventasIds.where((id) => !idsEnSqlite.contains(id)).toList();
+            if (idsFaltantes.isNotEmpty) {
+              try {
+                final detallesRemoto = await SupabaseService.client
+                    .from('detalle_ventas')
+                    .select('cantidad, precio_unitario')
+                    .inFilter('venta_id', idsFaltantes);
+                for (final d in (detallesRemoto as List)) {
+                  final pv = (d['precio_unitario'] as num? ?? 0).toDouble();
+                  // Sin costo → ganancia = precio_venta (conservador: no resta nada)
+                  gananciaBruta += pv * (d['cantidad'] as num? ?? 1).toDouble();
+                }
+              } catch (_) {}
             }
           } catch (_) {}
         }
