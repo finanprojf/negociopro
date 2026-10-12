@@ -76,14 +76,14 @@ class SyncService {
         final ventaData = _limpiarParaSupabase(venta);
         await SupabaseService.client.from('ventas').upsert(ventaData);
 
-        // Detalles de esta venta
+        // Detalles de esta venta (limpiar synced y convertir booleanos)
         final detalles = await db.query('detalle_ventas',
             where: 'venta_id = ?', whereArgs: [venta['id']]);
         for (final d in detalles) {
           try {
             await SupabaseService.client
                 .from('detalle_ventas')
-                .upsert(Map<String, dynamic>.from(d));
+                .upsert(_limpiarParaSupabase(d));
           } catch (_) {}
         }
 
