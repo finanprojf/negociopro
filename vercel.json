@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/privacidad",      "destination": "/vitrina-web/privacidad.html" },
+    { "source": "/eliminar-cuenta", "destination": "/vitrina-web/eliminar-cuenta.html" },
+    { "source": "/t/:slug",         "destination": "/vitrina-web/index.html" },
+    { "source": "/t/:slug/(.*)",    "destination": "/vitrina-web/index.html" }
+  ]
+}
