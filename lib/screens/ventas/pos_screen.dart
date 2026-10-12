@@ -503,19 +503,18 @@ Future<void> _cargarClientes() async {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModal) => AnimatedPadding(
-          duration: const Duration(milliseconds: 200),
+        builder: (ctx, setModal) => AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
           curve: Curves.easeOut,
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
             top: 24, left: 24, right: 24,
           ),
-          child: Container(
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
             Container(width: 40, height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(color: AppColors.cardBorder,
@@ -898,8 +897,7 @@ Future<void> _cargarClientes() async {
                     fontSize: 16, fontWeight: FontWeight.w700)),
               ),
             ),
-            ]),
-          ),
+          ]),
         ),
       ),
     );
