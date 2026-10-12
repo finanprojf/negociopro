@@ -24,6 +24,8 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
   List<ApartadoModel> _apartados = [];
   List<ApartadoModel> _filtrados = [];
   bool _loading = true;
+  // apartadoId → true si TODOS sus artículos están marcados como entregados
+  Map<String, bool> _entregadosMap = {};
 
   double get _totalPendiente => _filtrados
       .where((a) => a.estado == 'activo')
@@ -36,8 +38,30 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
     setState(() => _loading = true);
     try {
       final apartados = await ApartadoService.getApartados();
+
+      // Verificar estado de entrega por apartado en SQLite
+      // Un apartado está "entregado" si tiene al menos 1 línea y TODAS tienen entregado=1
+      final db = await LocalDatabase.database;
+      final entregadosMap = <String, bool>{};
+      for (final ap in apartados) {
+        try {
+          final lineas = await db.query('apartado_productos',
+              where: 'apartado_id = ?', whereArgs: [ap.id]);
+          if (lineas.isNotEmpty) {
+            entregadosMap[ap.id] =
+                lineas.every((l) => (l['entregado'] as int? ?? 0) == 1);
+          } else {
+            // Sin líneas: completado = entregado (comportamiento anterior)
+            entregadosMap[ap.id] = ap.estaCompletado;
+          }
+        } catch (_) {
+          entregadosMap[ap.id] = ap.estaCompletado;
+        }
+      }
+
       if (mounted) setState(() {
         _apartados = apartados;
+        _entregadosMap = entregadosMap;
         _aplicarFiltros();
         _loading = false;
       });
@@ -322,6 +346,7 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (_, i) => _ApartadoCard(
         apartado: _filtrados[i],
+        todosEntregados: _entregadosMap[_filtrados[i].id] ?? _filtrados[i].estaCompletado,
         onAbonar: () async {
           final ok = await Navigator.push<bool>(context,
               MaterialPageRoute(builder: (_) =>
@@ -397,12 +422,14 @@ class _FChip extends StatelessWidget {
 
 class _ApartadoCard extends StatelessWidget {
   final ApartadoModel apartado;
+  final bool todosEntregados;
   final VoidCallback onAbonar;
   final VoidCallback onHistorial;
   final VoidCallback onEntregar;
 
   const _ApartadoCard({
     required this.apartado,
+    required this.todosEntregados,
     required this.onAbonar,
     required this.onHistorial,
     required this.onEntregar,
@@ -554,19 +581,31 @@ class _ApartadoCard extends StatelessWidget {
                         ),
                       ),
                       Container(width: 1, height: 32, color: AppColors.cardBorder),
-                      // Entregar
+                      // Entregar / Entregado
                       Expanded(
-                        child: TextButton.icon(
-                          onPressed: onEntregar,
-                          icon: const Icon(Icons.inventory_2_rounded,
-                              size: 15, color: AppColors.success),
-                          label: const Text('Entregar',
-                              style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.success)),
-                          style: TextButton.styleFrom(
-                              minimumSize: const Size(0, 44)),
-                        ),
+                        child: todosEntregados
+                            ? TextButton.icon(
+                                onPressed: onEntregar, // tap para abrir sheet y usar "Quitar"
+                                icon: const Icon(Icons.check_circle_rounded,
+                                    size: 15, color: AppColors.success),
+                                label: const Text('Entregado',
+                                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.success)),
+                                style: TextButton.styleFrom(
+                                    minimumSize: const Size(0, 44)),
+                              )
+                            : TextButton.icon(
+                                onPressed: onEntregar,
+                                icon: const Icon(Icons.inventory_2_rounded,
+                                    size: 15, color: AppColors.success),
+                                label: const Text('Entregar',
+                                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.success)),
+                                style: TextButton.styleFrom(
+                                    minimumSize: const Size(0, 44)),
+                              ),
                       ),
                       Container(width: 1, height: 32, color: AppColors.cardBorder),
                       // Historial

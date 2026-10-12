@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../theme/app_colors.dart';
 import '../../services/supabase_service.dart';
 import '../../services/local_database.dart';
+import '../../services/cuadre_automatico_service.dart';
 
 class RecordatoriosScreen extends StatefulWidget {
   const RecordatoriosScreen({super.key});
@@ -207,6 +208,13 @@ class _RecordatoriosScreenState extends State<RecordatoriosScreen>
     final nuevoEstado = r['completado'] == 0 ? 1 : 0;
     await db.update('recordatorios', {'completado': nuevoEstado},
         where: 'id = ?', whereArgs: [r['id']]);
+    // Si se marca completado, cancelar notificación pendiente
+    if (nuevoEstado == 1) {
+      try {
+        final notifId = (r['id'] as String).hashCode.abs() % 100000 + 1000;
+        await CuadreAutomaticoService.cancelarRecordatorio(notifId);
+      } catch (_) {}
+    }
     _cargar();
   }
 
@@ -231,6 +239,11 @@ class _RecordatoriosScreenState extends State<RecordatoriosScreen>
       ),
     );
     if (ok != true) return;
+    // Cancelar notificación programada si existe
+    try {
+      final notifId = (r['id'] as String).hashCode.abs() % 100000 + 1000;
+      await CuadreAutomaticoService.cancelarRecordatorio(notifId);
+    } catch (_) {}
     final db = await LocalDatabase.database;
     await db.delete('recordatorios', where: 'id = ?', whereArgs: [r['id']]);
     _cargar();
@@ -660,7 +673,12 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
           ? '${_hora!.hour.toString().padLeft(2, '0')}:${_hora!.minute.toString().padLeft(2, '0')}'
           : null;
 
+      final recordatorioId = widget.recordatorio?['id'] as String? ?? const Uuid().v4();
+      final notifId = recordatorioId.hashCode.abs() % 100000 + 1000; // id único
+
       if (widget.recordatorio != null) {
+        // Cancelar notificación anterior antes de reprogramar
+        await CuadreAutomaticoService.cancelarRecordatorio(notifId);
         await db.update(
           'recordatorios',
           {
@@ -671,11 +689,11 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
             'cliente_nombre': _clienteNombre,
           },
           where: 'id = ?',
-          whereArgs: [widget.recordatorio!['id']],
+          whereArgs: [recordatorioId],
         );
       } else {
         await db.insert('recordatorios', {
-          'id': const Uuid().v4(),
+          'id': recordatorioId,
           'empresa_id': widget.empresaId,
           'titulo': titulo,
           'fecha': fechaStr,
@@ -686,6 +704,23 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
           'created_at': DateTime.now().toIso8601String(),
         });
       }
+
+      // Programar notificación si tiene hora
+      if (horaStr != null) {
+        try {
+          final parts = horaStr.split(':');
+          final fechaHoraLocal = DateTime(
+            _fecha.year, _fecha.month, _fecha.day,
+            int.parse(parts[0]), int.parse(parts[1]),
+          );
+          await CuadreAutomaticoService.programarRecordatorio(
+            notifId: notifId,
+            titulo: titulo,
+            fechaHora: fechaHoraLocal,
+          );
+        } catch (_) {}
+      }
+
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       setState(() => _guardando = false);

@@ -3,6 +3,34 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
+// Transición suave: fade + deslizamiento ligero hacia arriba
+class _SmoothPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _SmoothPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final fadeTween = CurveTween(curve: Curves.easeInOut);
+    final slideTween = Tween<Offset>(
+      begin: const Offset(0, 0.04),
+      end: Offset.zero,
+    ).chain(CurveTween(curve: Curves.easeOut));
+
+    return FadeTransition(
+      opacity: animation.drive(fadeTween),
+      child: SlideTransition(
+        position: animation.drive(slideTween),
+        child: child,
+      ),
+    );
+  }
+}
+
 class AppTheme {
   static ThemeData get light {
     final poppins = GoogleFonts.poppinsTextTheme();
@@ -10,6 +38,12 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       textTheme: poppins,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _SmoothPageTransitionsBuilder(),
+          TargetPlatform.iOS: _SmoothPageTransitionsBuilder(),
+        },
+      ),
       colorScheme: ColorScheme.light(
         primary: AppColors.primary,
         onPrimary: AppColors.textOnPrimary,

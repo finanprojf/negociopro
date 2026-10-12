@@ -685,10 +685,42 @@ Widget _buildVitrinaWidget() {
           icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
           onPressed: () { _cargarNombre(); _cargarResumen(); setState(() {}); },
         ),
-        IconButton(
-          icon: const Icon(Icons.notifications_outlined, color: AppColors.textSecondary),
-          onPressed: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const RecordatoriosScreen())),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined, color: AppColors.textSecondary),
+              onPressed: () async {
+                await Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const RecordatoriosScreen()));
+                _cargarRecordatoriosHoy();
+              },
+            ),
+            if (_recordatoriosHoy.isNotEmpty)
+              Positioned(
+                top: 6, right: 6,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 18, height: 18,
+                    decoration: BoxDecoration(
+                      color: AppColors.danger,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.surface, width: 1.5),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      _recordatoriosHoy.length > 9 ? '9+' : '${_recordatoriosHoy.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       GestureDetector(
           onTap: () => showModalBottomSheet(

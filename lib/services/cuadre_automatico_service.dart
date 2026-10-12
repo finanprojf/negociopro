@@ -26,6 +26,10 @@ class CuadreAutomaticoService {
   static Future<void> init() async {
     if (_iniciado) return;
     tz.initializeTimeZones();
+    // Forzar zona horaria de República Dominicana (UTC-4, sin horario de verano)
+    try {
+      tz.setLocalLocation(tz.getLocation('America/Santo_Domingo'));
+    } catch (_) {}
 
     await _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>()
@@ -113,5 +117,54 @@ class CuadreAutomaticoService {
     final minuto  = await getMinuto();
     await cancelar();
     await _programar(hora, minuto, intervalo);
+  }
+
+  // ── Canal y helper para recordatorios ────────────────────
+  static const _channelRecordatorio = AndroidNotificationChannel(
+    'recordatorios',
+    'Recordatorios',
+    description: 'Avisos de recordatorios que programaste',
+    importance: Importance.high,
+  );
+
+  /// Programa una notificación para un recordatorio concreto.
+  /// [notifId] debe ser único por recordatorio (usa el hash del id).
+  static Future<void> programarRecordatorio({
+    required int notifId,
+    required String titulo,
+    required DateTime fechaHora, // fecha+hora local
+  }) async {
+    await init(); // asegura que el plugin esté inicializado
+    await _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_channelRecordatorio);
+
+    final tzFecha = tz.TZDateTime.from(fechaHora, tz.local);
+    if (tzFecha.isBefore(tz.TZDateTime.now(tz.local))) return; // ya pasó
+
+    await _plugin.zonedSchedule(
+      notifId,
+      '🔔 $titulo',
+      'Recordatorio programado en NegocioPro',
+      tzFecha,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelRecordatorio.id,
+          _channelRecordatorio.name,
+          channelDescription: _channelRecordatorio.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  /// Cancela la notificación de un recordatorio.
+  static Future<void> cancelarRecordatorio(int notifId) async {
+    await _plugin.cancel(notifId);
   }
 }
