@@ -291,6 +291,21 @@ class _RecordatorioCard extends StatelessWidget {
     required this.onDelete,
   });
 
+  /// Convierte "HH:MM" (24h) → "H:MM AM/PM" (12h)
+  String _hora12(String hora24) {
+    try {
+      final parts = hora24.split(':');
+      int h = int.parse(parts[0]);
+      final m = parts[1];
+      final ampm = h >= 12 ? 'PM' : 'AM';
+      if (h == 0) h = 12;
+      else if (h > 12) h -= 12;
+      return '$h:$m $ampm';
+    } catch (_) {
+      return hora24;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final completado = recordatorio['completado'] == 1;
@@ -352,7 +367,7 @@ class _RecordatorioCard extends StatelessWidget {
             const Icon(Icons.access_time_rounded, size: 12,
                 color: AppColors.textMuted),
             const SizedBox(width: 3),
-            Text(hora,
+            Text(_hora12(hora!),
                 style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textSecondary)),
           ],
         ]),
@@ -598,6 +613,13 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
     final picked = await showTimePicker(
       context: context,
       initialTime: _hora ?? TimeOfDay.now(),
+      builder: (context, child) {
+        // Forzar formato 12 horas (AM/PM) sin importar configuración del dispositivo
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+          child: child!,
+        );
+      },
     );
     if (picked != null) setState(() => _hora = picked);
   }
