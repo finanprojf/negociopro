@@ -172,7 +172,16 @@ static Future<void> sincronizarPendientes() async {
         // Limpiar campos nulos que puedan causar error en columnas NOT NULL
         ventaData.removeWhere((k, v) => v == null &&
             ['itbis', 'notas', 'updated_at'].contains(k));
-        await SupabaseService.client.from('ventas').upsert(ventaData);
+        // Upsert y leer el numero_venta asignado por Supabase para actualizar SQLite
+        final ventaRes = await SupabaseService.client
+            .from('ventas')
+            .upsert(ventaData, onConflict: 'id')
+            .select('numero_venta')
+            .maybeSingle();
+        if (ventaRes != null && ventaRes['numero_venta'] != null) {
+          await db.update('ventas', {'numero_venta': ventaRes['numero_venta']},
+              where: 'id = ?', whereArgs: [v['id']]);
+        }
 
         // 2. Subir los detalles y actualizar stock con el valor ACTUAL remoto
         final detalles = await db.query('detalle_ventas',
@@ -273,6 +282,7 @@ static Future<void> sincronizarPendientes() async {
         'nombre_producto': p.nombre,
         'cantidad': cantidad,
         'precio_unitario': p.precioEfectivo,
+        'precio_compra': p.precioCompra,   // costo real — para calcular ganancia offline
         'descuento': 0,
         'subtotal': sub,
         'created_at': ahora,
@@ -319,7 +329,18 @@ static Future<void> sincronizarPendientes() async {
     String ahora,
   ) async {
     final ventaOnline = Map<String, dynamic>.from(ventaMap)..remove('synced');
-    await SupabaseService.client.from('ventas').upsert(ventaOnline);
+    // Upsert y leer el numero_venta asignado por Supabase para actualizar SQLite
+    final ventaRes = await SupabaseService.client
+        .from('ventas')
+        .upsert(ventaOnline, onConflict: 'id')
+        .select('numero_venta')
+        .maybeSingle();
+    // Actualizar número de venta en SQLite si Supabase lo asignó
+    if (ventaRes != null && ventaRes['numero_venta'] != null) {
+      final db = await LocalDatabase.database;
+      await db.update('ventas', {'numero_venta': ventaRes['numero_venta']},
+          where: 'id = ?', whereArgs: [ventaId]);
+    }
 
     // Detalles: leer desde SQLite para usar los mismos IDs (evitar duplicados)
     final db = await LocalDatabase.database;

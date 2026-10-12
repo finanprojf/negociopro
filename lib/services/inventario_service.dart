@@ -19,7 +19,9 @@ class InventarioService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
-  if (await SupabaseService.isOnlineAsync) {
+    final local = await LocalDatabase.consultar('categorias', empresaId, orderBy: 'nombre ASC');
+
+    if (await SupabaseService.isOnlineAsync) {
       try {
         final res = await SupabaseService.client
             .from('categorias')
@@ -32,11 +34,18 @@ class InventarioService {
           map['synced'] = 1;
           try { await LocalDatabase.insertar('categorias', map); } catch (_) {}
         }
-        return res.map((m) => CategoriaModel.fromMap(m)).toList();
+        // Incluir categorías locales pendientes (creadas offline) que no están en Supabase
+        final idsOnline = res.map((m) => m['id'] as String).toSet();
+        final pendientes = local.where((m) => !idsOnline.contains(m['id'] as String));
+        final resultado = [
+          ...res.map((m) => CategoriaModel.fromMap(m)),
+          ...pendientes.map((m) => CategoriaModel.fromMap(m)),
+        ];
+        resultado.sort((a, b) => a.nombre.compareTo(b.nombre));
+        return resultado;
       } catch (_) {}
     }
 
-    final local = await LocalDatabase.consultar('categorias', empresaId, orderBy: 'nombre ASC');
     return local.map((m) => CategoriaModel.fromMap(m)).toList();
   }
 
@@ -94,7 +103,14 @@ class InventarioService {
           };
         } catch (_) {}
 
+        // IDs con cambios locales pendientes — no sobreescribir
+        final idsPendientes = local
+            .where((m) => m['synced'] == 0)
+            .map((m) => m['id'] as String)
+            .toSet();
+
         for (final m in res) {
+          if (idsPendientes.contains(m['id'] as String?)) continue;
           final map = Map<String, dynamic>.from(m);
           map.remove('categorias');
           map.remove('categoria_nombre');
@@ -110,16 +126,33 @@ class InventarioService {
           } catch (_) {}
         }
 
-        return res.map((m) {
-          final map = Map<String, dynamic>.from(m);
-          if (m['categorias'] != null) {
-            map['categoria_nombre'] = m['categorias']['nombre'];
-          }
-          final oferta = ofertaMap[m['id'] as String];
-          map['precio_oferta']        = oferta?['precio_oferta'];
-          map['descuento_porcentaje'] = oferta?['descuento_porcentaje'];
-          return ProductoModel.fromMap(map);
-        }).toList();
+        // Mapa de pendientes locales para que la lista use la versión local
+        final localPendMap = Map.fromEntries(
+          productosLocal
+              .where((p) => idsPendientes.contains(p.id))
+              .map((p) => MapEntry(p.id, p)),
+        );
+
+        final idsOnline = res.map((m) => m['id'] as String).toSet();
+        final pendientesNoEnSupabase = productosLocal
+            .where((p) => !idsOnline.contains(p.id))
+            .toList();
+
+        return [
+          ...res.map((m) {
+            final id = m['id'] as String;
+            if (localPendMap.containsKey(id)) return localPendMap[id]!;
+            final map = Map<String, dynamic>.from(m);
+            if (m['categorias'] != null) {
+              map['categoria_nombre'] = m['categorias']['nombre'];
+            }
+            final oferta = ofertaMap[id];
+            map['precio_oferta']        = oferta?['precio_oferta'];
+            map['descuento_porcentaje'] = oferta?['descuento_porcentaje'];
+            return ProductoModel.fromMap(map);
+          }),
+          ...pendientesNoEnSupabase,
+        ];
       } catch (_) {}
     }
 
@@ -136,8 +169,8 @@ class InventarioService {
       ...producto.toMap(),
       'id': id,
       'empresa_id': empresaId,
-      'created_at': DateTime.now().toIso8601String(),
-      'updated_at': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
       'synced': 0,
     };
 
@@ -176,16 +209,18 @@ class InventarioService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return false;
 
+    final ahora = DateTime.now().toUtc().toIso8601String();
     await LocalDatabase.actualizar(
-        'productos', {'stock_actual': cantidad, 'updated_at': DateTime.now().toIso8601String()},
+        'productos', {'stock_actual': cantidad, 'updated_at': ahora, 'synced': 0},
         'id', productoId);
 
-   if (await SupabaseService.isOnlineAsync) {
+    if (await SupabaseService.isOnlineAsync) {
       try {
         await SupabaseService.client
             .from('productos')
-            .update({'stock_actual': cantidad, 'updated_at': DateTime.now().toIso8601String()})
+            .update({'stock_actual': cantidad, 'updated_at': ahora})
             .eq('id', productoId);
+        await LocalDatabase.marcarSynced('productos', productoId);
       } catch (_) {}
     }
 

@@ -20,6 +20,9 @@ class EncargoService {
 
     if (await SupabaseService.isOnlineAsync) {
       try {
+        // Primero empujar cambios pendientes locales a Supabase
+        await _sincronizarPendientes(empresaId);
+
         var query = SupabaseService.client
             .from('encargos')
             .select('*, clientes(nombre)')
@@ -28,7 +31,15 @@ class EncargoService {
 
         final res = await query;
 
+        // IDs con cambios locales no sincronizados — no sobreescribir
+        final idsPendientes = local
+            .where((m) => m['synced'] == 0)
+            .map((m) => m['id'] as String)
+            .toSet();
+
         for (final m in res) {
+          // Si hay cambios locales pendientes para este encargo, respetar local
+          if (idsPendientes.contains(m['id'] as String?)) continue;
           final map = Map<String, dynamic>.from(m);
           // Guardar nombre del cliente antes de quitar el join
           if (m['clientes'] != null) {
@@ -40,7 +51,18 @@ class EncargoService {
           try { await LocalDatabase.insertar('encargos', map); } catch (_) {}
         }
 
-        var encargosOnline = res.map((m) => EncargoModel.fromMap(m)).toList();
+        // Mapa local de pendientes para que la lista use versión local
+        final localPendMap = Map.fromEntries(
+          encargosLocal
+              .where((e) => idsPendientes.contains(e.id))
+              .map((e) => MapEntry(e.id, e)),
+        );
+
+        var encargosOnline = res.map((m) {
+          final id = m['id'] as String;
+          return localPendMap[id] ?? EncargoModel.fromMap(m);
+        }).toList();
+
         if (esListaPropia != null) {
           encargosOnline = encargosOnline
               .where((e) => e.esListaPropia == esListaPropia)
@@ -107,16 +129,35 @@ class EncargoService {
 
   static Future<bool> actualizarEstado(String id, String estado) async {
     final ahora = DateTime.now().toUtc().toIso8601String();
+    // Marcar synced=0 para que el cambio sobreviva si Supabase falla
     await LocalDatabase.actualizar('encargos',
-        {'estado': estado, 'updated_at': ahora}, 'id', id);
+        {'estado': estado, 'updated_at': ahora, 'synced': 0}, 'id', id);
 
     if (await SupabaseService.isOnlineAsync) {
       try {
         await SupabaseService.client.from('encargos')
             .update({'estado': estado, 'updated_at': ahora}).eq('id', id);
+        await LocalDatabase.marcarSynced('encargos', id);
       } catch (_) {}
     }
     return true;
+  }
+
+  /// Empuja encargos con synced=0 a Supabase antes de leer desde la nube.
+  static Future<void> _sincronizarPendientes(String empresaId) async {
+    final db = await LocalDatabase.database;
+    final pendientes = await db.query('encargos',
+        where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId]);
+    for (final row in pendientes) {
+      try {
+        final data = Map<String, dynamic>.from(row)
+          ..remove('synced')
+          ..remove('cliente_nombre'); // campo solo local
+        data['es_lista_propia'] = data['es_lista_propia'] == 1;
+        await SupabaseService.client.from('encargos').upsert(data);
+        await LocalDatabase.marcarSynced('encargos', row['id'] as String);
+      } catch (_) {}
+    }
   }
 
   static Future<bool> eliminarEncargo(String id) async {

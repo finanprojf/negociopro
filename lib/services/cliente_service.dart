@@ -147,7 +147,7 @@ class ClienteService {
     if (empresaId == null) return false;
 
     final id = esNuevo ? _uuid.v4() : cliente.id;
-    final ahora = DateTime.now().toIso8601String();
+    final ahora = DateTime.now().toUtc().toIso8601String();
 
     final datosBase = {
       ...cliente.toMap(),
@@ -194,7 +194,7 @@ class ClienteService {
     if (empresaId == null) return false;
 
     await LocalDatabase.actualizar('clientes',
-        {'puntos_fidelidad': puntos, 'updated_at': DateTime.now().toIso8601String(), 'synced': 0},
+        {'puntos_fidelidad': puntos, 'updated_at': DateTime.now().toUtc().toIso8601String(), 'synced': 0},
         'id', clienteId);
 
     if (await SupabaseService.isOnlineAsync) {
@@ -203,6 +203,7 @@ class ClienteService {
             .from('clientes')
             .update({'puntos_fidelidad': puntos})
             .eq('id', clienteId);
+        await LocalDatabase.marcarSynced('clientes', clienteId);
       } catch (_) {}
     }
 

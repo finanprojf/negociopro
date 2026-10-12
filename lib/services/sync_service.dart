@@ -123,34 +123,13 @@ class SyncService {
       try {
         final data = _limpiarParaSupabase(row);
         await SupabaseService.client.from('abonos_fiado').upsert(data);
-
-        // Actualizar saldo en Supabase después de sync abono
-        final monto = (row['monto'] as num).toDouble();
-        final fiadoId = row['fiado_id'] as String;
-        await _actualizarSaldoFiado(fiadoId, monto);
-
+        // NO llamar _actualizarSaldoFiado aquí: _syncFiados ya empuja el saldo
+        // correcto desde SQLite local (que ya descontó todos los abonos).
+        // Llamarlo aquí causaría doble-resta (saldo incorrecto en Supabase).
         await LocalDatabase.marcarSynced(
             'abonos_fiado', row['id'] as String);
       } catch (_) {}
     }
-  }
-
-  static Future<void> _actualizarSaldoFiado(
-      String fiadoId, double monto) async {
-    try {
-      final res = await SupabaseService.client
-          .from('fiados')
-          .select('saldo_pendiente')
-          .eq('id', fiadoId)
-          .single();
-      final saldoActual = (res['saldo_pendiente'] as num).toDouble();
-      final nuevoSaldo = (saldoActual - monto).clamp(0.0, double.infinity);
-      await SupabaseService.client.from('fiados').update({
-        'saldo_pendiente': nuevoSaldo,
-        'estado': nuevoSaldo <= 0 ? 'pagado' : 'activo',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', fiadoId);
-    } catch (_) {}
   }
 
   // ============================================================
@@ -168,35 +147,12 @@ class SyncService {
       try {
         final data = _limpiarParaSupabase(row);
         await SupabaseService.client.from('abonos_apartado').upsert(data);
-
-        final monto = (row['monto'] as num).toDouble();
-        final apartadoId = row['apartado_id'] as String;
-        await _actualizarSaldoApartado(apartadoId, monto);
-
+        // NO llamar _actualizarSaldoApartado aquí: _syncApartados ya empuja el
+        // saldo correcto desde SQLite local. Llamarlo aquí causaría doble-resta.
         await LocalDatabase.marcarSynced(
             'abonos_apartado', row['id'] as String);
       } catch (_) {}
     }
-  }
-
-  static Future<void> _actualizarSaldoApartado(
-      String apartadoId, double monto) async {
-    try {
-      final res = await SupabaseService.client
-          .from('apartados')
-          .select('saldo_pendiente, monto_pagado')
-          .eq('id', apartadoId)
-          .single();
-      final saldoActual = (res['saldo_pendiente'] as num).toDouble();
-      final pagadoActual = (res['monto_pagado'] as num).toDouble();
-      final nuevoSaldo = (saldoActual - monto).clamp(0.0, double.infinity);
-      await SupabaseService.client.from('apartados').update({
-        'saldo_pendiente': nuevoSaldo,
-        'monto_pagado': pagadoActual + monto,
-        'estado': nuevoSaldo <= 0 ? 'completado' : 'activo',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', apartadoId);
-    } catch (_) {}
   }
 
   // ============================================================

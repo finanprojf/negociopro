@@ -125,7 +125,7 @@ class ApartadoService {
     if (empresaId == null) return false;
 
     final id = _uuid.v4();
-    final ahora = DateTime.now().toIso8601String();
+    final ahora = DateTime.now().toUtc().toIso8601String();
     final saldo = montoTotal - abonoInicial;
 
     final map = {
@@ -219,7 +219,7 @@ class ApartadoService {
         'saldo_pendiente': nuevoSaldo,
         'monto_pagado': nuevoPagado,
         'estado': nuevoSaldo > 0 ? 'activo' : 'completado',
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
         'synced': 0,
       }, 'id', apartadoId);
     }
@@ -239,7 +239,7 @@ class ApartadoService {
             'saldo_pendiente': nuevoSaldo,
             'monto_pagado': nuevoPagado,
             'estado': nuevoSaldo > 0 ? 'activo' : 'completado',
-            'updated_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
           }).eq('id', apartadoId);
           await LocalDatabase.marcarSynced('apartados', apartadoId);
         }
@@ -259,7 +259,7 @@ class ApartadoService {
     if (empresaId == null) return false;
 
     final abonoId = _uuid.v4();
-    final ahora = DateTime.now().toIso8601String();
+    final ahora = DateTime.now().toUtc().toIso8601String();
 
     await LocalDatabase.insertar('abonos_apartado', {
       'id': abonoId,
@@ -316,7 +316,7 @@ class ApartadoService {
             'saldo_pendiente': nuevoSaldo,
             'monto_pagado': nuevoPagado,
             'estado': nuevoEstado,
-            'updated_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
           }).eq('id', apartadoId);
           // Marcar apartado como synced solo cuando Supabase confirma el saldo actualizado
           await LocalDatabase.marcarSynced('apartados', apartadoId);
@@ -347,7 +347,7 @@ class ApartadoService {
 
   static Future<void> marcarLineaEntregada(String lineaId, bool entregada) async {
     final db = await LocalDatabase.database;
-    final ahora = DateTime.now().toIso8601String();
+    final ahora = DateTime.now().toUtc().toIso8601String();
 
     await db.update('apartado_productos', {
       'entregado': entregada ? 1 : 0,

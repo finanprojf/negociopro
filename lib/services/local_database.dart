@@ -88,6 +88,7 @@ class LocalDatabase {
         id TEXT PRIMARY KEY, venta_id TEXT NOT NULL,
         producto_id TEXT, nombre_producto TEXT NOT NULL,
         cantidad REAL NOT NULL, precio_unitario REAL NOT NULL,
+        precio_compra REAL DEFAULT 0,
         descuento REAL DEFAULT 0, subtotal REAL NOT NULL,
         created_at TEXT
       )
@@ -316,6 +317,11 @@ class LocalDatabase {
     if (oldV < 13) {
       try { await db.execute('ALTER TABLE productos ADD COLUMN precio_oferta REAL'); } catch (_) {}
       try { await db.execute('ALTER TABLE productos ADD COLUMN descuento_porcentaje REAL'); } catch (_) {}
+    }
+    if (oldV < 14) {
+      // Guardar costo unitario en detalle_ventas para calcular ganancias
+      // sin depender de que la tabla productos esté cargada en SQLite.
+      try { await db.execute('ALTER TABLE detalle_ventas ADD COLUMN precio_compra REAL DEFAULT 0'); } catch (_) {}
     }
   }
 

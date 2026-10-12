@@ -152,16 +152,18 @@ Future<void> _cargarVersion() async {
         if (ventasHoy.isNotEmpty) {
           final ventaIds = ventasHoy.map((v) => "'${v['id']}'").join(',');
           final todosDetalles = await db.rawQuery(
-              'SELECT dv.cantidad, dv.precio_unitario, dv.producto_id, '
-              'p.precio_compra FROM detalle_ventas dv '
+              'SELECT dv.cantidad, dv.precio_unitario, '
+              '  CASE WHEN dv.precio_compra > 0 THEN dv.precio_compra '
+              '       ELSE COALESCE(p.precio_compra, 0) END AS precio_compra '
+              'FROM detalle_ventas dv '
               'LEFT JOIN productos p ON p.id = dv.producto_id '
               'WHERE dv.venta_id IN ($ventaIds)');
           for (final d in todosDetalles) {
-            if (d['precio_compra'] != null) {
+            final pc = (d['precio_compra'] as num? ?? 0).toDouble();
+            if (pc > 0) {
               final precioVenta = (d['precio_unitario'] as num).toDouble();
-              final precioCompra = (d['precio_compra'] as num).toDouble();
               final cantidad = (d['cantidad'] as num).toDouble();
-              gananciaReal += (precioVenta - precioCompra) * cantidad;
+              gananciaReal += (precioVenta - pc) * cantidad;
             }
           }
         }
@@ -211,8 +213,9 @@ Future<void> _cargarVersion() async {
       // Cachear ventas en SQLite para uso offline
       for (final v in ventas as List) {
         try {
+          final vid = v['id'] as String;
           await db.insert('ventas', {
-            'id': v['id'] as String,
+            'id': vid,
             'empresa_id': empresaId,
             'numero_venta': v['numero_venta'],
             'total': (v['total'] as num).toDouble(),
@@ -224,6 +227,11 @@ Future<void> _cargarVersion() async {
             'created_at': v['created_at'] as String,
             'synced': 1,
           }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          // Actualizar numero_venta si la fila ya existía sin él
+          if (v['numero_venta'] != null) {
+            await db.update('ventas', {'numero_venta': v['numero_venta']},
+                where: 'id = ? AND numero_venta IS NULL', whereArgs: [vid]);
+          }
         } catch (_) {}
       }
 
@@ -266,21 +274,23 @@ Future<void> _cargarVersion() async {
       }
 
     double gananciaReal = 0;
-      // Usar SQLite para TODAS las ganancias (online y offline) para consistencia.
-      // getVentas() ya cachea los detalle_ventas de Supabase en SQLite.
+      // Calcular ganancias usando precio_compra guardado en detalle_ventas.
+      // Fallback: JOIN con productos para ventas viejas que no tengan el campo.
       if (ventasIds.isNotEmpty) {
         final allIds = ventasIds.map((id) => "'$id'").join(',');
         final todosDetalles = await db.rawQuery(
-            'SELECT dv.cantidad, dv.precio_unitario, p.precio_compra '
+            'SELECT dv.cantidad, dv.precio_unitario, '
+            '  CASE WHEN dv.precio_compra > 0 THEN dv.precio_compra '
+            '       ELSE COALESCE(p.precio_compra, 0) END AS precio_compra '
             'FROM detalle_ventas dv '
             'LEFT JOIN productos p ON p.id = dv.producto_id '
             'WHERE dv.venta_id IN ($allIds)');
         for (final d in todosDetalles) {
-          if (d['precio_compra'] != null) {
+          final pc = (d['precio_compra'] as num? ?? 0).toDouble();
+          if (pc > 0) {
             final precioVenta = (d['precio_unitario'] as num).toDouble();
-            final precioCompra = (d['precio_compra'] as num).toDouble();
             final cantidad = (d['cantidad'] as num).toDouble();
-            gananciaReal += (precioVenta - precioCompra) * cantidad;
+            gananciaReal += (precioVenta - pc) * cantidad;
           }
         }
       }
@@ -1073,8 +1083,9 @@ Widget _buildVitrinaWidget() {
         // Cachear ventas en SQLite para uso offline
         for (final v in results[0] as List) {
           try {
+            final ventaId = v['id'] as String;
             await db2.insert('ventas', {
-              'id': v['id'] as String,
+              'id': ventaId,
               'empresa_id': empresaId,
               'numero_venta': v['numero_venta'],
               'total': (v['total'] as num).toDouble(),
@@ -1086,6 +1097,12 @@ Widget _buildVitrinaWidget() {
               'created_at': v['created_at'] as String,
               'synced': 1,
             }, conflictAlgorithm: ConflictAlgorithm.ignore);
+            // Si la fila ya existía (ignore), actualizar numero_venta
+            // (puede ser nulo para ventas creadas offline antes de este fix)
+            if (v['numero_venta'] != null) {
+              await db2.update('ventas', {'numero_venta': v['numero_venta']},
+                  where: 'id = ? AND numero_venta IS NULL', whereArgs: [ventaId]);
+            }
           } catch (_) {}
         }
         // Cachear gastos en SQLite para uso offline

@@ -26,7 +26,7 @@ class PuntosService {
     if (puntos <= 0) return true;
 
     final id = _uuid.v4();
-    final ahora = DateTime.now().toIso8601String();
+    final ahora = DateTime.now().toUtc().toIso8601String();
 
     await LocalDatabase.insertar('movimientos_puntos', {
       'id': id, 'empresa_id': empresaId,
@@ -58,7 +58,7 @@ class PuntosService {
     if (empresaId == null) return false;
 
     final id = _uuid.v4();
-    final ahora = DateTime.now().toIso8601String();
+    final ahora = DateTime.now().toUtc().toIso8601String();
 
     await LocalDatabase.insertar('movimientos_puntos', {
       'id': id, 'empresa_id': empresaId,

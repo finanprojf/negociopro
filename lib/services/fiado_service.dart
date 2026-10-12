@@ -19,7 +19,7 @@ class FiadoService {
     if (empresaId == null) return false;
 
     final id = _uuid.v4();
-    final ahora = DateTime.now().toIso8601String();
+    final ahora = DateTime.now().toUtc().toIso8601String();
     final saldo = (montoOriginal - montoPagado).clamp(0.0, double.infinity);
 
     final map = {
@@ -165,7 +165,7 @@ class FiadoService {
       await LocalDatabase.actualizar('fiados', {
         'saldo_pendiente': nuevoSaldo,
         'estado': nuevoSaldo > 0 ? 'activo' : 'pagado',
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
         'synced': 0,
       }, 'id', fiadoId);
     }
@@ -182,7 +182,7 @@ class FiadoService {
           await SupabaseService.client.from('fiados').update({
             'saldo_pendiente': nuevoSaldo,
             'estado': nuevoSaldo > 0 ? 'activo' : 'pagado',
-            'updated_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
           }).eq('id', fiadoId);
           await LocalDatabase.marcarSynced('fiados', fiadoId);
         }
@@ -202,7 +202,7 @@ class FiadoService {
     if (empresaId == null) return false;
 
     final abonoId = _uuid.v4();
-    final ahora = DateTime.now().toIso8601String();
+    final ahora = DateTime.now().toUtc().toIso8601String();
 
     await LocalDatabase.insertar('abonos_fiado', {
       'id': abonoId,
