@@ -51,11 +51,39 @@ class FiadoService {
     return true;
   }
 
+  /// Sincroniza abonos y fiados pendientes a Supabase antes de leer.
+  /// Garantiza que Supabase tenga los datos más recientes antes de cachear.
+  static Future<void> _sincronizarPendientes(String empresaId) async {
+    final db = await LocalDatabase.database;
+
+    // 1. Sincronizar abonos pendientes
+    final abonosPend = await db.query('abonos_fiado',
+        where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId]);
+    for (final ab in abonosPend) {
+      try {
+        final abMap = Map<String, dynamic>.from(ab)..remove('synced');
+        await SupabaseService.client.from('abonos_fiado').upsert(abMap);
+        await LocalDatabase.marcarSynced('abonos_fiado', ab['id'] as String);
+      } catch (_) {}
+    }
+
+    // 2. Sincronizar fiados con cambios pendientes (saldo actualizado)
+    final fiadosPend = await db.query('fiados',
+        where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId]);
+    for (final f in fiadosPend) {
+      try {
+        final fMap = Map<String, dynamic>.from(f)..remove('synced')..remove('cliente_nombre')..remove('cliente_telefono');
+        await SupabaseService.client.from('fiados').upsert(fMap);
+        await LocalDatabase.marcarSynced('fiados', f['id'] as String);
+      } catch (_) {}
+    }
+  }
+
   static Future<List<FiadoModel>> getFiados({String? estado}) async {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
- // Cargar local primero
+    // Cargar local primero
     final local = await LocalDatabase.consultar('fiados', empresaId);
     var fiadosLocal = local.map((m) => FiadoModel.fromMap(m)).toList();
     if (estado != null) {
@@ -63,6 +91,9 @@ class FiadoService {
     }
 
     if (await SupabaseService.isOnlineAsync) {
+      // Primero sincronizar cambios locales pendientes a Supabase
+      try { await _sincronizarPendientes(empresaId); } catch (_) {}
+
       try {
         List<dynamic> res;
         if (estado != null) {
@@ -224,6 +255,8 @@ class FiadoService {
             'estado': nuevoSaldo <= 0 ? 'pagado' : 'activo',
             'updated_at': ahora,
           }).eq('id', fiadoId);
+          // Marcar fiado como synced solo cuando Supabase confirma el saldo actualizado
+          await LocalDatabase.marcarSynced('fiados', fiadoId);
         }
 
         await LocalDatabase.marcarSynced('abonos_fiado', abonoId);

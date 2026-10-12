@@ -19,7 +19,7 @@ class _ItemCarrito {
 
   _ItemCarrito({required this.producto, this.cantidad = 1});
 
-  double get subtotal => producto.precioVenta * cantidad;
+  double get subtotal => producto.precioEfectivo * cantidad;
 }
 
 class PosScreen extends StatefulWidget {
@@ -169,6 +169,27 @@ Future<void> _agregarClienteRapido() async {
     } catch (e) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Descuenta el stock en memoria después de una venta sin recargar de red
+  void _actualizarStockLocal(List<_ItemCarrito> vendidos) {
+    final Map<String, double> vendidoMap = {
+      for (final i in vendidos) i.producto.id: i.cantidad
+    };
+    setState(() {
+      _productos = _productos.map((p) {
+        final qty = vendidoMap[p.id];
+        if (qty == null) return p;
+        return p.copyWith(stockActual: (p.stockActual - qty).clamp(0.0, double.infinity));
+      }).toList();
+      // Mantener el filtro actual
+      final q = _searchCtrl.text.trim().toLowerCase();
+      _filtrados = q.isEmpty
+          ? _productos
+          : _productos.where((p) =>
+              p.nombre.toLowerCase().contains(q) ||
+              (p.codigoBarras ?? '').contains(q)).toList();
+    });
   }
 
   Future<void> _escanearProducto() async {
@@ -398,7 +419,7 @@ Future<void> _cargarClientes() async {
       padding: const EdgeInsets.all(8),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio: 1.05,
+        childAspectRatio: 1.3,
         crossAxisSpacing: 8,
         mainAxisSpacing: 8,
       ),
@@ -710,7 +731,10 @@ Future<void> _cargarClientes() async {
                       descuento: opcion == 'descuento' ? _total : 0,
                     );
                     if (context.mounted) {
-                      Navigator.pop(context, true);
+                      Navigator.pop(ctx);
+                      final vendidos = List<_ItemCarrito>.from(_carrito);
+                      setState(() { _carrito.clear(); _carritoMap.clear(); _clienteSeleccionado = null; _tipoPago = 'efectivo'; });
+                      _actualizarStockLocal(vendidos);
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(opcion == 'fiado'
                             ? '¡Registrado en fiado!'
@@ -829,7 +853,10 @@ Future<void> _cargarClientes() async {
                       descuento: opcion == 'descuento' ? faltante : 0,
                     );
                     if (context.mounted) {
-                      Navigator.pop(context, true);
+                      Navigator.pop(ctx);
+                      final vendidos = List<_ItemCarrito>.from(_carrito);
+                      setState(() { _carrito.clear(); _carritoMap.clear(); _clienteSeleccionado = null; _tipoPago = 'efectivo'; });
+                      _actualizarStockLocal(vendidos);
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(opcion == 'fiado'
                             ? '¡Venta registrada en fiado!'
@@ -851,8 +878,9 @@ Future<void> _cargarClientes() async {
                     montoPagado: _tipoPago == 'fiado' ? 0 : (double.tryParse(ctrl.text) ?? _total),
                   );
                   if (context.mounted) {
-                    // Salir del POS PRIMERO para evitar el flash rojo
-                    Navigator.pop(context, true);
+                    final vendidos = List<_ItemCarrito>.from(_carrito);
+                    setState(() { _carrito.clear(); _carritoMap.clear(); _clienteSeleccionado = null; _tipoPago = 'efectivo'; });
+                    _actualizarStockLocal(vendidos);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text('¡Venta registrada!',
                           style: GoogleFonts.poppins()),
@@ -902,126 +930,101 @@ class _ProdCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final agotado = producto.sinStock;
 
-    // ── Imagen (lado izquierdo) ───────────────────────────────────
-    Widget imagen = Container(
+    // ── Foto / ícono ─────────────────────────────────────────────
+    Widget foto = Container(
+      width: 52, height: 52,
       decoration: BoxDecoration(
-        color: AppColors.colorVentas.withValues(alpha: 0.07),
-        borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
-      ),
+        color: AppColors.colorVentas.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10)),
       child: producto.fotoUrl != null
-          ? ClipRRect(
-              borderRadius:
-                  const BorderRadius.horizontal(left: Radius.circular(12)),
+          ? ClipRRect(borderRadius: BorderRadius.circular(10),
               child: producto.fotoUrl!.startsWith('http')
-                  ? Image.network(producto.fotoUrl!,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      errorBuilder: (_, __, ___) => Center(
-                          child: Icon(Icons.inventory_2_rounded,
-                              color: AppColors.colorVentas.withValues(alpha: 0.4),
-                              size: 32)))
-                  : Image.file(File(producto.fotoUrl!),
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      errorBuilder: (_, __, ___) => Center(
-                          child: Icon(Icons.inventory_2_rounded,
-                              color: AppColors.colorVentas.withValues(alpha: 0.4),
-                              size: 32))))
-          : Center(
-              child: Icon(Icons.inventory_2_rounded,
-                  color: AppColors.colorVentas.withValues(alpha: 0.35), size: 34)),
+                  ? Image.network(producto.fotoUrl!, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                          Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 26))
+                  : Image.file(File(producto.fotoUrl!), fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                          Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 26)))
+          : const Icon(Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 26),
     );
 
-    // ── Badge (stock o cantidad en carrito) ───────────────────────
-    Widget badge = enCarrito
-        ? Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-                color: AppColors.primary, borderRadius: BorderRadius.circular(8)),
-            child: Text('$cantidadEnCarrito',
-                style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white)))
-        : agotado
-            ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+    // ── Contenido de la tarjeta (siempre igual) ──────────────────
+    Widget info = Padding(
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(children: [
+            foto,
+            const Spacer(),
+            if (enCarrito)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                    color: AppColors.dangerSurface,
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(8)),
+                child: Text('$cantidadEnCarrito',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)))
+            else if (agotado)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(color: AppColors.dangerSurface,
                     borderRadius: BorderRadius.circular(4)),
-                child: Text('Agotado',
-                    style: GoogleFonts.poppins(
-                        fontSize: 7,
-                        color: AppColors.danger,
-                        fontWeight: FontWeight.w600)))
-            : Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Text('Agotado', style: GoogleFonts.poppins(
+                    fontSize: 8, color: AppColors.danger, fontWeight: FontWeight.w600)))
+            else if (producto.enOferta)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
-                    color: (producto.stockBajo
-                            ? AppColors.warning
-                            : AppColors.textMuted)
-                        .withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(8)),
+                  color: _rojo,
+                  borderRadius: BorderRadius.circular(8)),
+                child: Text('-${producto.pctDescuento.toStringAsFixed(0)}%',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)))
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: producto.stockBajo ? AppColors.warning : AppColors.textMuted,
+                  borderRadius: BorderRadius.circular(8)),
                 child: Text('${producto.stockActual.toInt()}',
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white)));
-
-    // ── Contenido (imagen izquierda | texto derecha) ─────────────
-    Widget info = Stack(children: [
-      Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        // Imagen: 45% del ancho
-        Expanded(flex: 45, child: imagen),
-        // Texto: 55% del ancho
-        Expanded(
-          flex: 55,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(producto.nombre,
-                    style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: agotado
-                            ? AppColors.textMuted
-                            : AppColors.textPrimary),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis),
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(AppFormatters.moneda(producto.precioVenta),
-                      style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: agotado
-                              ? AppColors.textMuted
-                              : AppColors.primary)),
-                  if (enCarrito)
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                      Icon(Icons.remove_rounded,
-                          size: 16,
-                          color: _rojo.withValues(alpha: 0.7)),
-                      Icon(Icons.add_rounded,
-                          size: 16,
-                          color: _verde.withValues(alpha: 0.7)),
-                    ]),
-                ]),
-              ],
-            ),
-          ),
-        ),
-      ]),
-      // Badge esquina superior derecha
-      Positioned(top: 6, right: 6, child: badge),
-    ]);
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white))),
+          ]),
+          const SizedBox(height: 4),
+          Text(producto.nombre,
+              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600,
+                  color: agotado ? AppColors.textMuted : AppColors.textPrimary),
+              maxLines: enCarrito ? 1 : 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 2),
+          // En carrito: precio efectivo solo (sin tachado para no desbordar)
+          // Sin carrito: precio tachado + oferta si aplica
+          if (!enCarrito && producto.enOferta) ...[
+            Text(AppFormatters.moneda(producto.precioVenta),
+                style: GoogleFonts.poppins(
+                    fontSize: 10, fontWeight: FontWeight.w500,
+                    color: AppColors.textMuted,
+                    decoration: TextDecoration.lineThrough)),
+            Text(AppFormatters.moneda(producto.precioEfectivo),
+                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700,
+                    color: _rojo)),
+          ] else
+            Text(AppFormatters.moneda(producto.precioEfectivo),
+                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700,
+                    color: agotado ? AppColors.textMuted
+                        : (producto.enOferta ? _rojo : AppColors.primary))),
+          if (enCarrito) ...[
+            const SizedBox(height: 2),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Icon(Icons.remove_rounded, size: 18, color: _rojo.withValues(alpha: 0.7)),
+              Icon(Icons.add_rounded,    size: 18, color: _verde.withValues(alpha: 0.7)),
+            ]),
+          ],
+        ],
+      ),
+    );
 
     // ══════════════════════════════════════════════════════════════
     // ESTADO NORMAL — tarjeta completa = agregar

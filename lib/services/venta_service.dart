@@ -238,7 +238,7 @@ static Future<void> sincronizarPendientes() async {
     for (final item in items) {
       final p = item['producto'] as ProductoModel;
       final cantidad = (item['cantidad'] as num).toDouble();
-      subtotal += p.precioVenta * cantidad;
+      subtotal += p.precioEfectivo * cantidad;
     }
     final total = subtotal - descuento;
     final cambio = (montoPagado - total).clamp(0.0, double.infinity);
@@ -264,7 +264,7 @@ static Future<void> sincronizarPendientes() async {
     for (final item in items) {
       final p = item['producto'] as ProductoModel;
       final cantidad = (item['cantidad'] as num).toDouble();
-      final sub = p.precioVenta * cantidad;
+      final sub = p.precioEfectivo * cantidad;
 
       await LocalDatabase.insertar('detalle_ventas', {
         'id': _uuid.v4(),
@@ -272,7 +272,7 @@ static Future<void> sincronizarPendientes() async {
         'producto_id': p.id,
         'nombre_producto': p.nombre,
         'cantidad': cantidad,
-        'precio_unitario': p.precioVenta,
+        'precio_unitario': p.precioEfectivo,
         'descuento': 0,
         'subtotal': sub,
         'created_at': ahora,
@@ -302,11 +302,10 @@ static Future<void> sincronizarPendientes() async {
 
    
 
-   if (await SupabaseService.isOnlineAsync) {
-      try {
-        await _syncVenta(ventaId, ventaMap, items, ahora);
-      } catch (_) {}
-    }
+   // Sync en background — no bloquea la UI
+    SupabaseService.isOnlineAsync.then((online) {
+      if (online) _syncVenta(ventaId, ventaMap, items, ahora).ignore();
+    });
 
     // Los descuentos NO se registran como gastos:
     // ya reducen el total de la venta directamente en el campo descuento.

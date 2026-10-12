@@ -82,29 +82,59 @@ class ClienteService {
     }).toList();
   }
 
-  /// Devuelve mapa cliente_id → saldo fiado activo total
+  /// Devuelve mapa cliente_id → saldo fiado activo total.
+  /// Siempre prefiere el saldo local para fiados con cambios pendientes (synced=0).
   static Future<Map<String, double>> _getSaldosFiados(String empresaId) async {
     final Map<String, double> saldos = {};
+
+    // Leer siempre SQLite para tener los datos más frescos (incl. cambios offline)
+    final local = await LocalDatabase.consultar('fiados', empresaId);
+
     try {
       if (await SupabaseService.isOnlineAsync) {
         final res = await SupabaseService.client
             .from('fiados')
-            .select('cliente_id, saldo_pendiente')
+            .select('id, cliente_id, saldo_pendiente')
             .eq('empresa_id', empresaId)
             .eq('estado', 'activo');
+
+        // Mapa de fiados locales con cambios pendientes (synced=0)
+        final localPendMap = <String, Map<String, dynamic>>{
+          for (final f in local.where((m) => m['synced'] == 0))
+            f['id'] as String: f
+        };
+
+        final idsOnline = <String>{};
         for (final f in res) {
+          final fId = f['id'] as String;
           final cid = f['cliente_id'] as String;
-          saldos[cid] = (saldos[cid] ?? 0) + (f['saldo_pendiente'] as num).toDouble();
+          idsOnline.add(fId);
+          // Usar saldo local si hay cambios pendientes; si no, usar Supabase
+          final saldo = localPendMap.containsKey(fId)
+              ? (localPendMap[fId]!['saldo_pendiente'] as num? ?? 0).toDouble()
+              : (f['saldo_pendiente'] as num).toDouble();
+          if (saldo > 0) saldos[cid] = (saldos[cid] ?? 0) + saldo;
+        }
+
+        // Agregar fiados solo-locales (aún no sincronizados a Supabase)
+        for (final f in local) {
+          final fId = f['id'] as String;
+          if (!idsOnline.contains(fId) && f['estado'] == 'activo') {
+            final cid = f['cliente_id'] as String;
+            final saldo = (f['saldo_pendiente'] as num? ?? 0).toDouble();
+            if (saldo > 0) saldos[cid] = (saldos[cid] ?? 0) + saldo;
+          }
         }
         return saldos;
       }
     } catch (_) {}
+
     // Offline: leer de SQLite
-    final local = await LocalDatabase.consultar('fiados', empresaId);
     for (final f in local) {
       if (f['estado'] == 'activo') {
         final cid = f['cliente_id'] as String;
-        saldos[cid] = (saldos[cid] ?? 0) + (f['saldo_pendiente'] as num).toDouble();
+        final saldo = (f['saldo_pendiente'] as num? ?? 0).toDouble();
+        if (saldo > 0) saldos[cid] = (saldos[cid] ?? 0) + saldo;
       }
     }
     return saldos;

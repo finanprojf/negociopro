@@ -81,13 +81,30 @@ class InventarioService {
         if (soloActivos) query = query.eq('activo', true);
         final res = await query.order('nombre');
 
+        // Cargar ofertas activas de vitrina PRIMERO (para cachear con productos)
+        Map<String, Map<String, dynamic>> ofertaMap = {};
+        try {
+          final vitrina = await SupabaseService.client
+              .from('vitrina_productos')
+              .select('producto_id, precio_oferta, descuento_porcentaje')
+              .eq('empresa_id', empresaId);
+          ofertaMap = {
+            for (final v in vitrina)
+              v['producto_id'] as String: v as Map<String, dynamic>
+          };
+        } catch (_) {}
+
         for (final m in res) {
           final map = Map<String, dynamic>.from(m);
-          map.remove('categorias');          // quitar join antes de SQLite
-          map.remove('categoria_nombre');    // no existe en schema SQLite
+          map.remove('categorias');
+          map.remove('categoria_nombre');
           map['synced'] = 1;
-          map['activo'] = m['activo'] == true ? 1 : 0;         // bool → int para SQLite
-          map['es_elaborado'] = m['es_elaborado'] == true ? 1 : 0; // bool → int para SQLite
+          map['activo'] = m['activo'] == true ? 1 : 0;
+          map['es_elaborado'] = m['es_elaborado'] == true ? 1 : 0;
+          // Cachear oferta en SQLite para disponibilidad offline
+          final oferta = ofertaMap[m['id'] as String];
+          map['precio_oferta']        = oferta?['precio_oferta'];
+          map['descuento_porcentaje'] = oferta?['descuento_porcentaje'];
           try {
             await LocalDatabase.insertar('productos', map);
           } catch (_) {}
@@ -98,6 +115,9 @@ class InventarioService {
           if (m['categorias'] != null) {
             map['categoria_nombre'] = m['categorias']['nombre'];
           }
+          final oferta = ofertaMap[m['id'] as String];
+          map['precio_oferta']        = oferta?['precio_oferta'];
+          map['descuento_porcentaje'] = oferta?['descuento_porcentaje'];
           return ProductoModel.fromMap(map);
         }).toList();
       } catch (_) {}

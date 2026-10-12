@@ -35,8 +35,10 @@ class _ApartadosClienteScreenState extends State<ApartadosClienteScreen> {
   }
 void _mostrarHistorial() async {
     try {
-      List<Map<String, dynamic>> res = [];
+      final List<Map<String, dynamic>> res = [];
+      final Set<String> idsVistos = {};
 
+      // 1. Cargar desde Supabase si hay internet
       if (await SupabaseService.isOnlineAsync) {
         try {
           final data = await SupabaseService.client
@@ -44,18 +46,29 @@ void _mostrarHistorial() async {
               .select('*, apartados(descripcion, id)')
               .eq('cliente_id', widget.cliente.id)
               .order('created_at', ascending: false);
-          res = List<Map<String, dynamic>>.from(data);
+          for (final item in data) {
+            res.add(Map<String, dynamic>.from(item));
+            idsVistos.add(item['id'] as String);
+          }
         } catch (_) {}
       }
 
-      if (res.isEmpty) {
-        final db = await LocalDatabase.database;
-        final local = await db.query('abonos_apartado',
-            where: 'cliente_id = ?',
-            whereArgs: [widget.cliente.id],
-            orderBy: 'created_at DESC');
-        res = local;
+      // 2. Siempre agregar abonos locales no incluidos en Supabase (offline/no sincronizados)
+      final db = await LocalDatabase.database;
+      final local = await db.query('abonos_apartado',
+          where: 'cliente_id = ?',
+          whereArgs: [widget.cliente.id],
+          orderBy: 'created_at DESC');
+      for (final m in local) {
+        if (!idsVistos.contains(m['id'] as String)) {
+          res.add(Map<String, dynamic>.from(m));
+        }
       }
+      res.sort((a, b) {
+        final aD = DateTime.tryParse(a['created_at'] as String? ?? '') ?? DateTime(0);
+        final bD = DateTime.tryParse(b['created_at'] as String? ?? '') ?? DateTime(0);
+        return bD.compareTo(aD);
+      });
 
       if (!mounted) return;
       showModalBottomSheet(
@@ -222,7 +235,6 @@ void _mostrarHistorial() async {
   Future<void> _cargar() async {
     setState(() => _loading = true);
     try {
-      // Local primero
       final db = await LocalDatabase.database;
       final local = await db.query('apartados',
           where: 'cliente_id = ?',
@@ -237,15 +249,37 @@ void _mostrarHistorial() async {
               .select()
               .eq('cliente_id', widget.cliente.id)
               .order('created_at', ascending: false);
-          // Guardar en local
+
+          // IDs con cambios locales pendientes — NO sobreescribir
+          final abonosPend = await db.query('abonos_apartado',
+              where: 'cliente_id = ? AND synced = 0',
+              whereArgs: [widget.cliente.id]);
+          final idsPendientes = <String>{
+            ...local
+                .where((m) => m['synced'] == 0)
+                .map((m) => m['id'] as String),
+            ...abonosPend.map((a) => a['apartado_id'] as String),
+          };
+
+          // Guardar en local solo si no hay cambios pendientes
           for (final m in res) {
-            final map = Map<String, dynamic>.from(m);
-            map['synced'] = 1;
+            if (idsPendientes.contains(m['id'] as String?)) continue;
+            final map = Map<String, dynamic>.from(m)..['synced'] = 1;
             try { await LocalDatabase.insertar('apartados', map); } catch (_) {}
           }
+
+          // Construir lista: usar versión LOCAL para pendientes
+          final localPendMap = Map.fromEntries(
+            local
+                .where((m) => idsPendientes.contains(m['id'] as String))
+                .map((m) => MapEntry(m['id'] as String, ApartadoModel.fromMap(m))),
+          );
           final idsOnline = res.map((m) => m['id'] as String).toSet();
-          final pendientes = lista.where((a) => !idsOnline.contains(a.id)).toList();
-          lista = [...res.map((m) => ApartadoModel.fromMap(m)), ...pendientes];
+          final soloLocales = lista.where((a) => !idsOnline.contains(a.id)).toList();
+          lista = [
+            ...res.map((m) => localPendMap[m['id']] ?? ApartadoModel.fromMap(m)),
+            ...soloLocales,
+          ];
         } catch (_) {}
       }
 

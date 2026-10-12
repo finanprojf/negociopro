@@ -35,7 +35,6 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
  Future<void> _cargar() async {
     setState(() => _loading = true);
     try {
-      // Cargar local primero
       final db = await LocalDatabase.database;
       final localFiados = await db.query('fiados',
           where: 'cliente_id = ?',
@@ -44,52 +43,59 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
 
       if (await SupabaseService.isOnlineAsync) {
         try {
-          // Traer fiados sin join (el join de ventas falla si no hay FK en Supabase)
           final res = await SupabaseService.client
               .from('fiados')
               .select('*')
               .eq('cliente_id', widget.cliente.id)
               .order('created_at', ascending: false);
 
-          // Guardar en local (cache)
+          // IDs con cambios locales pendientes — NO sobreescribir con datos viejos de Supabase
+          final abonosPend = await db.query('abonos_fiado',
+              where: 'cliente_id = ? AND synced = 0',
+              whereArgs: [widget.cliente.id]);
+          final idsPendientes = <String>{
+            ...localFiados
+                .where((m) => m['synced'] == 0)
+                .map((m) => m['id'] as String),
+            ...abonosPend.map((a) => a['fiado_id'] as String),
+          };
+
+          // Guardar en local solo si no hay cambios pendientes para ese fiado
           for (final m in res) {
+            if (idsPendientes.contains(m['id'] as String?)) continue;
             final map = Map<String, dynamic>.from(m)..['synced'] = 1;
             try { await LocalDatabase.insertar('fiados', map); } catch (_) {}
           }
 
-          // Combinar online + locales pendientes
+          // Construir lista: usar versión LOCAL para fiados con cambios pendientes
+          final localPendMap = Map.fromEntries(
+            localFiados
+                .where((m) => idsPendientes.contains(m['id'] as String))
+                .map((m) => MapEntry(m['id'] as String, Map<String, dynamic>.from(m))),
+          );
           final idsOnline = res.map((m) => m['id'] as String).toSet();
-          final localesPendientes = localFiados
+          final soloLocales = localFiados
               .where((m) => !idsOnline.contains(m['id'] as String))
+              .map((m) => Map<String, dynamic>.from(m))
               .toList();
-
           final todosLosMapas = [
-            ...List<Map<String, dynamic>>.from(res),
-            ...localesPendientes,
+            ...res.map((m) => localPendMap[m['id']] ?? Map<String, dynamic>.from(m)),
+            ...soloLocales,
           ];
 
-          // Enriquecer con detalle_ventas desde SQLite local
           final combinados = await _enriquecerConDetalles(db, todosLosMapas);
-
           if (mounted) {
-            setState(() {
-              _fiados = combinados;
-              _loading = false;
-            });
+            setState(() { _fiados = combinados; _loading = false; });
           }
           return;
         } catch (_) {}
       }
 
-    // Sin internet usar local con detalles de venta
-      final fiadosConDetalles = await _enriquecerConDetalles(db, localFiados);
-      if (mounted) {
-        setState(() {
-          _fiados = fiadosConDetalles;
-          _loading = false;
-        });
-      }
-    } catch (e) {
+      // Sin internet: usar local con detalles de venta
+      final fiadosConDetalles = await _enriquecerConDetalles(
+          db, localFiados.map((m) => Map<String, dynamic>.from(m)).toList());
+      if (mounted) setState(() { _fiados = fiadosConDetalles; _loading = false; });
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -722,8 +728,10 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
 
   void _mostrarHistorial() async {
     try {
-      List<Map<String, dynamic>> res = [];
+      final List<Map<String, dynamic>> res = [];
+      final Set<String> idsVistos = {};
 
+      // 1. Cargar desde Supabase si hay internet
       if (await SupabaseService.isOnlineAsync) {
         try {
           final data = await SupabaseService.client
@@ -731,19 +739,28 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
               .select()
               .eq('cliente_id', widget.cliente.id)
               .order('created_at', ascending: false);
-          res = List<Map<String, dynamic>>.from(data);
+          for (final item in data) {
+            res.add(Map<String, dynamic>.from(item));
+            idsVistos.add(item['id'] as String);
+          }
         } catch (_) {}
       }
 
-      // Fallback SQLite
-      if (res.isEmpty) {
-        final empresaId = await SupabaseService.getEmpresaId();
-        if (empresaId != null) {
-          final local = await LocalDatabase.consultar('abonos_fiado', empresaId);
-          res = local
-              .where((m) => m['cliente_id'] == widget.cliente.id)
-              .toList();
+      // 2. Siempre agregar abonos locales que no estén en Supabase (offline o no sincronizados)
+      final empresaId = await SupabaseService.getEmpresaId();
+      if (empresaId != null) {
+        final local = await LocalDatabase.consultar('abonos_fiado', empresaId);
+        for (final m in local) {
+          if (m['cliente_id'] == widget.cliente.id &&
+              !idsVistos.contains(m['id'] as String)) {
+            res.add(Map<String, dynamic>.from(m));
+          }
         }
+        res.sort((a, b) {
+          final aD = DateTime.tryParse(a['created_at'] as String? ?? '') ?? DateTime(0);
+          final bD = DateTime.tryParse(b['created_at'] as String? ?? '') ?? DateTime(0);
+          return bD.compareTo(aD);
+        });
       }
 
       if (!mounted) return;

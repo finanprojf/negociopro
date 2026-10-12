@@ -758,7 +758,7 @@ class _EncargosScreenState extends State<EncargosScreen>
 
     // 2. Si es fiado o mixto, crear el registro de fiado
     if (tipoPago != 'contado' && clienteId != null) {
-      final montoFiado = encargo.precioEstimado > 0 ? encargo.precioEstimado : 0;
+      final double montoFiado = encargo.precioEstimado > 0 ? encargo.precioEstimado : 0.0;
       if (montoFiado > 0) {
         await FiadoService.crearFiado(
           clienteId: clienteId,

@@ -10,10 +10,33 @@ import '../fiado/fiado_cliente_screen.dart';
 import '../apartados/apartados_cliente_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../services/cliente_service.dart';
 
-class ClienteDetalleScreen extends StatelessWidget {
+class ClienteDetalleScreen extends StatefulWidget {
   final ClienteModel cliente;
   const ClienteDetalleScreen({super.key, required this.cliente});
+
+  @override
+  State<ClienteDetalleScreen> createState() => _ClienteDetalleScreenState();
+}
+
+class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
+  late ClienteModel cliente;
+
+  @override
+  void initState() {
+    super.initState();
+    cliente = widget.cliente;
+  }
+
+  /// Recarga el cliente desde SQLite/Supabase para reflejar saldos actualizados
+  Future<void> _recargarCliente() async {
+    try {
+      final lista = await ClienteService.getClientes();
+      final actualizado = lista.where((c) => c.id == cliente.id).firstOrNull;
+      if (actualizado != null && mounted) setState(() => cliente = actualizado);
+    } catch (_) {}
+  }
 
   void _copiar(BuildContext context, String valor) {
     Clipboard.setData(ClipboardData(text: valor));
@@ -109,8 +132,11 @@ class ClienteDetalleScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_outlined),
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => ClienteFormScreen(cliente: cliente))),
+            onPressed: () async {
+              await Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => ClienteFormScreen(cliente: cliente)));
+              _recargarCliente();
+            },
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),
@@ -222,12 +248,18 @@ class ClienteDetalleScreen extends StatelessWidget {
                 'Contactar', AppColors.colorVentas, () => _contactar(context))),
             const SizedBox(width: 10),
             Expanded(child: _AccionBtn(Icons.handshake_outlined,
-                'Fiado', AppColors.colorFiado, () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => FiadoClienteScreen(cliente: cliente))))),
+                'Fiado', AppColors.colorFiado, () async {
+              await Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => FiadoClienteScreen(cliente: cliente)));
+              _recargarCliente();
+            })),
             const SizedBox(width: 10),
             Expanded(child: _AccionBtn(Icons.bookmark_outlined,
-                'Apartados', AppColors.colorApartados, () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => ApartadosClienteScreen(cliente: cliente))))),
+                'Apartados', AppColors.colorApartados, () async {
+              await Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => ApartadosClienteScreen(cliente: cliente)));
+              _recargarCliente();
+            })),
           ]),
 
           const SizedBox(height: 12),

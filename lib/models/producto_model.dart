@@ -22,6 +22,10 @@ class ProductoModel {
   final DateTime? updatedAt;
   final String? categoriaNombre;
 
+  // ── Oferta desde vitrina ────────────────────────────────────
+  final double? precioOferta;
+  final double? descuentoPorcentaje;
+
   ProductoModel({
     required this.id,
     required this.empresaId,
@@ -42,6 +46,8 @@ class ProductoModel {
     this.createdAt,
     this.updatedAt,
     this.categoriaNombre,
+    this.precioOferta,
+    this.descuentoPorcentaje,
   });
 
   // ── Getters de contabilidad ─────────────────────────────────
@@ -66,6 +72,21 @@ class ProductoModel {
 
   bool get stockBajo => stockActual <= stockMinimo;
   bool get sinStock  => stockActual <= 0;
+
+  /// Precio efectivo: usa precio de oferta si existe, si no el precio normal
+  double get precioEfectivo => (precioOferta != null && precioOferta! > 0 && precioOferta! < precioVenta)
+      ? precioOferta!
+      : precioVenta;
+
+  /// ¿Tiene oferta activa?
+  bool get enOferta => precioOferta != null && precioOferta! > 0 && precioOferta! < precioVenta;
+
+  /// Porcentaje de descuento calculado o guardado
+  double get pctDescuento {
+    if (descuentoPorcentaje != null && descuentoPorcentaje! > 0) return descuentoPorcentaje!;
+    if (enOferta) return ((precioVenta - precioOferta!) / precioVenta * 100);
+    return 0;
+  }
 
   // ── Precios sugeridos para producto elaborado ───────────────
   double get precioSugerido50  => costoUnitario * 1.50;
@@ -92,6 +113,8 @@ class ProductoModel {
         createdAt:  map['created_at'] != null ? DateTime.tryParse(map['created_at']) : null,
         updatedAt:  map['updated_at'] != null ? DateTime.tryParse(map['updated_at']) : null,
         categoriaNombre: map['categoria_nombre'],
+        precioOferta:       (map['precio_oferta'] as num?)?.toDouble(),
+        descuentoPorcentaje:(map['descuento_porcentaje'] as num?)?.toDouble(),
       );
 
   Map<String, dynamic> toMap() => {
@@ -118,6 +141,7 @@ class ProductoModel {
     double? precioVenta, double? stockActual, double? stockMinimo,
     String? unidad, bool? activo, bool? esElaborado,
     double? costoProduccion, double? unidadesProducidas,
+    double? precioOferta, double? descuentoPorcentaje,
   }) => ProductoModel(
         id:                id,
         empresaId:         empresaId,
@@ -137,5 +161,7 @@ class ProductoModel {
         unidadesProducidas:unidadesProducidas ?? this.unidadesProducidas,
         createdAt:         createdAt,
         updatedAt:         updatedAt,
+        precioOferta:      precioOferta       ?? this.precioOferta,
+        descuentoPorcentaje: descuentoPorcentaje ?? this.descuentoPorcentaje,
       );
 }

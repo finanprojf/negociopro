@@ -11,6 +11,7 @@ import 'impresora_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
+import '../../services/local_database.dart';
 class EmpresaScreen extends StatefulWidget {
   const EmpresaScreen({super.key});
 
@@ -52,12 +53,31 @@ Future<void> _verificarAdmin() async {
   Future<void> _cargarDatos() async {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
-      if (empresaId != null) {
+      if (empresaId == null) return;
+
+      // Primero intentar desde Supabase y cachear en SQLite
+      try {
         final res = await SupabaseService.client
             .from('empresas')
             .select()
             .eq('id', empresaId)
             .single();
+        // Cachear en SQLite para que el dashboard lo lea offline
+        await LocalDatabase.insertar('empresas', {
+          'id': empresaId,
+          'nombre': res['nombre'] ?? '',
+          'telefono': res['telefono'] ?? '',
+          'whatsapp': res['whatsapp'] ?? '',
+          'correo': res['correo'] ?? '',
+          'direccion': res['direccion'] ?? '',
+          'lema': res['lema'] ?? '',
+          'logo_url': res['logo_url'],
+          'moneda': res['moneda'] ?? 'DOP',
+          'mensaje_recibo': res['mensaje_recibo'],
+          'synced': 1,
+          'created_at': res['created_at'],
+          'updated_at': res['updated_at'],
+        });
         if (mounted) {
           setState(() {
             _nombreCtrl.text = res['nombre'] ?? '';
@@ -66,6 +86,21 @@ Future<void> _verificarAdmin() async {
             _direccionCtrl.text = res['direccion'] ?? '';
             _lemaCtrl.text = res['lema'] ?? '';
             _logoUrl = res['logo_url'];
+          });
+        }
+      } catch (_) {
+        // Sin internet: cargar desde SQLite
+        final db = await LocalDatabase.database;
+        final rows = await db.query('empresas', where: 'id = ?', whereArgs: [empresaId]);
+        if (rows.isNotEmpty && mounted) {
+          final r = rows.first;
+          setState(() {
+            _nombreCtrl.text = r['nombre'] as String? ?? '';
+            _telefonoCtrl.text = r['telefono'] as String? ?? '';
+            _whatsappCtrl.text = r['whatsapp'] as String? ?? '';
+            _direccionCtrl.text = r['direccion'] as String? ?? '';
+            _lemaCtrl.text = r['lema'] as String? ?? '';
+            _logoUrl = r['logo_url'] as String?;
           });
         }
       }
@@ -83,14 +118,20 @@ Future<void> _verificarAdmin() async {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId != null) {
-        await SupabaseService.client.from('empresas').update({
+        final datos = {
           'nombre': _nombreCtrl.text.trim(),
           'telefono': _telefonoCtrl.text.trim(),
           'whatsapp': _whatsappCtrl.text.trim(),
           'direccion': _direccionCtrl.text.trim(),
           'lema': _lemaCtrl.text.trim(),
           'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', empresaId);
+        };
+        // Guardar en Supabase
+        try {
+          await SupabaseService.client.from('empresas').update(datos).eq('id', empresaId);
+        } catch (_) {}
+        // Guardar en SQLite local para que dashboard lo vea inmediatamente
+        await LocalDatabase.insertar('empresas', {'id': empresaId, ...datos});
       }
       if (mounted) {
         setState(() => _loading = false);
@@ -551,7 +592,8 @@ SizedBox(
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-           await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
+              await LocalDatabase.limpiarDatosLocales();
+              await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -912,7 +954,8 @@ class _EliminarCuentaSheetState extends State<_EliminarCuentaSheet> {
           });
         } catch (_) {/* ignorar si la tabla no existe */}
       }
-      // Cerrar sesión y eliminar cuenta en Supabase Auth
+      // Limpiar datos locales y cerrar sesión
+      await LocalDatabase.limpiarDatosLocales();
       await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {

@@ -313,6 +313,10 @@ class LocalDatabase {
     if (oldV < 12) {
       try { await db.execute('ALTER TABLE encargos ADD COLUMN costo_pedido REAL DEFAULT 0'); } catch (_) {}
     }
+    if (oldV < 13) {
+      try { await db.execute('ALTER TABLE productos ADD COLUMN precio_oferta REAL'); } catch (_) {}
+      try { await db.execute('ALTER TABLE productos ADD COLUMN descuento_porcentaje REAL'); } catch (_) {}
+    }
   }
 
 
