@@ -76,6 +76,9 @@ class VentaService {
             } catch (_) {}
           }
         }
+        // Backfill precio_compra en detalle_ventas para ganancia correcta
+        // en cualquier dispositivo (incluyendo los que no hicieron la venta)
+        await LocalDatabase.backfillPrecioCompra();
 
         final ventasOnline = res.map((m) {
           final map = Map<String, dynamic>.from(m);

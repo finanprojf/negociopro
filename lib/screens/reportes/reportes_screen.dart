@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:sqflite/sqflite.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
 import '../../services/supabase_service.dart';
@@ -158,14 +159,70 @@ class _ReportesScreenState extends State<ReportesScreen> {
           }
         } catch (_) {}
 
-        // ── Ganancia desde SQLite (cubre TODOS los registros: offline + cacheados) ──
-        // Usa CASE WHEN: precio_compra del detalle primero, fallback a productos.
-        // Esto evita depender de que la columna precio_compra exista en Supabase.
+        // ── Ganancia desde SQLite con backfill de precio_compra ──────────────────
         final todosVentaIds = {...ventasIds, ...idsOfflineContados};
         if (todosVentaIds.isNotEmpty) {
           try {
             final dbLocal = await LocalDatabase.database;
             final ph = todosVentaIds.map((_) => '?').join(',');
+
+            // 1. Cachear detalles que falten en SQLite (ventas recientes de Supabase)
+            if (ventasIds.isNotEmpty) {
+              try {
+                final phV = ventasIds.map((_) => '?').join(',');
+                final enSqlite = await dbLocal.rawQuery(
+                    'SELECT DISTINCT venta_id FROM detalle_ventas WHERE venta_id IN ($phV)',
+                    ventasIds.toList());
+                final yaEnSqlite = enSqlite.map((r) => r['venta_id'] as String).toSet();
+                final faltantes = ventasIds.where((id) => !yaEnSqlite.contains(id)).toList();
+                if (faltantes.isNotEmpty) {
+                  final detallesRemoto = await SupabaseService.client
+                      .from('detalle_ventas')
+                      .select()
+                      .inFilter('venta_id', faltantes);
+                  for (final d in detallesRemoto as List) {
+                    try {
+                      await dbLocal.insert('detalle_ventas',
+                          Map<String, dynamic>.from(d),
+                          conflictAlgorithm: ConflictAlgorithm.ignore);
+                    } catch (_) {}
+                  }
+                }
+              } catch (_) {}
+            }
+
+            // 2. Cachear productos con precio_compra y hacer backfill en detalle_ventas
+            try {
+              final prodRows = await dbLocal.rawQuery(
+                  'SELECT DISTINCT producto_id FROM detalle_ventas '
+                  'WHERE venta_id IN ($ph) AND (precio_compra IS NULL OR precio_compra = 0) '
+                  'AND producto_id IS NOT NULL',
+                  todosVentaIds.toList());
+              if (prodRows.isNotEmpty) {
+                final prodIds = prodRows.map((r) => r['producto_id'] as String).toList();
+                final prods = await SupabaseService.client
+                    .from('productos')
+                    .select('id, nombre, precio_compra, precio_venta, stock_actual, stock_minimo, activo, empresa_id')
+                    .inFilter('id', prodIds);
+                for (final p in prods as List) {
+                  try {
+                    final map = Map<String, dynamic>.from(p);
+                    map['synced'] = 1;
+                    await dbLocal.insert('productos', map,
+                        conflictAlgorithm: ConflictAlgorithm.ignore);
+                  } catch (_) {}
+                  final pc = (p['precio_compra'] as num? ?? 0).toDouble();
+                  if (pc > 0) {
+                    await dbLocal.update('productos', {'precio_compra': pc},
+                        where: 'id = ? AND (precio_compra IS NULL OR precio_compra = 0)',
+                        whereArgs: [p['id']]);
+                  }
+                }
+                await LocalDatabase.backfillPrecioCompra();
+              }
+            } catch (_) {}
+
+            // 3. Calcular ganancia con CASE WHEN ya que precio_compra está relleno
             final detallesLocal = await dbLocal.rawQuery(
               'SELECT d.cantidad, d.precio_unitario, '
               '  CASE WHEN d.precio_compra > 0 THEN d.precio_compra '
@@ -179,28 +236,6 @@ class _ReportesScreenState extends State<ReportesScreen> {
               final pv = (d['precio_unitario'] as num? ?? 0).toDouble();
               final pc = (d['costo']           as num? ?? 0).toDouble();
               gananciaBruta += (pv - pc) * (d['cantidad'] as num? ?? 1).toDouble();
-            }
-            // Si hay ventas de Supabase que aún no están en SQLite,
-            // intentar obtener sus detalles desde Supabase (sin precio_compra → pc=0)
-            final idsEnSqlite = <String>{};
-            final idsCheck = await dbLocal.rawQuery(
-              'SELECT DISTINCT venta_id FROM detalle_ventas WHERE venta_id IN ($ph)',
-              todosVentaIds.toList(),
-            );
-            for (final r in idsCheck) idsEnSqlite.add(r['venta_id'] as String);
-            final idsFaltantes = ventasIds.where((id) => !idsEnSqlite.contains(id)).toList();
-            if (idsFaltantes.isNotEmpty) {
-              try {
-                final detallesRemoto = await SupabaseService.client
-                    .from('detalle_ventas')
-                    .select('cantidad, precio_unitario')
-                    .inFilter('venta_id', idsFaltantes);
-                for (final d in (detallesRemoto as List)) {
-                  final pv = (d['precio_unitario'] as num? ?? 0).toDouble();
-                  // Sin costo → ganancia = precio_venta (conservador: no resta nada)
-                  gananciaBruta += pv * (d['cantidad'] as num? ?? 1).toDouble();
-                }
-              } catch (_) {}
             }
           } catch (_) {}
         }

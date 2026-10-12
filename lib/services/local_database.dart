@@ -369,6 +369,31 @@ class LocalDatabase {
     await db.update(tabla, {'synced': 1}, where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Rellena precio_compra en detalle_ventas locales usando la tabla productos.
+  /// Llama esto después de cachear detalles desde Supabase para que la ganancia
+  /// se calcule correctamente en cualquier dispositivo.
+  static Future<void> backfillPrecioCompra() async {
+    final db = await database;
+    try {
+      await db.rawUpdate('''
+        UPDATE detalle_ventas
+        SET precio_compra = (
+          SELECT COALESCE(p.precio_compra, 0)
+          FROM productos p
+          WHERE p.id = detalle_ventas.producto_id
+            AND p.precio_compra > 0
+        )
+        WHERE (precio_compra IS NULL OR precio_compra = 0)
+          AND producto_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM productos p
+            WHERE p.id = detalle_ventas.producto_id
+              AND p.precio_compra > 0
+          )
+      ''');
+    } catch (_) {}
+  }
+
   static Future<void> cerrar() async {
     final db = await database;
     await db.close();

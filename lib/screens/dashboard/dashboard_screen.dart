@@ -270,6 +270,38 @@ Future<void> _cargarVersion() async {
                   conflictAlgorithm: ConflictAlgorithm.ignore);
             } catch (_) {}
           }
+
+          // Backfill: cachear productos con precio_compra y rellenar detalle_ventas
+          // Esto resuelve ganancia = 0 en dispositivos nuevos donde productos no está local
+          try {
+            final prodIds = (detallesRemoto as List)
+                .where((d) => d['producto_id'] != null)
+                .map((d) => d['producto_id'] as String)
+                .toSet().toList();
+            if (prodIds.isNotEmpty) {
+              final prods = await SupabaseService.client
+                  .from('productos')
+                  .select('id, nombre, precio_compra, precio_venta, stock_actual, stock_minimo, activo, empresa_id')
+                  .inFilter('id', prodIds);
+              for (final p in prods as List) {
+                try {
+                  final map = Map<String, dynamic>.from(p);
+                  map['synced'] = 1;
+                  await db.insert('productos', map,
+                      conflictAlgorithm: ConflictAlgorithm.ignore);
+                } catch (_) {}
+                // Actualizar precio_compra si el producto ya existía con valor 0
+                final pc = (p['precio_compra'] as num? ?? 0).toDouble();
+                if (pc > 0) {
+                  await db.update('productos', {'precio_compra': pc},
+                      where: 'id = ? AND (precio_compra IS NULL OR precio_compra = 0)',
+                      whereArgs: [p['id']]);
+                }
+              }
+              // Propagar precio_compra a detalle_ventas locales
+              await LocalDatabase.backfillPrecioCompra();
+            }
+          } catch (_) {}
         } catch (_) {}
       }
 
