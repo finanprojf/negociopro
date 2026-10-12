@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 import '../dashboard/dashboard_screen.dart';
 class RegisterScreen extends StatefulWidget {
@@ -316,15 +317,42 @@ if (mounted) {
   }
 
   Widget _buildTerminos() {
-    return const Center(
-      child: Text(
-        'Al registrarte aceptas nuestros Términos de uso\ny Política de privacidad.',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontFamily: 'Poppins',
-          fontSize: 12,
-          color: AppColors.textMuted,
-        ),
+    return Center(
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        children: [
+          const Text(
+            'Al registrarte aceptas nuestros ',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textMuted),
+          ),
+          GestureDetector(
+            onTap: () async {
+              final uri = Uri.parse('https://vitrina-web-beta.vercel.app/privacidad');
+              try { await launchUrl(uri, mode: LaunchMode.externalApplication); } catch (_) {}
+            },
+            child: const Text(
+              'Términos de uso',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                  color: AppColors.primary, decoration: TextDecoration.underline),
+            ),
+          ),
+          const Text(
+            ' y ',
+            style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textMuted),
+          ),
+          GestureDetector(
+            onTap: () async {
+              final uri = Uri.parse('https://vitrina-web-beta.vercel.app/privacidad');
+              try { await launchUrl(uri, mode: LaunchMode.externalApplication); } catch (_) {}
+            },
+            child: const Text(
+              'Política de privacidad.',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                  color: AppColors.primary, decoration: TextDecoration.underline),
+            ),
+          ),
+        ],
       ),
     );
   }
