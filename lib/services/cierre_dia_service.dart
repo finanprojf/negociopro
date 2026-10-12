@@ -23,6 +23,29 @@ class CierreDiaService {
           orderBy: 'created_at DESC', limit: 1);
       if (cierres.isNotEmpty && cierres.first['created_at'] != null) {
         inicio = cierres.first['created_at'] as String;
+      } else if (await SupabaseService.isOnlineAsync) {
+        // SQLite vacío (reinstalación/sesión nueva) — buscar último cierre en Supabase
+        try {
+          final res = await SupabaseService.client
+              .from('cierres_dia')
+              .select('created_at, id, fecha, total_ventas, cantidad_ventas, '
+                      'total_gastos, ganancia, ganancia_real, efectivo_esperado, '
+                      'efectivo_contado, diferencia, notas')
+              .eq('empresa_id', empresaId)
+              .order('created_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
+          if (res != null && res['created_at'] != null) {
+            inicio = res['created_at'] as String;
+            // Cachear en SQLite para futuros accesos offline
+            try {
+              final m = Map<String, dynamic>.from(res as Map);
+              m['synced'] = 1;
+              await db.insert('cierres_dia', m,
+                  conflictAlgorithm: ConflictAlgorithm.ignore);
+            } catch (_) {}
+          }
+        } catch (_) {}
       }
 
       // ── 1-4: Queries en paralelo (SQLite) ────────────────────
@@ -334,8 +357,9 @@ class CierreDiaService {
           .timeout(const Duration(seconds: 10));
       if (empresaId == null) return [];
 
-      // Leer local primero
-      final rows = await LocalDatabase.consultar('cierres_dia', empresaId);
+      // Leer local primero (List.from para que sea mutable — sqflite devuelve lista no modificable)
+      final rows = List<Map<String, dynamic>>.from(
+          await LocalDatabase.consultar('cierres_dia', empresaId));
       final idsLocal = rows.map((r) => r['id'] as String).toSet();
 
       // Si hay internet, traer de Supabase los que no estén en local

@@ -171,17 +171,21 @@ class _ReportesScreenState extends State<ReportesScreen> {
           }
         } catch (_) {}
 
-        // Ganancia bruta de ventas sincronizadas (desde Supabase con precio_compra)
+        // Ganancia bruta de ventas sincronizadas
+        // Usa precio_compra de detalle_ventas (denormalizado al momento de venta),
+        // con fallback a productos.precio_compra si no tiene.
         if (ventasIds.isNotEmpty) {
           try {
             final detalles = await SupabaseService.client
                 .from('detalle_ventas')
-                .select('cantidad, precio_unitario, productos(precio_compra)')
+                .select('cantidad, precio_unitario, precio_compra, productos(precio_compra)')
                 .inFilter('venta_id', ventasIds);
             for (final d in detalles) {
-              final pv = (d['precio_unitario'] as num).toDouble();
-              final pc = d['productos'] != null
+              final pv    = (d['precio_unitario'] as num).toDouble();
+              final pcDV  = (d['precio_compra']   as num? ?? 0).toDouble();
+              final pcProd = d['productos'] != null
                   ? (d['productos']['precio_compra'] as num? ?? 0).toDouble() : 0.0;
+              final pc    = pcDV > 0 ? pcDV : pcProd;
               gananciaBruta += (pv - pc) * (d['cantidad'] as num).toDouble();
             }
           } catch (_) {}
