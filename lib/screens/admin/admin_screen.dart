@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
 import '../../services/supabase_service.dart';
+import 'dart:convert';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -28,7 +29,7 @@ class _AdminScreenState extends State<AdminScreen> {
     try {
      final res = await SupabaseService.client
           .from('empresas')
-          .select('id, nombre, telefono, whatsapp, plan_activo, suscripcion_vence, created_at, usuarios(correo)')
+          .select('id, nombre, telefono, whatsapp, plan_activo, suscripcion_vence, created_at, usuario_id, usuarios(id, correo)')
           .order('created_at', ascending: false);
 
       if (mounted) {
@@ -79,6 +80,16 @@ class _AdminScreenState extends State<AdminScreen> {
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {}
+  }
+
+  String _nombrePlan(dynamic plan) {
+    switch (plan?.toString()) {
+      case 'pro': return 'Pro';
+      case 'enterprise': return 'Enterprise';
+      case 'basico': return 'Básico';
+      case 'trial': return 'Trial';
+      default: return 'Básico';
+    }
   }
 
   String _planLabel(int dias) {
@@ -219,7 +230,10 @@ class _AdminScreenState extends State<AdminScreen> {
                     color: activa ? AppColors.successSurface : AppColors.dangerSurface,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(activa ? '✓ Activa' : '✕ Vencida',
+                  child: Text(
+                      activa
+                        ? '✓ Activa · ${_nombrePlan(e['plan_activo'])}'
+                        : '✕ Vencida',
                       style: GoogleFonts.poppins(
                           fontSize: 10, fontWeight: FontWeight.w600,
                           color: activa ? AppColors.success : AppColors.danger)),
@@ -258,6 +272,47 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(width: 6),
                 _PlanBtn('1 año', () => _activarPlan(e, 365, telefono),
                     color: AppColors.success),
+              ]),
+              const SizedBox(height: 12),
+              const Divider(height: 1, color: AppColors.cardBorder),
+              const SizedBox(height: 10),
+              // Acciones de usuario
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _editarUsuario(e),
+                    icon: const Icon(Icons.edit_outlined, size: 15),
+                    label: Text('Editar usuario',
+                        style: GoogleFonts.poppins(
+                            fontSize: 12, fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.5)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _eliminarUsuario(e),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 15),
+                    label: Text('Eliminar',
+                        style: GoogleFonts.poppins(
+                            fontSize: 12, fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.danger,
+                      side: BorderSide(
+                          color: AppColors.danger.withValues(alpha: 0.5)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
               ]),
             ]),
           );
@@ -326,6 +381,234 @@ class _AdminScreenState extends State<AdminScreen> {
         }
       }
     } catch (_) {}
+  }
+
+  Future<void> _editarUsuario(Map<String, dynamic> empresa) async {
+    final correoActual = empresa['usuarios'] != null &&
+            (empresa['usuarios'] as List).isNotEmpty
+        ? (empresa['usuarios'] as List).first['correo'] ?? ''
+        : '';
+    final usuarioId = empresa['usuario_id'] as String?;
+    if (usuarioId == null || usuarioId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se encontró el ID del usuario'),
+          backgroundColor: AppColors.danger,
+        ));
+      }
+      return;
+    }
+
+    final correoCtrl = TextEditingController(text: correoActual);
+    final passCtrl = TextEditingController();
+    bool obscure = true;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Editar usuario',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(empresa['nombre'] ?? '',
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: correoCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: 'Correo electrónico',
+                prefixIcon: const Icon(Icons.email_outlined),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: passCtrl,
+              obscureText: obscure,
+              decoration: InputDecoration(
+                labelText: 'Nueva contraseña (opcional)',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                      obscure ? Icons.visibility_off : Icons.visibility),
+                  onPressed: () => setS(() => obscure = !obscure),
+                ),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text('Deja la contraseña vacía si no quieres cambiarla.',
+                style: GoogleFonts.poppins(
+                    fontSize: 11, color: AppColors.textMuted)),
+          ]),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Cancelar',
+                  style: GoogleFonts.poppins(color: AppColors.textMuted))),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('Guardar',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600))),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final nuevoCorreo = correoCtrl.text.trim();
+    final nuevaPass = passCtrl.text.trim();
+
+    if (nuevoCorreo.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('El correo no puede estar vacío'),
+          backgroundColor: AppColors.warning,
+        ));
+      }
+      return;
+    }
+
+    try {
+      final body = <String, dynamic>{
+        'accion': 'actualizar',
+        'usuario_id': usuarioId,
+        'nuevo_correo': nuevoCorreo,
+      };
+      if (nuevaPass.isNotEmpty) body['nueva_contrasena'] = nuevaPass;
+
+      final response = await SupabaseService.client.functions.invoke(
+        'admin-user-manager',
+        body: body,
+      );
+
+      if (response.status == 200) {
+        _cargar();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Usuario actualizado correctamente'),
+            backgroundColor: AppColors.success,
+          ));
+        }
+      } else {
+        final data = response.data;
+        final msg = data is Map ? (data['error'] ?? 'Error desconocido') : 'Error';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error: $msg'),
+            backgroundColor: AppColors.danger,
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: AppColors.danger,
+        ));
+      }
+    }
+  }
+
+  Future<void> _eliminarUsuario(Map<String, dynamic> empresa) async {
+    final usuarioId = empresa['usuario_id'] as String?;
+    if (usuarioId == null || usuarioId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se encontró el ID del usuario'),
+          backgroundColor: AppColors.danger,
+        ));
+      }
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('⚠️ Eliminar usuario',
+            style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700, color: AppColors.danger)),
+        content: Column(mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('¿Estás seguro de eliminar este usuario?',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Text('Empresa: ${empresa['nombre']}',
+              style: GoogleFonts.poppins(color: AppColors.textSecondary)),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.dangerSurface,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'Esta acción es irreversible. Se eliminará el usuario y todos sus datos.',
+              style: GoogleFonts.poppins(
+                  fontSize: 12, color: AppColors.danger),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancelar',
+                style: GoogleFonts.poppins(color: AppColors.textMuted))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Eliminar',
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600, color: Colors.white))),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final response = await SupabaseService.client.functions.invoke(
+        'admin-user-manager',
+        body: {
+          'accion': 'eliminar',
+          'usuario_id': usuarioId,
+        },
+      );
+
+      if (response.status == 200) {
+        _cargar();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Usuario eliminado correctamente'),
+            backgroundColor: AppColors.success,
+          ));
+        }
+      } else {
+        final data = response.data;
+        final msg = data is Map ? (data['error'] ?? 'Error desconocido') : 'Error';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error: $msg'),
+            backgroundColor: AppColors.danger,
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: AppColors.danger,
+        ));
+      }
+    }
   }
 
   void _ofrecerEnviarRecibo(Map<String, dynamic> empresa, int dias,
