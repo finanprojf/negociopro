@@ -195,6 +195,7 @@ class LocalDatabase {
         fecha TEXT NOT NULL,
         hora TEXT,
         completado INTEGER DEFAULT 0,
+        synced INTEGER DEFAULT 0,
         created_at TEXT NOT NULL
       )
     ''');
@@ -322,6 +323,10 @@ class LocalDatabase {
       // Guardar costo unitario en detalle_ventas para calcular ganancias
       // sin depender de que la tabla productos esté cargada en SQLite.
       try { await db.execute('ALTER TABLE detalle_ventas ADD COLUMN precio_compra REAL DEFAULT 0'); } catch (_) {}
+    }
+    if (oldV < 15) {
+      // Agregar synced a recordatorios para habilitar sync multi-dispositivo.
+      try { await db.execute('ALTER TABLE recordatorios ADD COLUMN synced INTEGER DEFAULT 0'); } catch (_) {}
     }
   }
 

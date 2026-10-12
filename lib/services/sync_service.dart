@@ -22,8 +22,10 @@ class SyncService {
       await _syncAbonosFiado();
       await _syncApartados();
       await _syncAbonosApartado();
+      await _syncTablaSimple('apartado_productos');
       await _syncTablaSimple('gastos');
       await _syncTablaSimple('encargos');
+      await _syncTablaSimple('recordatorios');
     } finally {
       _corriendo = false;
     }
@@ -166,7 +168,7 @@ class SyncService {
     // SQLite guarda booleanos como 0/1 (INTEGER).
     // Supabase (PostgreSQL) espera true/false. Convertir campos conocidos.
     for (final campo in ['activo', 'completado', 'entregado',
-        'es_elaborado', 'visible', 'permitir_resenas']) {
+        'es_elaborado', 'es_lista_propia', 'visible', 'permitir_resenas']) {
       if (data.containsKey(campo) && data[campo] is int) {
         data[campo] = data[campo] == 1;
       }
