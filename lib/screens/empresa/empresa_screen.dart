@@ -124,14 +124,15 @@ Future<void> _verificarAdmin() async {
           'whatsapp': _whatsappCtrl.text.trim(),
           'direccion': _direccionCtrl.text.trim(),
           'lema': _lemaCtrl.text.trim(),
-          'updated_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         };
-        // Guardar en Supabase
+        // Guardar en SQLite local primero (offline-first)
+        await LocalDatabase.insertar('empresas', {'id': empresaId, ...datos, 'synced': 0});
+        // Luego intentar Supabase
         try {
           await SupabaseService.client.from('empresas').update(datos).eq('id', empresaId);
+          await LocalDatabase.actualizar('empresas', {'synced': 1}, 'id', empresaId);
         } catch (_) {}
-        // Guardar en SQLite local para que dashboard lo vea inmediatamente
-        await LocalDatabase.insertar('empresas', {'id': empresaId, ...datos});
       }
       if (mounted) {
         setState(() => _loading = false);

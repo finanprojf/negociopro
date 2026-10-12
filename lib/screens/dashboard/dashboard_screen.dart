@@ -93,11 +93,32 @@ Future<void> _cargarVersion() async {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
       if (empresaId == null) return;
-      // Local-first: mostrar nombre inmediatamente sin esperar red
+
+      // 1. Mostrar inmediatamente lo que hay en SQLite (local-first)
       final db = await LocalDatabase.database;
       final rows = await db.query('empresas', where: 'id = ?', whereArgs: [empresaId]);
       if (rows.isNotEmpty && mounted) {
-        setState(() => _nombreNegocio = rows.first['nombre'] as String? ?? 'Mi Negocio');
+        final nombreLocal = rows.first['nombre'] as String? ?? '';
+        if (nombreLocal.isNotEmpty) {
+          setState(() => _nombreNegocio = nombreLocal);
+        }
+      }
+
+      // 2. Siempre actualizar desde Supabase para tener el nombre correcto
+      if (await SupabaseService.isOnlineAsync) {
+        final res = await SupabaseService.client
+            .from('empresas')
+            .select('id, nombre, telefono, whatsapp, correo, direccion, moneda, logo_url, lema, mensaje_recibo')
+            .eq('id', empresaId)
+            .maybeSingle();
+        if (res != null) {
+          final nombre = res['nombre'] as String? ?? 'Mi Negocio';
+          // Cachear en SQLite para uso offline
+          final map = Map<String, dynamic>.from(res);
+          map['synced'] = 1;
+          try { await LocalDatabase.insertar('empresas', map); } catch (_) {}
+          if (mounted) setState(() => _nombreNegocio = nombre);
+        }
       }
     } catch (_) {}
   }
