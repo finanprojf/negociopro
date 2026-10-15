@@ -35,7 +35,8 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   int _selectedIndex = 0;
   String _nombreNegocio = 'Mi Negocio';
   String? _empresaId;
@@ -55,12 +56,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _cargarNombre();
     _cargarResumen();
     _cargarVersion();
     _cargarRecordatoriosHoy();
     _cargarVitrina();
-    _timer = Timer.periodic(const Duration(seconds: 60), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) {
         _cargarResumen();
         setState(() {});
@@ -69,7 +71,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Refrescar al volver la app a primer plano — captura cambios de otros dispositivos
+    if (state == AppLifecycleState.resumed && mounted) {
+      _cargarResumen();
+      _cargarRecordatoriosHoy();
+      setState(() {});
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
   }
@@ -1034,8 +1047,11 @@ Widget _buildVitrinaWidget() {
         physics: const NeverScrollableScrollPhysics(),
         crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.05,
         children: modules.map((m) => GestureDetector(
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => m.screen)),
+          onTap: () async {
+            await Navigator.push(context,
+                MaterialPageRoute(builder: (_) => m.screen));
+            if (mounted) { _cargarResumen(); setState(() {}); }
+          },
           child: Container(
             decoration: BoxDecoration(color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
@@ -1255,9 +1271,18 @@ Widget _buildVitrinaWidget() {
               'fecha': _toLocal(a['created_at'] as String), 'positivo': true});
         }
 
-        // Merge abonos pendientes (offline) no incluidos en Supabase aún
+        // Merge abonos pendientes (offline) no incluidos en Supabase aún.
+        // Aplicar desdeCierre también aquí — sin esto, items offline viejos
+        // siguen apareciendo hasta que sincronizan (que puede ser "al otro día").
+        final whereLocal = desdeCierre != null
+            ? 'empresa_id = ? AND synced = 0 AND created_at >= ?'
+            : 'empresa_id = ? AND synced = 0';
+        final argsLocal = desdeCierre != null
+            ? [empresaId, desdeCierre]
+            : [empresaId];
+
         final abonosFiadoLocal = await db2.query('abonos_fiado',
-            where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId],
+            where: whereLocal, whereArgs: argsLocal,
             orderBy: 'created_at DESC', limit: 10);
         for (final f in abonosFiadoLocal) {
           if (idsAbonosFiadoOnline.contains(f['id'] as String)) continue;
@@ -1266,7 +1291,7 @@ Widget _buildVitrinaWidget() {
               'fecha': _toLocal(f['created_at'] as String), 'positivo': true});
         }
         final abonosApartadoLocal = await db2.query('abonos_apartado',
-            where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId],
+            where: whereLocal, whereArgs: argsLocal,
             orderBy: 'created_at DESC', limit: 10);
         for (final a in abonosApartadoLocal) {
           if (idsAbonosApartadoOnline.contains(a['id'] as String)) continue;
@@ -1276,7 +1301,7 @@ Widget _buildVitrinaWidget() {
         }
         // Apartados locales pendientes
         final apartadosLocal = await db2.query('apartados',
-            where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId],
+            where: whereLocal, whereArgs: argsLocal,
             orderBy: 'created_at DESC', limit: 10);
         for (final a in apartadosLocal) {
           if (idsApartadosOnline.contains(a['id'] as String)) continue;

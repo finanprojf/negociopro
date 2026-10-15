@@ -260,8 +260,13 @@ Future<void> _agregarClienteRapido() async {
   }
 
   void _agregar(ProductoModel p) {
+    final idx = _carritoMap[p.id];
+    final cantActual = idx != null ? _carrito[idx].cantidad : 0;
+    if (cantActual >= p.stockActual) {
+      _mostrarSinStock(p);
+      return;
+    }
     setState(() {
-      final idx = _carritoMap[p.id];
       if (idx != null) {
         _carrito[idx].cantidad++;
       } else {
@@ -270,6 +275,32 @@ Future<void> _agregarClienteRapido() async {
       }
     });
     HapticFeedback.lightImpact();
+  }
+
+  void _mostrarSinStock(ProductoModel p) {
+    HapticFeedback.mediumImpact();
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(children: [
+          const Icon(Icons.inventory_2_outlined, color: Colors.white, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              p.stockActual <= 0
+                  ? '${p.nombre} está agotado'
+                  : 'Solo hay ${p.stockActual.toInt()} ${p.stockActual == 1 ? "unidad" : "unidades"} de ${p.nombre}',
+              style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ]),
+        backgroundColor: const Color(0xFFD97706),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 2),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      ),
+    );
   }
 
   void _cambiarCantidad(int idx, double nueva) {
@@ -353,6 +384,7 @@ Future<void> _cargarClientes() async {
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(children: [
+            // ── Header ──────────────────────────────────────────
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(children: [
@@ -364,6 +396,7 @@ Future<void> _cargarClientes() async {
               ]),
             ),
             const Divider(height: 1),
+            // ── Lista de productos ───────────────────────────────
             Expanded(child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: _carrito.length,
@@ -371,6 +404,11 @@ Future<void> _cargarClientes() async {
               itemBuilder: (_, i) => _CarritoItem(
                 item: _carrito[i],
                 onCambiar: (n) {
+                  final stock = _carrito[i].producto.stockActual;
+                  if (n > stock) {
+                    _mostrarSinStock(_carrito[i].producto);
+                    return;
+                  }
                   setState(() {
                     if (n <= 0) _carrito.removeAt(i);
                     else _carrito[i].cantidad = n;
@@ -384,6 +422,37 @@ Future<void> _cargarClientes() async {
                 },
               ),
             )),
+            // ── Footer con total ─────────────────────────────────
+            const Divider(height: 1),
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+              child: Row(children: [
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Total a pagar', style: GoogleFonts.poppins(
+                      fontSize: 12, color: AppColors.textMuted)),
+                  Text(AppFormatters.moneda(_total),
+                      style: GoogleFonts.poppins(
+                          fontSize: 22, fontWeight: FontWeight.w800,
+                          color: AppColors.primary)),
+                ]),
+                const Spacer(),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _mostrarCobro();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: Text('Cobrar', style: GoogleFonts.poppins(
+                      fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+              ]),
+            ),
           ]),
         ),
       ),
@@ -930,10 +999,10 @@ class _ProdCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final agotado = producto.sinStock;
+    final agotado = producto.sinStock || cantidadEnCarrito >= producto.stockActual;
 
-    // ── Foto / ícono ─────────────────────────────────────────────
-    Widget foto = Container(
+    // ── Foto / ícono (con badge de oferta encima si aplica) ──────
+    Widget fotoBase = Container(
       width: 52, height: 52,
       decoration: BoxDecoration(
         color: AppColors.colorVentas.withValues(alpha: 0.10),
@@ -949,6 +1018,23 @@ class _ProdCard extends StatelessWidget {
                           Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 26)))
           : const Icon(Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 26),
     );
+    // Badge de oferta en esquina inferior izquierda de la foto
+    Widget foto = producto.enOferta && !enCarrito
+        ? Stack(clipBehavior: Clip.none, children: [
+            fotoBase,
+            Positioned(
+              bottom: -4, left: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _rojo,
+                  borderRadius: BorderRadius.circular(6)),
+                child: Text('-${producto.pctDescuento.toStringAsFixed(0)}%',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white))),
+            ),
+          ])
+        : fotoBase;
 
     // ── Contenido de la tarjeta (siempre igual) ──────────────────
     Widget info = Padding(
@@ -976,16 +1062,8 @@ class _ProdCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4)),
                 child: Text('Agotado', style: GoogleFonts.poppins(
                     fontSize: 8, color: AppColors.danger, fontWeight: FontWeight.w600)))
-            else if (producto.enOferta)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _rojo,
-                  borderRadius: BorderRadius.circular(8)),
-                child: Text('-${producto.pctDescuento.toStringAsFixed(0)}%',
-                    style: const TextStyle(fontFamily: 'Poppins',
-                        fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)))
             else
+              // Stock siempre visible — el badge de oferta va sobre la foto
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
@@ -1121,7 +1199,10 @@ class _CarritoItem extends StatelessWidget {
               child: Text('${item.cantidad.toInt()}',
                   style: GoogleFonts.poppins(fontSize: 14,
                       fontWeight: FontWeight.w700))),
-            _Btn(Icons.add_rounded, () => onCambiar(item.cantidad + 1)),
+            _Btn(Icons.add_rounded,
+              item.cantidad >= item.producto.stockActual
+                  ? null
+                  : () => onCambiar(item.cantidad + 1)),
           ]),
           Text(AppFormatters.moneda(item.subtotal),
               style: GoogleFonts.poppins(fontSize: 13,
@@ -1133,16 +1214,19 @@ class _CarritoItem extends StatelessWidget {
 }
 
 class _Btn extends StatelessWidget {
-  final IconData icon; final VoidCallback onTap;
+  final IconData icon; final VoidCallback? onTap;
   const _Btn(this.icon, this.onTap);
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
-    child: Container(width: 24, height: 24,
-        decoration: BoxDecoration(color: AppColors.surfaceAlt,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: AppColors.cardBorder)),
-        child: Icon(icon, size: 14, color: AppColors.textPrimary)),
+    child: Opacity(
+      opacity: onTap == null ? 0.3 : 1.0,
+      child: Container(width: 24, height: 24,
+          decoration: BoxDecoration(color: AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.cardBorder)),
+          child: Icon(icon, size: 14, color: AppColors.textPrimary)),
+    ),
   );
 }
 
