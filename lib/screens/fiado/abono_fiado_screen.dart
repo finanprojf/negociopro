@@ -77,10 +77,15 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
 
   Future<void> _ofrecerRecibo(FiadoModel fiado, double monto, double saldo, String metodo) async {
     if (!mounted) return;
+    // Cerrar teclado antes de mostrar el sheet
+    FocusScope.of(context).unfocus();
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (!mounted) return;
     await showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
+      builder: (sheetCtx) => Container(
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
         decoration: const BoxDecoration(
           color: AppColors.surface,
@@ -116,7 +121,7 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14))),
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetCtx);
                 ReciboService.compartirTextoFiado(
                   fiado: fiado,
                   montoAbonado: monto,
@@ -139,7 +144,7 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14))),
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetCtx);
                 ReciboService.imprimirTextoFiado(
                   fiado: fiado,
                   montoAbonado: monto,
@@ -151,7 +156,7 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
           ),
           const SizedBox(height: 10),
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(sheetCtx),
             child: const Text('No, gracias',
                 style: TextStyle(fontFamily: 'Poppins',
                     color: AppColors.textMuted)),

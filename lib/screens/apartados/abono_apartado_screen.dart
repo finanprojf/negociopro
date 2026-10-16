@@ -72,10 +72,15 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
 
   Future<void> _ofrecerRecibo(ApartadoModel apt, double monto, double saldo, String metodo) async {
     if (!mounted) return;
+    // Cerrar teclado antes de mostrar el sheet
+    FocusScope.of(context).unfocus();
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (!mounted) return;
     await showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
+      builder: (sheetCtx) => Container(
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
         decoration: const BoxDecoration(
           color: AppColors.surface,
@@ -112,7 +117,7 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14))),
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetCtx);
                 ReciboService.compartirTextoAbonoApartado(
                   apartado: apt,
                   montoAbonado: monto,
@@ -135,7 +140,7 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14))),
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetCtx);
                 ReciboService.imprimirTextoAbonoApartado(
                   apartado: apt,
                   montoAbonado: monto,
@@ -147,7 +152,7 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
           ),
           const SizedBox(height: 10),
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(sheetCtx),
             child: const Text('No, gracias',
                 style: TextStyle(fontFamily: 'Poppins',
                     color: AppColors.textMuted)),
