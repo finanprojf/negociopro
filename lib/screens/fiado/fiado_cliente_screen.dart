@@ -8,6 +8,7 @@ import '../../utils/formatters.dart';
 import '../../services/fiado_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/local_database.dart';
+import '../../services/recibo_service.dart';
 class FiadoClienteScreen extends StatefulWidget {
   final ClienteModel cliente;
   const FiadoClienteScreen({super.key, required this.cliente});
@@ -826,6 +827,26 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
                                   fontSize: 15, fontWeight: FontWeight.w700,
                                   color: AppColors.success)),
                           const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () {
+                              ReciboService.compartirAbonoHistorialFiado(
+                                clienteNombre: widget.cliente.nombre,
+                                monto: monto,
+                                metodoPago: p['metodo_pago'] as String? ?? 'efectivo',
+                                fecha: DateTime.tryParse(p['created_at'] as String? ?? '') ?? DateTime.now(),
+                              );
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppColors.colorFiado.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.share_rounded,
+                                  color: AppColors.colorFiado, size: 16),
+                            ),
+                          ),
                           GestureDetector(
                             onTap: () async {
                               final confirm = await showDialog<bool>(

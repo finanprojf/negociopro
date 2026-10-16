@@ -345,6 +345,28 @@ class ReciboService {
     await Share.share(sb.toString(), subject: 'Apartado ${apartado.numeroFormateado} - $nombre');
   }
 
+  // ── COMPROBANTE ABONO DESDE HISTORIAL FIADO ─────────────
+  static Future<void> compartirAbonoHistorialFiado({
+    required String clienteNombre,
+    required double monto,
+    required String metodoPago,
+    required DateTime fecha,
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln('💳 *COMPROBANTE DE ABONO - FIADO*');
+    sb.writeln('📍 $nombre');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('📅 ${AppFormatters.fechaHora(fecha)}');
+    sb.writeln('👤 Cliente: $clienteNombre');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('💰 Abono recibido:  *${AppFormatters.moneda(monto)}*');
+    sb.writeln('Método de pago:  ${metodoPago.toUpperCase()}');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('¡Gracias por su abono! 🙏');
+    await Share.share(sb.toString(), subject: 'Comprobante abono - $nombre');
+  }
+
   // ── COMPROBANTE ABONO DESDE HISTORIAL ───────────────────
   static Future<void> compartirAbonoHistorial({
     required String clienteNombre,

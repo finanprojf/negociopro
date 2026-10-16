@@ -11,6 +11,7 @@ import '../seguridad/pin_entrada_dialog.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 import 'entregar_articulos_sheet.dart';
+import '../../services/recibo_service.dart';
 
 class ApartadosScreen extends StatefulWidget {
   const ApartadosScreen({super.key});
@@ -277,6 +278,22 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
                                   style: const TextStyle(fontFamily: 'Poppins',
                                       fontSize: 11, color: AppColors.textMuted)),
                             ])),
+                            IconButton(
+                              icon: const Icon(Icons.share_rounded,
+                                  color: AppColors.colorApartados, size: 20),
+                              tooltip: 'Compartir comprobante',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                              onPressed: () {
+                                ReciboService.compartirAbonoHistorial(
+                                  clienteNombre: apartado.clienteNombre ?? '—',
+                                  descripcion: apartado.descripcion,
+                                  monto: monto,
+                                  fecha: DateTime.tryParse(ab['created_at'] as String? ?? '') ?? DateTime.now(),
+                                  esInicial: esInicial,
+                                );
+                              },
+                            ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline_rounded,
                                   color: AppColors.danger, size: 20),
