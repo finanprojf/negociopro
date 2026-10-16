@@ -53,7 +53,7 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(_completaElPago
             ? '¡Apartado completado! El cliente puede retirar su producto.'
-            : 'Abono de \${AppFormatters.moneda(_montoReal)} registrado'),
+            : 'Abono de ${AppFormatters.moneda(_montoReal)} registrado'),
         backgroundColor: AppColors.success,
       ));
     }
@@ -85,7 +85,7 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
               style: TextStyle(fontFamily: 'Poppins', fontSize: 16,
                   fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           const SizedBox(height: 4),
-          Text(saldo <= 0 ? '¡Apartado pagado completo!' : 'Saldo restante: \${AppFormatters.moneda(saldo)}',
+          Text(saldo <= 0 ? '¡Apartado pagado completo!' : 'Saldo restante: ${AppFormatters.moneda(saldo)}',
               style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
                   color: saldo <= 0 ? AppColors.success : AppColors.colorApartados,
                   fontWeight: FontWeight.w600)),

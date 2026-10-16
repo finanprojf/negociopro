@@ -60,7 +60,7 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(_completaElPago
               ? '¡Fiado pagado completamente!'
-              : 'Abono de \${AppFormatters.moneda(_montoReal)} registrado'),
+              : 'Abono de ${AppFormatters.moneda(_montoReal)} registrado'),
           backgroundColor: AppColors.success,
         ));
       } else {
@@ -94,11 +94,11 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
           ),
           const Icon(Icons.receipt_long_rounded, color: AppColors.success, size: 40),
           const SizedBox(height: 12),
-          const Text('¿Enviar comprobante?',
+          const Text('Comprobante de abono',
               style: TextStyle(fontFamily: 'Poppins', fontSize: 16,
                   fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           const SizedBox(height: 4),
-          Text(saldo <= 0 ? 'Deuda saldada completamente' : 'Saldo restante: \${AppFormatters.moneda(saldo)}',
+          Text(saldo <= 0 ? '✅ Deuda saldada completamente' : 'Saldo pendiente: ${AppFormatters.moneda(saldo)}',
               style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
                   color: saldo <= 0 ? AppColors.success : AppColors.colorFiado,
                   fontWeight: FontWeight.w600)),
@@ -107,8 +107,8 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
             width: double.infinity, height: 50,
             child: ElevatedButton.icon(
               icon: const Icon(Icons.share_rounded),
-              label: const Text('Enviar / Compartir recibo',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 15,
+              label: const Text('Compartir por WhatsApp / SMS',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
                       fontWeight: FontWeight.w700)),
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.success,
@@ -117,6 +117,29 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
               onPressed: () {
                 Navigator.pop(context);
                 ReciboService.compartirTextoFiado(
+                  fiado: fiado,
+                  montoAbonado: monto,
+                  nuevoSaldo: saldo,
+                  metodoPago: metodo,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.print_rounded, color: AppColors.success),
+              label: const Text('Imprimir recibo',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                      fontWeight: FontWeight.w600, color: AppColors.success)),
+              style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.success),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14))),
+              onPressed: () {
+                Navigator.pop(context);
+                ReciboService.imprimirTextoFiado(
                   fiado: fiado,
                   montoAbonado: monto,
                   nuevoSaldo: saldo,

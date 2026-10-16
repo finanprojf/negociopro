@@ -824,14 +824,14 @@ class _EncargosScreenState extends State<EncargosScreen>
           const Icon(Icons.receipt_long_rounded,
               color: AppColors.primary, size: 44),
           const SizedBox(height: 12),
-          Text('¿Enviar comprobante de entrega?',
+          Text('Comprobante de entrega',
               style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary)),
           const SizedBox(height: 4),
           Text(
             tipoPago == 'contado' ? '✅ Pagado en contado' :
-            tipoPago == 'fiado' ? 'Fiado: \${AppFormatters.moneda(saldoFiado)}' :
-            'Saldo fiado: \${AppFormatters.moneda(saldoFiado)}',
+            tipoPago == 'fiado' ? 'Fiado: ${AppFormatters.moneda(saldoFiado)}' :
+            'Saldo fiado: ${AppFormatters.moneda(saldoFiado)}',
             style: GoogleFonts.poppins(fontSize: 13,
                 color: tipoPago == 'contado' ? AppColors.success : AppColors.warning,
                 fontWeight: FontWeight.w600),
@@ -841,8 +841,8 @@ class _EncargosScreenState extends State<EncargosScreen>
             width: double.infinity, height: 50,
             child: ElevatedButton.icon(
               icon: const Icon(Icons.share_rounded),
-              label: Text('Enviar / Compartir recibo',
-                  style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700)),
+              label: Text('Compartir por WhatsApp / SMS',
+                  style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700)),
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   shape: RoundedRectangleBorder(
@@ -850,6 +850,30 @@ class _EncargosScreenState extends State<EncargosScreen>
               onPressed: () {
                 Navigator.pop(context);
                 ReciboService.compartirTextoEncargo(
+                  encargo: encargo,
+                  tipoPago: tipoPago,
+                  montoCobrado: montoCobrado,
+                  saldoFiado: saldoFiado,
+                  clienteNombre: clienteNombre,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: OutlinedButton.icon(
+              icon: Icon(Icons.print_rounded, color: AppColors.primary),
+              label: Text('Imprimir recibo',
+                  style: GoogleFonts.poppins(fontSize: 14,
+                      fontWeight: FontWeight.w600, color: AppColors.primary)),
+              style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.primary),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14))),
+              onPressed: () {
+                Navigator.pop(context);
+                ReciboService.imprimirTextoEncargo(
                   encargo: encargo,
                   tipoPago: tipoPago,
                   montoCobrado: montoCobrado,

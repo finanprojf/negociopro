@@ -473,4 +473,137 @@ class ReciboService {
     await Share.share(sb.toString(), subject: 'Apartado - $nombre');
   }
 
+
+  // ── HELPER: generar PDF simple de texto ──────────────────
+  static Future<Uint8List> _textoPDF(String titulo, String cuerpo,
+      String nombreNegocio) async {
+    final pdf = pw.Document();
+    const gris  = PdfColor.fromInt(0xFF6B7280);
+    const negro = PdfColor.fromInt(0xFF111827);
+    const verde = PdfColor.fromInt(0xFF0F7B5B);
+
+    pdf.addPage(pw.Page(
+      pageFormat: PdfPageFormat.roll57,
+      margin: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      build: (_) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          pw.Text(nombreNegocio.toUpperCase(),
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold,
+                  color: verde),
+              textAlign: pw.TextAlign.center),
+          pw.SizedBox(height: 2),
+          pw.Text(titulo,
+              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold,
+                  color: negro),
+              textAlign: pw.TextAlign.center),
+          pw.SizedBox(height: 4),
+          pw.Divider(color: gris, thickness: 0.5),
+          pw.SizedBox(height: 4),
+          ...cuerpo.split('\n').map((linea) => pw.Text(
+            linea.replaceAll('*', '').replaceAll('━', '─'),
+            style: pw.TextStyle(fontSize: 8, color: negro),
+          )),
+          pw.SizedBox(height: 8),
+          pw.Divider(color: gris, thickness: 0.5),
+          pw.Text('¡Gracias por su preferencia!',
+              style: pw.TextStyle(fontSize: 8, color: gris,
+                  fontStyle: pw.FontStyle.italic),
+              textAlign: pw.TextAlign.center),
+        ],
+      ),
+    ));
+    return pdf.save();
+  }
+
+  // ── IMPRIMIR ABONO FIADO ──────────────────────────────────
+  static Future<void> imprimirTextoFiado({
+    required FiadoModel fiado,
+    required double montoAbonado,
+    required double nuevoSaldo,
+    required String metodoPago,
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln(AppFormatters.fechaHora(DateTime.now()));
+    sb.writeln('Cliente: ${fiado.clienteNombre ?? "—"}');
+    if (fiado.clienteTelefono != null) sb.writeln('Tel: ${fiado.clienteTelefono}');
+    sb.writeln('──────────────────────────');
+    sb.writeln('Abono recibido: ${AppFormatters.moneda(montoAbonado)}');
+    sb.writeln('Método: ${metodoPago.toUpperCase()}');
+    sb.writeln('──────────────────────────');
+    sb.writeln('Deuda original: ${AppFormatters.moneda(fiado.montoOriginal)}');
+    sb.writeln('Total pagado:   ${AppFormatters.moneda(fiado.montoPagado + montoAbonado)}');
+    sb.writeln(nuevoSaldo <= 0
+        ? 'DEUDA SALDADA COMPLETAMENTE'
+        : 'Saldo pendiente: ${AppFormatters.moneda(nuevoSaldo)}');
+    final bytes = await _textoPDF('RECIBO DE ABONO - FIADO', sb.toString(), nombre);
+    await Printing.layoutPdf(onLayout: (_) async => bytes,
+        name: 'Abono fiado - ${fiado.clienteNombre ?? ""}');
+  }
+
+  // ── IMPRIMIR ABONO APARTADO ───────────────────────────────
+  static Future<void> imprimirTextoAbonoApartado({
+    required ApartadoModel apartado,
+    required double montoAbonado,
+    required double nuevoSaldo,
+    required String metodoPago,
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln('N°: ${apartado.numeroFormateado}');
+    sb.writeln(AppFormatters.fechaHora(DateTime.now()));
+    sb.writeln('Cliente: ${apartado.clienteNombre ?? "—"}');
+    sb.writeln('Artículo: ${apartado.descripcion}');
+    sb.writeln('──────────────────────────');
+    sb.writeln('Abono recibido: ${AppFormatters.moneda(montoAbonado)}');
+    sb.writeln('Método: ${metodoPago.toUpperCase()}');
+    sb.writeln('──────────────────────────');
+    sb.writeln('Total apartado: ${AppFormatters.moneda(apartado.montoTotal)}');
+    sb.writeln('Total pagado:   ${AppFormatters.moneda(apartado.montoPagado + montoAbonado)}');
+    sb.writeln(nuevoSaldo <= 0
+        ? 'APARTADO COMPLETADO - PUEDE RETIRAR'
+        : 'Saldo pendiente: ${AppFormatters.moneda(nuevoSaldo)}');
+    if (apartado.fechaEstimada != null && nuevoSaldo > 0) {
+      sb.writeln('Entrega estimada: ${AppFormatters.fecha(apartado.fechaEstimada)}');
+    }
+    final bytes = await _textoPDF('RECIBO DE ABONO - APARTADO', sb.toString(), nombre);
+    await Printing.layoutPdf(onLayout: (_) async => bytes,
+        name: 'Abono ${apartado.numeroFormateado}');
+  }
+
+  // ── IMPRIMIR ENTREGA ENCARGO ──────────────────────────────
+  static Future<void> imprimirTextoEncargo({
+    required EncargoModel encargo,
+    required String tipoPago,
+    required double montoCobrado,
+    required double saldoFiado,
+    String? clienteNombre,
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln(AppFormatters.fechaHora(DateTime.now()));
+    final cliente = clienteNombre ?? encargo.clienteNombre;
+    if (cliente != null) sb.writeln('Cliente: $cliente');
+    sb.writeln('──────────────────────────');
+    sb.writeln('ARTÍCULO ENTREGADO:');
+    sb.writeln(encargo.descripcion);
+    if (encargo.cantidad > 1) sb.writeln('Cantidad: ${encargo.cantidad.toStringAsFixed(0)}');
+    sb.writeln('──────────────────────────');
+    if (encargo.precioEstimado > 0) {
+      sb.writeln('Precio: ${AppFormatters.moneda(encargo.precioEstimado)}');
+    }
+    if (tipoPago == 'contado') {
+      sb.writeln('PAGADO EN CONTADO');
+    } else if (tipoPago == 'fiado') {
+      sb.writeln('QUEDA FIADO: ${AppFormatters.moneda(saldoFiado)}');
+    } else {
+      if (montoCobrado > 0) sb.writeln('Abono: ${AppFormatters.moneda(montoCobrado)}');
+      if (saldoFiado > 0) sb.writeln('Queda fiado: ${AppFormatters.moneda(saldoFiado)}');
+    }
+    final bytes = await _textoPDF('COMPROBANTE DE ENTREGA', sb.toString(), nombre);
+    await Printing.layoutPdf(onLayout: (_) async => bytes,
+        name: 'Entrega encargo - ${encargo.descripcion}');
+  }
+
 }
