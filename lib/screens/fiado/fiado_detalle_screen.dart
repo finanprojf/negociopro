@@ -5,6 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../models/fiado_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/fiado_service.dart';
+import '../../services/recibo_service.dart';
 class FiadoDetalleScreen extends StatefulWidget {
   final FiadoModel fiado;
   const FiadoDetalleScreen({super.key, required this.fiado});
@@ -98,7 +99,37 @@ class _FiadoDetalleScreenState extends State<FiadoDetalleScreen> {
                       style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: () => ReciboService.compartirTextoFiado(
+                  fiado: f,
+                  montoAbonado: 0,
+                  nuevoSaldo: f.saldoPendiente,
+                  metodoPago: '',
+                  soloSaldo: true,
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.colorFiado),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+                child: const Icon(Icons.share_rounded, color: AppColors.colorFiado),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: () => ReciboService.imprimirTextoFiado(
+                  fiado: f,
+                  montoAbonado: 0,
+                  nuevoSaldo: f.saldoPendiente,
+                  metodoPago: '',
+                  soloSaldo: true,
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.colorFiado),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+                child: const Icon(Icons.print_rounded, color: AppColors.colorFiado),
+              ),
+              const SizedBox(width: 8),
               OutlinedButton(
                 onPressed: () => _compartirWhatsApp(context),
                 child: const Icon(Icons.chat_rounded, color: AppColors.success),

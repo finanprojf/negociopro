@@ -47,36 +47,37 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
       _montoReal,
       _metodoPago,
     );
-    if (mounted) {
-      if (ok) {
-        // Capturar datos antes de pop
-        final montoAplicado = _montoReal;
-        final saldoRestante = _nuevoSaldo;
-        final metodo = _metodoPago;
-        final fiadoSnap = widget.fiado;
-        Navigator.pop(context, true);
-        // Ofrecer recibo
-        _ofrecerRecibo(fiadoSnap, montoAplicado, saldoRestante, metodo);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(_completaElPago
-              ? '¡Fiado pagado completamente!'
-              : 'Abono de ${AppFormatters.moneda(_montoReal)} registrado'),
-          backgroundColor: AppColors.success,
-        ));
-      } else {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Error al registrar el abono'),
-          backgroundColor: AppColors.danger,
-        ));
-      }
+    if (!mounted) return;
+    if (ok) {
+      final montoAplicado = _montoReal;
+      final saldoRestante = _nuevoSaldo;
+      final completaPago = _completaElPago;
+      final metodo = _metodoPago;
+      final fiadoSnap = widget.fiado;
+      setState(() => _loading = false);
+      // Mostrar recibo ANTES de pop (widget aún montado)
+      await _ofrecerRecibo(fiadoSnap, montoAplicado, saldoRestante, metodo);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(completaPago
+            ? '¡Fiado pagado completamente!'
+            : 'Abono de ${AppFormatters.moneda(montoAplicado)} registrado'),
+        backgroundColor: AppColors.success,
+      ));
+    } else {
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Error al registrar el abono'),
+        backgroundColor: AppColors.danger,
+      ));
     }
   }
 
 
-  void _ofrecerRecibo(FiadoModel fiado, double monto, double saldo, String metodo) {
+  Future<void> _ofrecerRecibo(FiadoModel fiado, double monto, double saldo, String metodo) async {
     if (!mounted) return;
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(

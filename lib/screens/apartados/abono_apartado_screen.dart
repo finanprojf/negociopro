@@ -37,32 +37,42 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
       return;
     }
     setState(() => _loading = true);
-    await ApartadoService.registrarAbono(
+    final ok = await ApartadoService.registrarAbono(
       widget.apartado.id,
       widget.apartado.clienteId,
       _montoReal,
       _metodoPago,
     );
-    if (mounted) {
+    if (!mounted) return;
+    if (ok) {
       final montoAplicado = _montoReal;
       final saldoRestante = _nuevoSaldo;
+      final completaPago = _completaElPago;
       final metodo = _metodoPago;
       final aptSnap = widget.apartado;
+      setState(() => _loading = false);
+      await _ofrecerRecibo(aptSnap, montoAplicado, saldoRestante, metodo);
+      if (!mounted) return;
       Navigator.pop(context, true);
-      _ofrecerRecibo(aptSnap, montoAplicado, saldoRestante, metodo);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(_completaElPago
+        content: Text(completaPago
             ? '¡Apartado completado! El cliente puede retirar su producto.'
-            : 'Abono de ${AppFormatters.moneda(_montoReal)} registrado'),
+            : 'Abono de ${AppFormatters.moneda(montoAplicado)} registrado'),
         backgroundColor: AppColors.success,
+      ));
+    } else {
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Error al registrar el abono'),
+        backgroundColor: AppColors.danger,
       ));
     }
   }
 
 
-  void _ofrecerRecibo(ApartadoModel apt, double monto, double saldo, String metodo) {
+  Future<void> _ofrecerRecibo(ApartadoModel apt, double monto, double saldo, String metodo) async {
     if (!mounted) return;
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
@@ -104,6 +114,29 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
               onPressed: () {
                 Navigator.pop(context);
                 ReciboService.compartirTextoAbonoApartado(
+                  apartado: apt,
+                  montoAbonado: monto,
+                  nuevoSaldo: saldo,
+                  metodoPago: metodo,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.print_rounded, color: AppColors.colorApartados),
+              label: const Text('Imprimir recibo',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                      fontWeight: FontWeight.w600, color: AppColors.colorApartados)),
+              style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.colorApartados),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14))),
+              onPressed: () {
+                Navigator.pop(context);
+                ReciboService.imprimirTextoAbonoApartado(
                   apartado: apt,
                   montoAbonado: monto,
                   nuevoSaldo: saldo,

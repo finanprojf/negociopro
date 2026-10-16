@@ -273,29 +273,32 @@ class ReciboService {
     required double montoAbonado,
     required double nuevoSaldo,
     required String metodoPago,
+    bool soloSaldo = false,
   }) async {
     final nombre = await _getNombreNegocio();
     final sb = StringBuffer();
-    sb.writeln('💳 *COMPROBANTE DE ABONO - FIADO*');
+    sb.writeln(soloSaldo ? '💳 *ESTADO DE CUENTA - FIADO*' : '💳 *COMPROBANTE DE ABONO - FIADO*');
     sb.writeln('📍 $nombre');
     sb.writeln('━━━━━━━━━━━━━━━━━━━━');
     sb.writeln('📅 ${AppFormatters.fechaHora(DateTime.now())}');
     sb.writeln('👤 Cliente: ${fiado.clienteNombre ?? "—"}');
     if (fiado.clienteTelefono != null) sb.writeln('📞 Tel: ${fiado.clienteTelefono}');
     sb.writeln('━━━━━━━━━━━━━━━━━━━━');
-    sb.writeln('💰 Abono recibido:   *${AppFormatters.moneda(montoAbonado)}*');
-    sb.writeln('Método de pago:  ${metodoPago.toUpperCase()}');
-    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    if (!soloSaldo) {
+      sb.writeln('💰 Abono recibido:   *${AppFormatters.moneda(montoAbonado)}*');
+      if (metodoPago.isNotEmpty) sb.writeln('Método de pago:  ${metodoPago.toUpperCase()}');
+      sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    }
     sb.writeln('Deuda original:  ${AppFormatters.moneda(fiado.montoOriginal)}');
-    sb.writeln('Total pagado:    ${AppFormatters.moneda(fiado.montoPagado + montoAbonado)}');
+    sb.writeln('Total pagado:    ${AppFormatters.moneda(fiado.montoPagado + (soloSaldo ? 0 : montoAbonado))}');
     if (nuevoSaldo <= 0) {
       sb.writeln('*✅ DEUDA SALDADA COMPLETAMENTE*');
     } else {
       sb.writeln('*Saldo pendiente: ${AppFormatters.moneda(nuevoSaldo)}*');
     }
     sb.writeln('━━━━━━━━━━━━━━━━━━━━');
-    sb.writeln('¡Gracias por su abono! 🙏');
-    await Share.share(sb.toString(), subject: 'Comprobante abono - $nombre');
+    sb.writeln(soloSaldo ? '¡Gracias por su preferencia! 🙏' : '¡Gracias por su abono! 🙏');
+    await Share.share(sb.toString(), subject: '${soloSaldo ? "Estado fiado" : "Comprobante abono"} - $nombre');
   }
 
   // ── RECIBO NUEVO APARTADO ─────────────────────────────────
@@ -340,6 +343,29 @@ class ReciboService {
     sb.writeln('━━━━━━━━━━━━━━━━━━━━');
     sb.writeln('¡Gracias por su preferencia! 🙏');
     await Share.share(sb.toString(), subject: 'Apartado ${apartado.numeroFormateado} - $nombre');
+  }
+
+  // ── COMPROBANTE ABONO DESDE HISTORIAL ───────────────────
+  static Future<void> compartirAbonoHistorial({
+    required String clienteNombre,
+    required String descripcion,
+    required double monto,
+    required DateTime fecha,
+    bool esInicial = false,
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln('📦 *COMPROBANTE DE ${esInicial ? "APARTADO" : "ABONO"}*');
+    sb.writeln('📍 $nombre');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('📅 ${AppFormatters.fechaHora(fecha)}');
+    sb.writeln('👤 Cliente: $clienteNombre');
+    sb.writeln('📋 $descripcion');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('💰 ${esInicial ? "Abono inicial" : "Abono recibido"}:  *${AppFormatters.moneda(monto)}*');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('¡Gracias por su preferencia! 🙏');
+    await Share.share(sb.toString(), subject: 'Comprobante apartado - $nombre');
   }
 
   // ── RECIBO ABONO APARTADO ─────────────────────────────────
@@ -522,6 +548,7 @@ class ReciboService {
     required double montoAbonado,
     required double nuevoSaldo,
     required String metodoPago,
+    bool soloSaldo = false,
   }) async {
     final nombre = await _getNombreNegocio();
     final sb = StringBuffer();
@@ -529,17 +556,20 @@ class ReciboService {
     sb.writeln('Cliente: ${fiado.clienteNombre ?? "—"}');
     if (fiado.clienteTelefono != null) sb.writeln('Tel: ${fiado.clienteTelefono}');
     sb.writeln('──────────────────────────');
-    sb.writeln('Abono recibido: ${AppFormatters.moneda(montoAbonado)}');
-    sb.writeln('Método: ${metodoPago.toUpperCase()}');
-    sb.writeln('──────────────────────────');
+    if (!soloSaldo) {
+      sb.writeln('Abono recibido: ${AppFormatters.moneda(montoAbonado)}');
+      if (metodoPago.isNotEmpty) sb.writeln('Método: ${metodoPago.toUpperCase()}');
+      sb.writeln('──────────────────────────');
+    }
     sb.writeln('Deuda original: ${AppFormatters.moneda(fiado.montoOriginal)}');
-    sb.writeln('Total pagado:   ${AppFormatters.moneda(fiado.montoPagado + montoAbonado)}');
+    sb.writeln('Total pagado:   ${AppFormatters.moneda(fiado.montoPagado + (soloSaldo ? 0 : montoAbonado))}');
     sb.writeln(nuevoSaldo <= 0
         ? 'DEUDA SALDADA COMPLETAMENTE'
         : 'Saldo pendiente: ${AppFormatters.moneda(nuevoSaldo)}');
-    final bytes = await _textoPDF('RECIBO DE ABONO - FIADO', sb.toString(), nombre);
+    final titulo = soloSaldo ? 'ESTADO DE CUENTA - FIADO' : 'RECIBO DE ABONO - FIADO';
+    final bytes = await _textoPDF(titulo, sb.toString(), nombre);
     await Printing.layoutPdf(onLayout: (_) async => bytes,
-        name: 'Abono fiado - ${fiado.clienteNombre ?? ""}');
+        name: '${soloSaldo ? "Estado" : "Abono"} fiado - ${fiado.clienteNombre ?? ""}');
   }
 
   // ── IMPRIMIR ABONO APARTADO ───────────────────────────────

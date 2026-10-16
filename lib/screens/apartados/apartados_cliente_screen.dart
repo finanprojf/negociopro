@@ -11,6 +11,7 @@ import '../../services/apartado_service.dart';
 import 'abono_apartado_screen.dart';
 import 'apartado_form_screen.dart';
 import 'entregar_articulos_sheet.dart';
+import '../../services/recibo_service.dart';
 
 class ApartadosClienteScreen extends StatefulWidget {
   final ClienteModel cliente;
@@ -167,6 +168,23 @@ void _mostrarHistorial() async {
                                     fontSize: 14, fontWeight: FontWeight.w700,
                                     color: AppColors.colorApartados)),
                             const SizedBox(width: 4),
+                            IconButton(
+                              icon: const Icon(Icons.share_rounded,
+                                  color: AppColors.colorApartados, size: 20),
+                              tooltip: 'Compartir comprobante',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                              onPressed: () {
+                                ReciboService.compartirAbonoHistorial(
+                                  clienteNombre: widget.cliente.nombre,
+                                  descripcion: descripcion,
+                                  monto: (p['monto'] as num).toDouble(),
+                                  fecha: DateTime.tryParse(
+                                      p['created_at'] as String? ?? '') ?? DateTime.now(),
+                                  esInicial: esInicial,
+                                );
+                              },
+                            ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline_rounded,
                                   color: AppColors.danger, size: 20),
