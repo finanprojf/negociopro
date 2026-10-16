@@ -532,8 +532,12 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
                 width: double.infinity, height: 52,
                 child: ElevatedButton(
                   onPressed: ingresado <= 0 ? null : () async {
+                    // Capturar valores antes del async
+                    final montoCapturado = montoReal;
+                    final quedanCapturado = quedan;
+                    final clienteNombre = widget.cliente.nombre;
                     Navigator.pop(ctx);
-                    double restante = montoReal;
+                    double restante = montoCapturado;
                     final fiadosActivos = _fiados
                         .where((f) => f['estado'] == 'activo')
                         .toList();
@@ -546,12 +550,87 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
                       restante -= abonoEste;
                     }
                     _cargar();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(quedan <= 0 ? '¡Deuda saldada!' : 'Abono registrado'),
-                        backgroundColor: AppColors.success,
-                      ));
-                    }
+                    if (!mounted) return;
+                    await Future.delayed(const Duration(milliseconds: 200));
+                    if (!mounted) return;
+                    await showModalBottomSheet(
+                      context: context,
+                      useRootNavigator: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (sheetCtx) => Container(
+                        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+                        decoration: const BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                        ),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Container(width: 36, height: 4,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(color: AppColors.cardBorder,
+                                borderRadius: BorderRadius.circular(2))),
+                          const Icon(Icons.receipt_long_rounded, color: AppColors.success, size: 40),
+                          const SizedBox(height: 12),
+                          const Text('Comprobante de abono',
+                              style: TextStyle(fontFamily: 'Poppins', fontSize: 16,
+                                  fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                          const SizedBox(height: 4),
+                          Text(quedanCapturado <= 0 ? '✅ Deuda saldada completamente' : 'Saldo pendiente: ${AppFormatters.moneda(quedanCapturado)}',
+                              style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                                  color: quedanCapturado <= 0 ? AppColors.success : AppColors.colorFiado,
+                                  fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity, height: 50,
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.share_rounded),
+                              label: const Text('Compartir por WhatsApp / SMS',
+                                  style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700)),
+                              style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.success,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                              onPressed: () {
+                                Navigator.pop(sheetCtx);
+                                ReciboService.compartirAbonoHistorialFiado(
+                                  clienteNombre: clienteNombre,
+                                  monto: montoCapturado,
+                                  metodoPago: 'efectivo',
+                                  fecha: DateTime.now(),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity, height: 50,
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.print_rounded, color: AppColors.success),
+                              label: const Text('Imprimir recibo',
+                                  style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                                      fontWeight: FontWeight.w600, color: AppColors.success)),
+                              style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: AppColors.success),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                              onPressed: () {
+                                Navigator.pop(sheetCtx);
+                                ReciboService.imprimirAbonoHistorialFiado(
+                                  clienteNombre: clienteNombre,
+                                  monto: montoCapturado,
+                                  metodoPago: 'efectivo',
+                                  fecha: DateTime.now(),
+                                  nuevoSaldo: quedanCapturado,
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextButton(
+                            onPressed: () => Navigator.pop(sheetCtx),
+                            child: const Text('No, gracias',
+                                style: TextStyle(fontFamily: 'Poppins', color: AppColors.textMuted)),
+                          ),
+                        ]),
+                      ),
+                    );
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.colorFiado),
                   child: Text(quedan <= 0 ? 'Confirmar — saldar todo' : 'Confirmar abono',

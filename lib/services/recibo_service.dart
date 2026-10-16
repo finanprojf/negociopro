@@ -346,6 +346,33 @@ class ReciboService {
   }
 
   // ── COMPROBANTE ABONO DESDE HISTORIAL FIADO ─────────────
+
+  static Future<void> imprimirAbonoHistorialFiado({
+    required String clienteNombre,
+    required double monto,
+    required String metodoPago,
+    required DateTime fecha,
+    double? nuevoSaldo,
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln(AppFormatters.fechaHora(fecha));
+    sb.writeln('Cliente: $clienteNombre');
+    sb.writeln('──────────────────────────');
+    sb.writeln('Abono recibido: ${AppFormatters.moneda(monto)}');
+    sb.writeln('Método: ${metodoPago.toUpperCase()}');
+    if (nuevoSaldo != null) {
+      sb.writeln('──────────────────────────');
+      sb.writeln(nuevoSaldo <= 0
+          ? 'DEUDA SALDADA COMPLETAMENTE'
+          : 'Saldo pendiente: ${AppFormatters.moneda(nuevoSaldo)}');
+    }
+    sb.writeln('──────────────────────────');
+    sb.writeln('¡Gracias por su abono!');
+    final bytes = await _textoPDF('COMPROBANTE DE ABONO - FIADO', sb.toString(), nombre);
+    await Printing.layoutPdf(onLayout: (_) async => bytes, name: 'Abono fiado $clienteNombre');
+  }
+
   static Future<void> compartirAbonoHistorialFiado({
     required String clienteNombre,
     required double monto,
