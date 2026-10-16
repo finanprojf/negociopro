@@ -9,6 +9,7 @@ import '../../utils/formatters.dart';
 import '../../services/encargo_service.dart';
 import '../../services/cliente_service.dart';
 import '../../services/fiado_service.dart';
+import '../../services/recibo_service.dart';
 import '../ventas/pos_screen.dart';
 
 class EncargosScreen extends StatefulWidget {
@@ -782,7 +783,91 @@ class _EncargosScreenState extends State<EncargosScreen>
         content: Text(msg, style: GoogleFonts.poppins()),
         backgroundColor: AppColors.success,
       ));
+      // Ofrecer recibo
+      final saldoFiadoFinal = tipoPago == 'contado' ? 0.0
+          : tipoPago == 'fiado' ? (encargo.precioEstimado)
+          : (encargo.precioEstimado - adelanto).clamp(0.0, double.infinity);
+      _ofrecerReciboEncargo(
+        encargo: encargo,
+        tipoPago: tipoPago,
+        montoCobrado: tipoPago == 'mixto' ? adelanto : (tipoPago == 'contado' ? encargo.precioEstimado : 0),
+        saldoFiado: saldoFiadoFinal,
+        clienteNombre: clienteNombre,
+      );
     }
+  }
+
+  void _ofrecerReciboEncargo({
+    required EncargoModel encargo,
+    required String tipoPago,
+    required double montoCobrado,
+    required double saldoFiado,
+    String? clienteNombre,
+  }) {
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 36, height: 4,
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const Icon(Icons.receipt_long_rounded,
+              color: AppColors.primary, size: 44),
+          const SizedBox(height: 12),
+          Text('¿Enviar comprobante de entrega?',
+              style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 4),
+          Text(
+            tipoPago == 'contado' ? '✅ Pagado en contado' :
+            tipoPago == 'fiado' ? 'Fiado: \${AppFormatters.moneda(saldoFiado)}' :
+            'Saldo fiado: \${AppFormatters.moneda(saldoFiado)}',
+            style: GoogleFonts.poppins(fontSize: 13,
+                color: tipoPago == 'contado' ? AppColors.success : AppColors.warning,
+                fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.share_rounded),
+              label: Text('Enviar / Compartir recibo',
+                  style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14))),
+              onPressed: () {
+                Navigator.pop(context);
+                ReciboService.compartirTextoEncargo(
+                  encargo: encargo,
+                  tipoPago: tipoPago,
+                  montoCobrado: montoCobrado,
+                  saldoFiado: saldoFiado,
+                  clienteNombre: clienteNombre,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('No, gracias',
+                style: GoogleFonts.poppins(color: AppColors.textMuted)),
+          ),
+        ]),
+      ),
+    );
   }
 
   // ──────────────────────────────────────────────────────────────

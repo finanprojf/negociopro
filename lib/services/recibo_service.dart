@@ -8,6 +8,9 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/venta_model.dart';
+import '../models/encargo_model.dart';
+import '../models/apartado_model.dart';
+import '../models/fiado_model.dart';
 import '../utils/formatters.dart';
 import 'local_database.dart';
 
@@ -263,4 +266,211 @@ class ReciboService {
     final esp = 32 - label.length - valor.length;
     return '$label${' ' * (esp > 0 ? esp : 1)}$valor\n';
   }
+
+  // ── RECIBO ABONO FIADO ────────────────────────────────────
+  static Future<void> compartirTextoFiado({
+    required FiadoModel fiado,
+    required double montoAbonado,
+    required double nuevoSaldo,
+    required String metodoPago,
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln('💳 *COMPROBANTE DE ABONO - FIADO*');
+    sb.writeln('📍 $nombre');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('📅 ${AppFormatters.fechaHora(DateTime.now())}');
+    sb.writeln('👤 Cliente: ${fiado.clienteNombre ?? "—"}');
+    if (fiado.clienteTelefono != null) sb.writeln('📞 Tel: ${fiado.clienteTelefono}');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('💰 Abono recibido:   *${AppFormatters.moneda(montoAbonado)}*');
+    sb.writeln('Método de pago:  ${metodoPago.toUpperCase()}');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('Deuda original:  ${AppFormatters.moneda(fiado.montoOriginal)}');
+    sb.writeln('Total pagado:    ${AppFormatters.moneda(fiado.montoPagado + montoAbonado)}');
+    if (nuevoSaldo <= 0) {
+      sb.writeln('*✅ DEUDA SALDADA COMPLETAMENTE*');
+    } else {
+      sb.writeln('*Saldo pendiente: ${AppFormatters.moneda(nuevoSaldo)}*');
+    }
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('¡Gracias por su abono! 🙏');
+    await Share.share(sb.toString(), subject: 'Comprobante abono - $nombre');
+  }
+
+  // ── RECIBO NUEVO APARTADO ─────────────────────────────────
+  static Future<void> compartirTextoNuevoApartado({
+    required ApartadoModel apartado,
+    required List<Map<String, dynamic>> lineas,
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln('📦 *COMPROBANTE DE APARTADO*');
+    sb.writeln('📍 $nombre');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('N°: ${apartado.numeroFormateado}');
+    sb.writeln('📅 ${AppFormatters.fechaHora(DateTime.now())}');
+    sb.writeln('👤 Cliente: ${apartado.clienteNombre ?? "—"}');
+    if (apartado.clienteTelefono != null) sb.writeln('📞 Tel: ${apartado.clienteTelefono}');
+    if (apartado.fechaEstimada != null) {
+      sb.writeln('🗓 Entrega estimada: ${AppFormatters.fecha(apartado.fechaEstimada)}');
+    }
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('*ARTÍCULOS APARTADOS:*');
+    for (final l in lineas) {
+      final cant = (l['cantidad'] as num? ?? 1).toStringAsFixed(0);
+      final precio = AppFormatters.moneda((l['precio'] as num? ?? 0).toDouble());
+      final sub = AppFormatters.moneda(((l['precio'] as num? ?? 0) * (l['cantidad'] as num? ?? 1)).toDouble());
+      sb.writeln('• ${l['nombre']}');
+      sb.writeln('  $cant x $precio = $sub');
+    }
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('Total apartado:  *${AppFormatters.moneda(apartado.montoTotal)}*');
+    if (apartado.montoPagado > 0) {
+      sb.writeln('Abono inicial:   ${AppFormatters.moneda(apartado.montoPagado)}');
+    }
+    if (apartado.saldoPendiente > 0) {
+      sb.writeln('*Saldo pendiente: ${AppFormatters.moneda(apartado.saldoPendiente)}*');
+    } else {
+      sb.writeln('*✅ PAGADO COMPLETAMENTE*');
+    }
+    if (apartado.notas != null && apartado.notas!.isNotEmpty) {
+      sb.writeln('📝 Notas: ${apartado.notas}');
+    }
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('¡Gracias por su preferencia! 🙏');
+    await Share.share(sb.toString(), subject: 'Apartado ${apartado.numeroFormateado} - $nombre');
+  }
+
+  // ── RECIBO ABONO APARTADO ─────────────────────────────────
+  static Future<void> compartirTextoAbonoApartado({
+    required ApartadoModel apartado,
+    required double montoAbonado,
+    required double nuevoSaldo,
+    required String metodoPago,
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln('📦 *COMPROBANTE DE ABONO - APARTADO*');
+    sb.writeln('📍 $nombre');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('N°: ${apartado.numeroFormateado}');
+    sb.writeln('📅 ${AppFormatters.fechaHora(DateTime.now())}');
+    sb.writeln('👤 Cliente: ${apartado.clienteNombre ?? "—"}');
+    if (apartado.clienteTelefono != null) sb.writeln('📞 Tel: ${apartado.clienteTelefono}');
+    sb.writeln('📋 ${apartado.descripcion}');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('💰 Abono recibido:   *${AppFormatters.moneda(montoAbonado)}*');
+    sb.writeln('Método de pago:  ${metodoPago.toUpperCase()}');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('Total apartado:  ${AppFormatters.moneda(apartado.montoTotal)}');
+    sb.writeln('Total pagado:    ${AppFormatters.moneda(apartado.montoPagado + montoAbonado)}');
+    if (nuevoSaldo <= 0) {
+      sb.writeln('*✅ APARTADO COMPLETADO*');
+      sb.writeln('El cliente puede retirar su artículo.');
+    } else {
+      sb.writeln('*Saldo pendiente: ${AppFormatters.moneda(nuevoSaldo)}*');
+      if (apartado.fechaEstimada != null) {
+        sb.writeln('🗓 Entrega estimada: ${AppFormatters.fecha(apartado.fechaEstimada)}');
+      }
+    }
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('¡Gracias por su abono! 🙏');
+    await Share.share(sb.toString(), subject: 'Abono apartado ${apartado.numeroFormateado} - $nombre');
+  }
+
+  // ── RECIBO ENTREGA ENCARGO ────────────────────────────────
+  static Future<void> compartirTextoEncargo({
+    required EncargoModel encargo,
+    required String tipoPago, // 'contado' | 'fiado' | 'mixto'
+    required double montoCobrado,
+    required double saldoFiado,
+    String? clienteNombre,
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln('🛍 *COMPROBANTE DE ENTREGA - ENCARGO*');
+    sb.writeln('📍 $nombre');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('📅 ${AppFormatters.fechaHora(DateTime.now())}');
+    final cliente = clienteNombre ?? encargo.clienteNombre;
+    if (cliente != null) sb.writeln('👤 Cliente: $cliente');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('*ARTÍCULO ENTREGADO:*');
+    sb.writeln('• ${encargo.descripcion}');
+    if (encargo.cantidad > 1) sb.writeln('  Cantidad: ${encargo.cantidad.toStringAsFixed(0)}');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    if (encargo.precioEstimado > 0) {
+      sb.writeln('Precio:  *${AppFormatters.moneda(encargo.precioEstimado)}*');
+    }
+    if (tipoPago == 'contado') {
+      sb.writeln('✅ Pagado en efectivo');
+    } else if (tipoPago == 'fiado') {
+      sb.writeln('📋 *QUEDA FIADO: ${AppFormatters.moneda(saldoFiado)}*');
+    } else if (tipoPago == 'mixto') {
+      if (montoCobrado > 0) sb.writeln('Abono recibido:  ${AppFormatters.moneda(montoCobrado)}');
+      if (saldoFiado > 0) sb.writeln('*Queda fiado:  ${AppFormatters.moneda(saldoFiado)}*');
+    }
+    if (encargo.notas != null && encargo.notas!.isNotEmpty) {
+      sb.writeln('📝 Notas: ${encargo.notas}');
+    }
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('¡Gracias por su preferencia! 🙏');
+    await Share.share(sb.toString(), subject: 'Entrega encargo - $nombre');
+  }
+
+
+  // ── RECIBO NUEVO APARTADO (datos crudos, sin modelo) ─────
+  static Future<void> compartirTextoNuevoApartadoRaw({
+    required String clienteNombre,
+    required String descripcion,
+    required double montoTotal,
+    required double montoPagado,
+    required double saldoPendiente,
+    DateTime? fechaEstimada,
+    String? notas,
+    List<Map<String, dynamic>> lineas = const [],
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln('📦 *COMPROBANTE DE APARTADO*');
+    sb.writeln('📍 $nombre');
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('📅 ${AppFormatters.fechaHora(DateTime.now())}');
+    if (clienteNombre.isNotEmpty) sb.writeln('👤 Cliente: $clienteNombre');
+    if (fechaEstimada != null) {
+      sb.writeln('🗓 Entrega estimada: ${AppFormatters.fecha(fechaEstimada)}');
+    }
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    if (lineas.isNotEmpty) {
+      sb.writeln('*ARTÍCULOS APARTADOS:*');
+      for (final l in lineas) {
+        final cant = (l['cantidad'] as num? ?? 1).toStringAsFixed(0);
+        final precio = AppFormatters.moneda((l['precio'] as num? ?? 0).toDouble());
+        final sub = AppFormatters.moneda(((l['precio'] as num? ?? 0) * (l['cantidad'] as num? ?? 1)).toDouble());
+        sb.writeln('• ${l['nombre']}');
+        sb.writeln('  $cant x $precio = $sub');
+      }
+      sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    } else {
+      sb.writeln('📋 $descripcion');
+      sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    }
+    sb.writeln('Total apartado:  *${AppFormatters.moneda(montoTotal)}*');
+    if (montoPagado > 0) {
+      sb.writeln('Abono inicial:   ${AppFormatters.moneda(montoPagado)}');
+    }
+    if (saldoPendiente <= 0) {
+      sb.writeln('*✅ PAGADO COMPLETAMENTE*');
+    } else {
+      sb.writeln('*Saldo pendiente: ${AppFormatters.moneda(saldoPendiente)}*');
+    }
+    if (notas != null && notas.isNotEmpty) {
+      sb.writeln('📝 Notas: $notas');
+    }
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('¡Gracias por su preferencia! 🙏');
+    await Share.share(sb.toString(), subject: 'Apartado - $nombre');
+  }
+
 }

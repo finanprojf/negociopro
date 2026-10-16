@@ -4,6 +4,7 @@ import '../../theme/app_colors.dart';
 import '../../models/fiado_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/fiado_service.dart';
+import '../../services/recibo_service.dart';
 
 class AbonoFiadoScreen extends StatefulWidget {
   final FiadoModel fiado;
@@ -48,11 +49,18 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
     );
     if (mounted) {
       if (ok) {
+        // Capturar datos antes de pop
+        final montoAplicado = _montoReal;
+        final saldoRestante = _nuevoSaldo;
+        final metodo = _metodoPago;
+        final fiadoSnap = widget.fiado;
         Navigator.pop(context, true);
+        // Ofrecer recibo
+        _ofrecerRecibo(fiadoSnap, montoAplicado, saldoRestante, metodo);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(_completaElPago
               ? '¡Fiado pagado completamente!'
-              : 'Abono de ${AppFormatters.moneda(_montoReal)} registrado'),
+              : 'Abono de \${AppFormatters.moneda(_montoReal)} registrado'),
           backgroundColor: AppColors.success,
         ));
       } else {
@@ -63,6 +71,70 @@ class _AbonoFiadoScreenState extends State<AbonoFiadoScreen> {
         ));
       }
     }
+  }
+
+
+  void _ofrecerRecibo(FiadoModel fiado, double monto, double saldo, String metodo) {
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 36, height: 4,
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const Icon(Icons.receipt_long_rounded, color: AppColors.success, size: 40),
+          const SizedBox(height: 12),
+          const Text('¿Enviar comprobante?',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 16,
+                  fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const SizedBox(height: 4),
+          Text(saldo <= 0 ? 'Deuda saldada completamente' : 'Saldo restante: \${AppFormatters.moneda(saldo)}',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                  color: saldo <= 0 ? AppColors.success : AppColors.colorFiado,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.share_rounded),
+              label: const Text('Enviar / Compartir recibo',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                      fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.success,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14))),
+              onPressed: () {
+                Navigator.pop(context);
+                ReciboService.compartirTextoFiado(
+                  fiado: fiado,
+                  montoAbonado: monto,
+                  nuevoSaldo: saldo,
+                  metodoPago: metodo,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('No, gracias',
+                style: TextStyle(fontFamily: 'Poppins',
+                    color: AppColors.textMuted)),
+          ),
+        ]),
+      ),
+    );
   }
 
   @override

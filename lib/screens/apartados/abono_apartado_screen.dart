@@ -4,6 +4,7 @@ import '../../theme/app_colors.dart';
 import '../../models/apartado_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/apartado_service.dart';
+import '../../services/recibo_service.dart';
 class AbonoApartadoScreen extends StatefulWidget {
   final ApartadoModel apartado;
   const AbonoApartadoScreen({super.key, required this.apartado});
@@ -43,14 +44,84 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
       _metodoPago,
     );
     if (mounted) {
+      final montoAplicado = _montoReal;
+      final saldoRestante = _nuevoSaldo;
+      final metodo = _metodoPago;
+      final aptSnap = widget.apartado;
       Navigator.pop(context, true);
+      _ofrecerRecibo(aptSnap, montoAplicado, saldoRestante, metodo);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(_completaElPago
             ? '¡Apartado completado! El cliente puede retirar su producto.'
-            : 'Abono de ${AppFormatters.moneda(_montoReal)} registrado'),
+            : 'Abono de \${AppFormatters.moneda(_montoReal)} registrado'),
         backgroundColor: AppColors.success,
       ));
     }
+  }
+
+
+  void _ofrecerRecibo(ApartadoModel apt, double monto, double saldo, String metodo) {
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 36, height: 4,
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const Icon(Icons.receipt_long_rounded,
+              color: AppColors.colorApartados, size: 40),
+          const SizedBox(height: 12),
+          const Text('¿Enviar comprobante?',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 16,
+                  fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const SizedBox(height: 4),
+          Text(saldo <= 0 ? '¡Apartado pagado completo!' : 'Saldo restante: \${AppFormatters.moneda(saldo)}',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                  color: saldo <= 0 ? AppColors.success : AppColors.colorApartados,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.share_rounded),
+              label: const Text('Enviar / Compartir recibo',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                      fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.colorApartados,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14))),
+              onPressed: () {
+                Navigator.pop(context);
+                ReciboService.compartirTextoAbonoApartado(
+                  apartado: apt,
+                  montoAbonado: monto,
+                  nuevoSaldo: saldo,
+                  metodoPago: metodo,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('No, gracias',
+                style: TextStyle(fontFamily: 'Poppins',
+                    color: AppColors.textMuted)),
+          ),
+        ]),
+      ),
+    );
   }
 
   @override

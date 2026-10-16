@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../theme/app_colors.dart';
 import '../../models/producto_model.dart';
 import '../../services/apartado_service.dart';
+import '../../services/recibo_service.dart';
 import '../../services/cliente_service.dart';
 import '../../services/inventario_service.dart';
 import '../../models/cliente_model.dart';
@@ -215,6 +216,19 @@ class _ApartadoFormScreenState extends State<ApartadoFormScreen> {
         ? _lineas.first.nombre
         : '${_lineas.first.nombre} y ${_lineas.length - 1} artículo(s) más';
 
+    final clienteNombreSnap = _clientes.firstWhere(
+      (c) => c['id'] == _clienteId, orElse: () => {'nombre': ''})['nombre'] ?? '';
+    final lineasSnap = _lineas.map((l) => {
+      'nombre': l.nombre,
+      'cantidad': l.cantidad,
+      'precio': l.precio,
+    }).toList();
+    final montoTotalSnap = _montoTotal;
+    final abonoSnap = _abonoInicial;
+    final fechaSnap = _fechaEstimada;
+    final notasSnap = _notasCtrl.text.trim().isEmpty ? null : _notasCtrl.text.trim();
+    final descSnap = desc;
+
     await ApartadoService.crearApartado(
       clienteId:    _clienteId!,
       descripcion:  desc,
@@ -237,7 +251,95 @@ class _ApartadoFormScreenState extends State<ApartadoFormScreen> {
         content: Text('Apartado creado exitosamente'),
         backgroundColor: AppColors.success,
       ));
+      _ofrecerReciboNuevo(
+        clienteNombre: clienteNombreSnap,
+        descripcion: descSnap,
+        montoTotal: montoTotalSnap,
+        montoPagado: abonoSnap,
+        fechaEstimada: fechaSnap,
+        notas: notasSnap,
+        lineas: lineasSnap,
+      );
     }
+  }
+
+  void _ofrecerReciboNuevo({
+    required String clienteNombre,
+    required String descripcion,
+    required double montoTotal,
+    required double montoPagado,
+    required DateTime? fechaEstimada,
+    required String? notas,
+    required List<Map<String, dynamic>> lineas,
+  }) {
+    if (!mounted) return;
+    final saldo = montoTotal - montoPagado;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 36, height: 4,
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const Icon(Icons.receipt_long_rounded,
+              color: AppColors.colorApartados, size: 44),
+          const SizedBox(height: 12),
+          const Text('¿Enviar comprobante?',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 16,
+                  fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const SizedBox(height: 4),
+          Text(saldo > 0
+              ? 'Saldo pendiente: \${AppFormatters.moneda(saldo)}'
+              : '¡Pagado completamente!',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                  color: saldo > 0 ? AppColors.colorApartados : AppColors.success,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.share_rounded),
+              label: const Text('Enviar / Compartir recibo',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                      fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.colorApartados,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14))),
+              onPressed: () {
+                Navigator.pop(context);
+                ReciboService.compartirTextoNuevoApartadoRaw(
+                  clienteNombre: clienteNombre,
+                  descripcion: descripcion,
+                  montoTotal: montoTotal,
+                  montoPagado: montoPagado,
+                  saldoPendiente: saldo,
+                  fechaEstimada: fechaEstimada,
+                  notas: notas,
+                  lineas: lineas,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('No, gracias',
+                style: TextStyle(fontFamily: 'Poppins',
+                    color: AppColors.textMuted)),
+          ),
+        ]),
+      ),
+    );
   }
 
   // ─── UI ─────────────────────────────────────────────────────────────────
