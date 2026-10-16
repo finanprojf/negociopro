@@ -595,6 +595,7 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
                                   monto: montoCapturado,
                                   metodoPago: 'efectivo',
                                   fecha: DateTime.now(),
+                                  nuevoSaldo: quedanCapturado,
                                 );
                               },
                             ),

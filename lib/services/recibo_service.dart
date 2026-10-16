@@ -378,6 +378,7 @@ class ReciboService {
     required double monto,
     required String metodoPago,
     required DateTime fecha,
+    double? nuevoSaldo,
   }) async {
     final nombre = await _getNombreNegocio();
     final sb = StringBuffer();
@@ -390,6 +391,14 @@ class ReciboService {
     sb.writeln('💰 Abono recibido:  *${AppFormatters.moneda(monto)}*');
     sb.writeln('Método de pago:  ${metodoPago.toUpperCase()}');
     sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    if (nuevoSaldo != null) {
+      if (nuevoSaldo <= 0) {
+        sb.writeln('✅ *DEUDA SALDADA COMPLETAMENTE*');
+      } else {
+        sb.writeln('📊 Saldo pendiente:  *${AppFormatters.moneda(nuevoSaldo)}*');
+      }
+      sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    }
     sb.writeln('¡Gracias por su abono! 🙏');
     await Share.share(sb.toString(), subject: 'Comprobante abono - $nombre');
   }
