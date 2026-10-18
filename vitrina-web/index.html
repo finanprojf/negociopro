@@ -1246,32 +1246,20 @@
   function cartaEnviarWS() {
     if (!Object.keys(cartaCarrito).length) return;
     const notas = document.getElementById('cNotasInput').value.trim();
-    let msg = '🍽️ *Pedido — ' + empresa.nombre + '*
-
-';
-    if (cartaNumMesa) msg += '🪑 *Mesa:* ' + cartaNumMesa + '
-
-';
-    msg += '📋 *Platos:*
-';
+    let msg = '🍽️ *Pedido — ' + empresa.nombre + '*\n\n';
+    if (cartaNumMesa) msg += '🪑 *Mesa:* ' + cartaNumMesa + '\n\n';
+    msg += '📋 *Platos:*\n';
     let subtotal = 0;
     Object.values(cartaCarrito).forEach(({producto, cantidad}) => {
       const precio = Number(producto.precio_venta||0);
       subtotal += precio * cantidad;
       msg += '  • ' + producto.nombre + ' x' + cantidad;
-      if (cartaMostrarPrecios) msg += ' — RD$' + (precio*cantidad).toLocaleString();
-      msg += '
-';
+      if (cartaMostrarPrecios) msg += ' - RD$' + (precio*cantidad).toLocaleString();
+      msg += '\n';
     });
-    if (cartaMostrarPrecios) msg += '
-✅ *Total: RD$' + subtotal.toLocaleString() + '*';
-    if (notas) msg += '
-
-📝 *Notas:* ' + notas;
-    msg += '
-
-_Pedido enviado desde NegocioPro Carta Digital_';
-
+    if (cartaMostrarPrecios) msg += '\n✅ *Total: RD$' + subtotal.toLocaleString() + '*';
+    if (notas) msg += '\n\n📝 *Notas:* ' + notas;
+    msg += '\n\n_Pedido enviado desde NegocioPro Carta Digital_';
     let num = (empresa.whatsapp || empresa.telefono || '').replace(/[^0-9]/g,'');
     if (num.length === 10 && (num.startsWith('8') || num.startsWith('9'))) num = '1' + num;
     if (num.length === 7) num = '1809' + num;
