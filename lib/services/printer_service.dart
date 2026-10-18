@@ -67,14 +67,15 @@ class PrinterService {
   static Future<PrintResult> sendBytes(List<int> bytes) async {
     if (_address == null) return const PrintResult.fail('No hay impresora configurada.');
     try {
-      await PrintBluetoothThermal.connect(macPrinterAddress: _address!);
-      await Future.delayed(const Duration(milliseconds: 1500));
-      final connected = await PrintBluetoothThermal.connectionStatus;
-      if (!connected) {
+      // Pattern that works: connect → check return → write immediately → wait → disconnect (flush)
+      final conectado = await PrintBluetoothThermal.connect(macPrinterAddress: _address!);
+      if (!conectado) {
         return const PrintResult.fail('Verifica que la impresora esté encendida y cerca');
       }
-      await PrintBluetoothThermal.writeBytes(Uint8List.fromList(bytes));
-      await Future.delayed(const Duration(milliseconds: 500));
+      final byteList = bytes.map((c) => c > 255 ? 63 : c).toList();
+      await PrintBluetoothThermal.writeBytes(byteList);
+      await Future.delayed(const Duration(milliseconds: 300));
+      await PrintBluetoothThermal.disconnect;
       return const PrintResult.success();
     } catch (e) {
       return PrintResult.fail('No se pudo imprimir. Verifica que la impresora esté encendida');
