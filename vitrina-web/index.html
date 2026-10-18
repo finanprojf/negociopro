@@ -1526,11 +1526,29 @@
   // ═══════════════ FIN CARTA JS ════════════════════════════════════════════
 
   // ── Detectar modo carta ──
-  if (new URLSearchParams(location.search).has('carta')) {
-    initCarta();
-  } else {
-    init();
-  }
+  (function() {
+    const esCarta = new URLSearchParams(location.search).has('carta');
+    // Debug banner — 5 seg
+    const dbg = document.createElement('div');
+    dbg.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1e40af;color:#fff;font-size:13px;padding:6px 12px;text-align:center';
+    dbg.textContent = esCarta ? '🍽️ Modo carta detectado…' : '🏪 Modo vitrina…';
+    document.body.appendChild(dbg);
+    setTimeout(() => dbg.remove(), 6000);
+    if (esCarta) {
+      initCarta().catch(err => {
+        console.error('[Carta] uncaught:', err);
+        try {
+          document.getElementById('cLoading').classList.add('hidden');
+          const errEl = document.getElementById('cError');
+          errEl.classList.remove('hidden');
+          const p = errEl.querySelector('p');
+          if (p) p.textContent = 'Error: ' + (err?.message || err);
+        } catch(_) {}
+      });
+    } else {
+      init();
+    }
+  })();
 </script>
 
 </body>
