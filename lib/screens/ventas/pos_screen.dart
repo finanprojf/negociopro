@@ -200,50 +200,64 @@ Future<void> _agregarClienteRapido() async {
       // Intentar Bluetooth primero
       if (PrinterService.hasPrinter) {
         final bool ok = await PrinterService.ensureConnected();
-        if (ok) {
-          final List<int> bytes = [];
-          void cmd(List<int> b) => bytes.addAll(b);
-          void txt(String s) { bytes.addAll(s.codeUnits); bytes.add(10); }
-          void boldOn()  => cmd([0x1B, 0x45, 0x01]);
-          void boldOff() => cmd([0x1B, 0x45, 0x00]);
-          void center()  => cmd([0x1B, 0x61, 0x01]);
-          void left()    => cmd([0x1B, 0x61, 0x00]);
-
-          cmd([0x1B, 0x40]); // init
-          center(); boldOn(); txt(nombreNegocio); boldOff();
-          txt('$fecha  $hora');
-          left();
-          txt('================================');
-          txt('PRODUCTO           CANT   PRECIO');
-          txt('================================');
-          for (final item in items) {
-            final nom = item.producto.nombre.length > 16
-                ? item.producto.nombre.substring(0, 16)
-                : item.producto.nombre.padRight(16);
-            final cant = item.cantidad.toInt().toString().padLeft(4);
-            final prec = AppFormatters.moneda(item.subtotal).padLeft(9);
-            txt('$nom$cant$prec');
-          }
-          txt('--------------------------------');
-          if (descuento > 0) txt('Descuento: -\${AppFormatters.moneda(descuento)}');
-          boldOn(); txt('TOTAL: \${AppFormatters.moneda(total)}'); boldOff();
-          final tipLabel = tipoPago == 'fiado' ? 'FIADO' : tipoPago == 'transferencia' ? 'TRANSFERENCIA' : 'EFECTIVO';
-          txt('Pago: \$tipLabel');
-          if (montoPagado > 0 && tipoPago == 'efectivo') txt('Recibido: \${AppFormatters.moneda(montoPagado)}');
-          if (cambio > 0) txt('Cambio: \${AppFormatters.moneda(cambio)}');
-          txt('================================');
-          center(); txt('Gracias por su compra!'); left();
-          cmd([0x0A, 0x0A, 0x0A]);
-          cmd([0x1D, 0x56, 0x00]); // corte
-          await PrintBluetoothThermal.writeBytes(Uint8List.fromList(bytes));
+        if (!ok) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('🖨️ Impresora no disponible — verifica que esté encendida y cerca'),
+            backgroundColor: Colors.orange, duration: Duration(seconds: 3)));
           return;
         }
-      }
+        final List<int> bytes = [];
+        void cmd(List<int> b) => bytes.addAll(b);
+        void txt(String s) { bytes.addAll(s.codeUnits); bytes.add(10); }
+        void boldOn()  => cmd([0x1B, 0x45, 0x01]);
+        void boldOff() => cmd([0x1B, 0x45, 0x00]);
+        void center()  => cmd([0x1B, 0x61, 0x01]);
+        void left()    => cmd([0x1B, 0x61, 0x00]);
 
-      // Sin impresora BT configurada — no imprimir nada
-      return;
-    } catch (_) {
-      // impresión silenciosa — no bloquear UI
+        cmd([0x1B, 0x40]); // init
+        center(); boldOn(); txt(nombreNegocio); boldOff();
+        txt('$fecha  $hora');
+        left();
+        txt('================================');
+        txt('PRODUCTO           CANT   PRECIO');
+        txt('================================');
+        for (final item in items) {
+          final nom = item.producto.nombre.length > 16
+              ? item.producto.nombre.substring(0, 16)
+              : item.producto.nombre.padRight(16);
+          final cant = item.cantidad.toInt().toString().padLeft(4);
+          final prec = AppFormatters.moneda(item.subtotal).padLeft(9);
+          txt('$nom$cant$prec');
+        }
+        txt('--------------------------------');
+        if (descuento > 0) {
+          final descStr = AppFormatters.moneda(descuento);
+          txt('Descuento: -$descStr');
+        }
+        final totalStr = AppFormatters.moneda(total);
+        boldOn(); txt('TOTAL: $totalStr'); boldOff();
+        final tipLabel = tipoPago == 'fiado' ? 'FIADO' : tipoPago == 'transferencia' ? 'TRANSFERENCIA' : 'EFECTIVO';
+        txt('Pago: $tipLabel');
+        if (montoPagado > 0 && tipoPago == 'efectivo') {
+          final recibidoStr = AppFormatters.moneda(montoPagado);
+          txt('Recibido: $recibidoStr');
+        }
+        if (cambio > 0) {
+          final cambioStr = AppFormatters.moneda(cambio);
+          txt('Cambio: $cambioStr');
+        }
+        txt('================================');
+        center(); txt('  Gracias por su compra!  '); left();
+        cmd([0x0A, 0x0A, 0x0A]);
+        cmd([0x1D, 0x56, 0x00]); // corte
+        await PrintBluetoothThermal.writeBytes(Uint8List.fromList(bytes));
+        return;
+      }
+      // Sin impresora configurada — no hacer nada
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('🖨️ Error al imprimir: $e'),
+        backgroundColor: Colors.red, duration: const Duration(seconds: 4)));
     }
   }
 
