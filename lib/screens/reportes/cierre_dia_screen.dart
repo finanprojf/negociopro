@@ -247,9 +247,13 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
     ),
     body: _cargando
         ? const Center(child: CircularProgressIndicator())
-        : TabBarView(controller: _tabs,
-            children: [
-            const GuiaModuloBanner(modulo: 'cuadre_caja'),_tabNuevo(), _tabHistorial(), _tabAutomatico()]),
+        : Column(children: [
+            const GuiaModuloBanner(modulo: 'cuadre_caja'),
+            Expanded(
+              child: TabBarView(controller: _tabs,
+                children: [_tabNuevo(), _tabHistorial(), _tabAutomatico()]),
+            ),
+          ]),
   );
 
   // ══════════════════════ TAB 1 ════════════════════════════════
