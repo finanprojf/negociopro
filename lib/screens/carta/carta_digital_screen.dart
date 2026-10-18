@@ -1044,5 +1044,6 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
             },
           )),
     ]);
+  );
   }
 }
