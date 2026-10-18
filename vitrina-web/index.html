@@ -382,7 +382,7 @@
         </button>
         <button id="cBtnCocina" onclick="cartaEnviarDirectoCocina()"
           class="w-full text-white rounded-xl py-3.5 font-bold text-base shadow-md" style="background:var(--color-primary)">
-          🖨️ Enviar a cocina
+          🍽️ Enviar a cocina
         </button>
         <button id="cBtnMesero" onclick="cartaMostrarMesero()"
           class="w-full border-2 border-gray-300 text-gray-700 rounded-xl py-3.5 font-bold text-base">
@@ -402,7 +402,7 @@
     <p id="cMeseroTotal" class="text-2xl font-bold mb-8"></p>
     <button id="cMeseroBtnCocina"
       class="bg-white font-bold px-6 py-3 rounded-2xl text-base mb-3 w-full max-w-xs" style="color:var(--color-primary-text)">
-      🖨️ Enviar a cocina / Imprimir
+      🍽️ Enviar a cocina
     </button>
     <button onclick="document.getElementById('cMeseroScreen').classList.add('hidden')"
       class="font-bold px-10 py-3 rounded-2xl text-base w-full max-w-xs" style="background:rgba(255,255,255,0.2);color:white">
@@ -1491,12 +1491,12 @@
       // Reset button after delay
       setTimeout(() => {
         btn.disabled = false;
-        btn.textContent = '🖨️ Enviar a cocina';
+        btn.textContent = '🍽️ Enviar a cocina';
         btn.style.background = '';
       }, 5000);
     } catch(e) {
       btn.disabled = false;
-      btn.textContent = '🖨️ Enviar a cocina';
+      btn.textContent = '🍽️ Enviar a cocina';
       alert('No se pudo enviar. Verifica tu conexión.');
     }
   }
@@ -1534,7 +1534,7 @@
       cartaMostrarPedidoEnProceso();
     } catch(e) {
       btn.disabled = false;
-      btn.textContent = '🖨️ Enviar a cocina / Imprimir';
+      btn.textContent = '🍽️ Enviar a cocina';
       alert('No se pudo enviar el pedido. Verifica tu conexión.');
     }
   }
