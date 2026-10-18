@@ -160,12 +160,21 @@ class _AuthWrapperState extends State<AuthWrapper> {
     if (!mostrada) {
       // Intentar cargar nombre del negocio
       try {
-        final empresa = await supa.SupabaseService.getEmpresa();
-        if (mounted) {
-          setState(() {
-            _nombreNegocio = empresa?['nombre'] as String? ?? '';
-            _mostrarBienvenida = true;
-          });
+        final empresaId = await supa.SupabaseService.getEmpresaId();
+        if (empresaId != null) {
+          final res = await supa.SupabaseService.client
+              .from('empresas')
+              .select('nombre')
+              .eq('id', empresaId)
+              .maybeSingle();
+          if (mounted) {
+            setState(() {
+              _nombreNegocio = res?['nombre'] as String? ?? '';
+              _mostrarBienvenida = true;
+            });
+          }
+        } else {
+          if (mounted) setState(() => _mostrarBienvenida = true);
         }
       } catch (_) {
         if (mounted) setState(() => _mostrarBienvenida = true);
