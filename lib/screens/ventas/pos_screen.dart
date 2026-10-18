@@ -8,6 +8,7 @@ import '../../models/producto_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/inventario_service.dart';
 import '../../services/venta_service.dart';
+import '../../services/supabase_service.dart';
 import '../../services/cliente_service.dart';
 import '../../models/cliente_model.dart';
 import 'historial_ventas_screen.dart';
