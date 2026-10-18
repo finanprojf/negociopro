@@ -27,6 +27,7 @@ import '../encargos/encargos_screen.dart';
 import '../reportes/cierre_dia_screen.dart';
 import '../auth/login_screen.dart';
 import '../recordatorios/recordatorios_screen.dart';
+import '../../services/plan_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -144,8 +145,9 @@ Future<void> _cargarVersion() async {
       // Sincronizar ventas pendientes
       await VentaService.sincronizarPendientes();
       final online = await SupabaseService.isOnlineAsync;
-// Verificar suscripción
+// Verificar suscripción y cargar plan
       if (online) {
+        await PlanService.cargar();
         final sus = await SupabaseService.getSuscripcion();
         if (sus != null && sus['suscripcion_vence'] != null) {
           final vence = DateTime.parse(sus['suscripcion_vence']);

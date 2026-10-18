@@ -13,6 +13,7 @@ import '../../models/categoria_model.dart';
 import 'vitrina_producto_config_screen.dart';
 import 'vitrina_resenas_screen.dart';
 import '../../widgets/guia_modulo_banner.dart';
+import '../../widgets/pro_gate.dart';
 
 class VitrinaConfigScreen extends StatefulWidget {
   const VitrinaConfigScreen({super.key});
@@ -338,7 +339,9 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ProGate(
+      nombreFuncion: 'Vitrina Digital',
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Mi Vitrina Digital'),
@@ -692,7 +695,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
                 const SizedBox(height: 40),
               ],
             ),
-    );
+    ));
   }
 
   void _abrirConfigProducto(Map<String, dynamic> p) {

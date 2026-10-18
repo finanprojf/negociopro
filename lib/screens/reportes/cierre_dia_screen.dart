@@ -8,6 +8,7 @@ import '../../services/cierre_dia_service.dart';
 import '../../services/cuadre_automatico_service.dart';
 import '../../models/cierre_dia_model.dart';
 import '../../widgets/guia_modulo_banner.dart';
+import '../../widgets/pro_gate.dart';
 
 class CierreDiaScreen extends StatefulWidget {
   const CierreDiaScreen({super.key});
@@ -226,7 +227,9 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
 
   // ─────────────────────────────────────────────────────────────
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => ProGate(
+    nombreFuncion: 'Cuadre de Caja',
+    child: Scaffold(
     backgroundColor: AppColors.background,
     appBar: AppBar(
       backgroundColor: AppColors.primary,
@@ -974,4 +977,5 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
           ],
         ),
       );
+  )
 }

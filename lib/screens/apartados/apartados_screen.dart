@@ -13,6 +13,7 @@ import 'package:uuid/uuid.dart';
 import 'entregar_articulos_sheet.dart';
 import '../../services/recibo_service.dart';
 import '../../widgets/guia_modulo_banner.dart';
+import '../../widgets/pro_gate.dart';
 
 class ApartadosScreen extends StatefulWidget {
   const ApartadosScreen({super.key});
@@ -79,7 +80,9 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ProGate(
+      nombreFuncion: 'Apartados',
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Apartados')),
       body: Column(children: [
@@ -108,7 +111,7 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildResumen() {

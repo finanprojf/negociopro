@@ -12,6 +12,7 @@ import '../../services/fiado_service.dart';
 import '../../services/recibo_service.dart';
 import '../ventas/pos_screen.dart';
 import '../../widgets/guia_modulo_banner.dart';
+import '../../widgets/pro_gate.dart';
 
 class EncargosScreen extends StatefulWidget {
   const EncargosScreen({super.key});
@@ -901,7 +902,9 @@ class _EncargosScreenState extends State<EncargosScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ProGate(
+      nombreFuncion: 'Encargos',
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Encargos'),
@@ -940,7 +943,7 @@ class _EncargosScreenState extends State<EncargosScreen>
                   fontSize: 9)),
         ]),
       ),
-    );
+    ));
   }
 
   Widget _buildEncargos() {
