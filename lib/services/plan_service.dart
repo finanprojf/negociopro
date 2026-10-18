@@ -5,6 +5,13 @@ enum NivelPlan { trial, basico, pro, desconocido }
 
 class PlanService {
   static NivelPlan? _cache;
+  static int? _diasTrial; // null = no es trial activo
+
+  /// Días restantes del trial (null si no aplica)
+  static int? get diasTrial => _diasTrial;
+
+  /// true si está en trial activo (no vencido)
+  static bool get enTrial => _cache == NivelPlan.trial && (_diasTrial ?? 0) >= 0;
 
   /// true  → 'pro' | 'activo' | 'trial'  (acceso completo)
   /// false → 'basico' o sin datos
@@ -22,6 +29,12 @@ class PlanService {
       final sus = await SupabaseService.getSuscripcion();
       final raw = sus?['plan_activo'] as String? ?? '';
       _cache = _parsear(raw);
+      if (_cache == NivelPlan.trial && sus?['suscripcion_vence'] != null) {
+        final vence = DateTime.parse(sus!['suscripcion_vence']);
+        _diasTrial = vence.difference(DateTime.now()).inDays;
+      } else {
+        _diasTrial = null;
+      }
     } catch (_) {
       _cache = NivelPlan.desconocido;
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
+import '../../services/plan_service.dart';
 
 // ─── Modelos de precios ────────────────────────────────────────────
 class _Periodo {
@@ -104,6 +105,12 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
           // ── Encabezado ───────────────────────────────────────────
           _Header(),
           const SizedBox(height: 20),
+
+          // ── Banner trial ─────────────────────────────────────────
+          if (PlanService.enTrial) ...[
+            _TrialBanner(dias: PlanService.diasTrial ?? 30),
+            const SizedBox(height: 16),
+          ],
 
           // ── Selector de período ──────────────────────────────────
           Container(
@@ -226,6 +233,58 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
 // ═══════════════════════════════════════════════════════════════════
 // WIDGETS
 // ═══════════════════════════════════════════════════════════════════
+
+class _TrialBanner extends StatelessWidget {
+  final int dias;
+  const _TrialBanner({required this.dias});
+
+  @override
+  Widget build(BuildContext context) {
+    final urgente = dias <= 5;
+    final color = urgente ? const Color(0xFFE17055) : const Color(0xFF00B894);
+    final bgColor = urgente
+        ? const Color(0xFFE17055).withOpacity(0.08)
+        : const Color(0xFF00B894).withOpacity(0.08);
+    final borderColor = color.withOpacity(0.3);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: 1.5),
+      ),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+          child: Icon(urgente ? Icons.timer_outlined : Icons.card_giftcard_rounded,
+              color: color, size: 24),
+        ),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(
+            dias <= 0
+                ? '¡Tu período de prueba ha vencido!'
+                : dias == 1
+                    ? '¡Te queda 1 día de prueba gratis!'
+                    : '🎉 Prueba gratuita activa — $dias días restantes',
+            style: GoogleFonts.poppins(
+              fontSize: 13, fontWeight: FontWeight.w700, color: color),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            dias <= 0
+                ? 'Activa un plan para seguir usando NegocioPro.'
+                : 'Estás usando el Plan Pro completo gratis. Activa tu plan antes de que venza.',
+            style: GoogleFonts.poppins(fontSize: 11.5, color: color.withOpacity(0.8)),
+          ),
+        ])),
+      ]),
+    );
+  }
+}
 
 class _Header extends StatelessWidget {
   @override
