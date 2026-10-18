@@ -62,6 +62,49 @@
     .star-empty   { color:#d1d5db; }
     .star-pick    { font-size:1.8rem; cursor:pointer; transition:transform .1s, color .1s; display:inline-block; }
     .star-pick:hover { transform:scale(1.25); }
+
+    /* ── CARTA DIGITAL ─────────────────────────────────── */
+    #cartaApp { font-family: 'Poppins', sans-serif; }
+    .carta-header { background:var(--color-primary); }
+    .carta-mesa-badge { background:rgba(255,255,255,0.2); border-radius:12px; }
+    .carta-cat-chip { white-space:nowrap; padding:0.3rem 0.85rem; border-radius:9999px;
+      font-size:0.78rem; font-weight:600; cursor:pointer; border:2px solid transparent; transition:all .15s; }
+    .carta-cat-chip.active { background:var(--color-primary); color:white; }
+    .carta-cat-chip.inactive { background:#f3f4f6; color:#6b7280; }
+    .carta-cat-chip.inactive:hover { background:#e5e7eb; }
+    .carta-section-title { font-size:0.7rem; font-weight:700; letter-spacing:0.1em;
+      text-transform:uppercase; color:var(--color-primary); padding:12px 0 6px; }
+    .carta-card { background:white; border-radius:16px; border:1px solid #f0f0f0;
+      display:flex; gap:12px; padding:12px; margin-bottom:8px; box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+    .carta-card-img { width:80px; height:80px; border-radius:12px; object-fit:cover;
+      flex-shrink:0; background:#f3f4f6; }
+    .carta-card-placeholder { width:80px; height:80px; border-radius:12px; flex-shrink:0;
+      background:linear-gradient(135deg,#f3f4f6,#e5e7eb);
+      display:flex; align-items:center; justify-content:center; font-size:2rem; }
+    .carta-card-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+    .carta-card-nombre { font-size:0.9rem; font-weight:700; color:#111; line-height:1.3; }
+    .carta-card-desc { font-size:0.72rem; color:#9ca3af; line-height:1.3;
+      display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .carta-card-price { font-size:0.95rem; font-weight:700; color:var(--color-primary-text); margin-top:2px; }
+    .carta-badge-disp { display:inline-flex; align-items:center; gap:3px;
+      font-size:0.65rem; font-weight:600; padding:2px 7px; border-radius:9999px; }
+    .carta-badge-ok { background:#d1fae5; color:#065f46; }
+    .carta-badge-no { background:#fee2e2; color:#dc2626; }
+    .carta-qty-box { display:flex; align-items:center; gap:8px; margin-top:6px; }
+    .carta-qty-btn { width:28px; height:28px; border-radius:50%; border:none; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; font-size:1.1rem; font-weight:700;
+      background:var(--color-primary-light); color:var(--color-primary-text); transition:background .1s; }
+    .carta-qty-btn:hover { background:var(--color-primary-border); }
+    .carta-qty-num { font-weight:700; font-size:0.9rem; color:var(--color-primary-text); min-width:16px; text-align:center; }
+    .carta-btn-add { border:none; cursor:pointer; font-size:0.78rem; font-weight:600;
+      padding:5px 14px; border-radius:9999px; background:var(--color-primary); color:white;
+      margin-top:6px; transition:background .1s; }
+    .carta-btn-add:hover { background:var(--color-primary-dark); }
+    .carta-fab { position:fixed; bottom:20px; left:16px; right:16px; z-index:40; max-width:448px; margin:0 auto; }
+    .carta-mesero-screen { position:fixed; inset:0; z-index:60; background:var(--color-primary);
+      display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px; color:white; }
+    @keyframes cartaFadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .carta-card { animation: cartaFadeIn 0.2s ease; }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -936,7 +979,455 @@
     document.getElementById('errorState').classList.remove('hidden');
   }
 
-  init();
+  // ═══════════════ CARTA DIGITAL JS ═══════════════════════════════════════
+
+  let cartaCarrito   = {};   // { [id]: { producto, cantidad } }
+  let cartaNumMesa   = '';
+  let cartaCatActiva = 'todas';
+  let cartaProductos = [];
+  let cartaCategorias= [];
+  let cartaMostrarPrecios = true;
+
+  async function initCarta() {
+    // Ocultar vitrina, mostrar carta
+    ['header','infoBar','mensajeBienvenida','buscador','categoriasBar',
+     'loadingState','productosGrid','carritoFab','seccionResenas']
+      .forEach(id => { const el=document.getElementById(id); if(el) el.style.display='none'; });
+    document.querySelector('.max-w-xl.mx-auto.px-4.pt-4.pb-32')?.style?.setProperty('display','none');
+    document.getElementById('cartaApp').classList.remove('hidden');
+
+    const slug = location.pathname.split('/t/')[1]?.split('/')[0];
+    if (!slug) { document.getElementById('cLoading').classList.add('hidden'); document.getElementById('cError').classList.remove('hidden'); return; }
+
+    try {
+      // Config
+      let cfgData = await fetchSB('vitrina_config?slug=eq.' + encodeURIComponent(slug) + '&select=*');
+      if (!cfgData.length) cfgData = await fetchSB('vitrina_config?empresa_id=eq.' + encodeURIComponent(slug) + '&select=*');
+      if (!cfgData.length) throw new Error('Sin config');
+      config = cfgData[0];
+      if (config.color_tema) aplicarTema(config.color_tema);
+      cartaMostrarPrecios = config.carta_mostrar_precios !== false;
+
+      // Empresa
+      const empRes = await fetchSB('empresas?id=eq.' + config.empresa_id + '&select=nombre,whatsapp,telefono,logo_url');
+      if (!empRes.length) throw new Error('Sin empresa');
+      empresa = empRes[0];
+
+      // Categorías
+      try {
+        cartaCategorias = await fetchSB('categorias?empresa_id=eq.' + config.empresa_id + '&select=id,nombre&order=nombre');
+      } catch(_) { cartaCategorias = []; }
+
+      // Productos carta
+      cartaProductos = await fetchSB(
+        'productos?empresa_id=eq.' + config.empresa_id +
+        '&carta_disponible=eq.true&activo=eq.true' +
+        '&select=id,nombre,descripcion,precio_venta,stock_actual,foto_url,categoria_id&order=nombre'
+      );
+
+      // Render
+      cartaRenderHeader();
+      cartaRenderCats();
+      cartaRenderProductos();
+
+      document.getElementById('cLoading').classList.add('hidden');
+      document.getElementById('cProductosWrap').classList.remove('hidden');
+      document.title = empresa.nombre + ' — Carta Digital';
+
+      // Mostrar whatsapp button si tiene número
+      const num = (empresa.whatsapp || empresa.telefono || '').replace(/[^0-9]/g,'');
+      if (num) document.getElementById('cBtnWS').classList.remove('hidden');
+
+      // Pedir mesa al inicio
+      setTimeout(abrirSelectorMesa, 600);
+
+    } catch(e) {
+      console.error('[Carta]', e);
+      document.getElementById('cLoading').classList.add('hidden');
+      document.getElementById('cError').classList.remove('hidden');
+    }
+  }
+
+  function cartaRenderHeader() {
+    document.getElementById('cNombre').textContent = empresa.nombre;
+    if (empresa.logo_url) {
+      document.getElementById('cLogoImg').src = empresa.logo_url;
+      document.getElementById('cLogoWrap').classList.remove('hidden');
+    }
+  }
+
+  function cartaRenderCats() {
+    const bar = document.getElementById('cCatBar');
+    bar.innerHTML = '';
+    const cats = [{ id:'todas', nombre:'Todo' }, ...cartaCategorias];
+    cats.forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'carta-cat-chip ' + (cartaCatActiva === c.id ? 'active' : 'inactive');
+      btn.textContent = c.nombre;
+      btn.onclick = () => { cartaCatActiva = c.id; cartaRenderCats(); cartaRenderProductos(); };
+      bar.appendChild(btn);
+    });
+  }
+
+  function cartaProductosFiltrados() {
+    return cartaCatActiva === 'todas'
+      ? cartaProductos
+      : cartaProductos.filter(p => p.categoria_id === cartaCatActiva);
+  }
+
+  function cartaRenderProductos() {
+    const lista = cartaProductosFiltrados();
+    const container = document.getElementById('cProductosList');
+    container.innerHTML = '';
+    if (!lista.length) {
+      container.innerHTML = '<p class="text-center text-gray-400 py-12 text-sm">No hay platos en esta sección</p>';
+      return;
+    }
+
+    function agregarSeccion(titulo, prods) {
+      if (!prods.length) return;
+      const hdr = document.createElement('div');
+      hdr.className = 'carta-section-title';
+      hdr.textContent = titulo;
+      container.appendChild(hdr);
+      prods.forEach(p => container.appendChild(cartaProductoCard(p)));
+    }
+
+    if (cartaCatActiva !== 'todas') {
+      lista.forEach(p => container.appendChild(cartaProductoCard(p)));
+    } else {
+      const sinCat = lista.filter(p => !p.categoria_id);
+      cartaCategorias.forEach(cat => {
+        const prods = lista.filter(p => p.categoria_id === cat.id);
+        agregarSeccion(cat.nombre, prods);
+      });
+      if (sinCat.length) agregarSeccion('Otros', sinCat);
+    }
+  }
+
+  function cartaProductoCard(p) {
+    const disponible = (p.stock_actual ?? 1) > 0;
+    const enCarrito  = cartaCarrito[p.id]?.cantidad || 0;
+    const precio     = Number(p.precio_venta || 0);
+
+    const card = document.createElement('div');
+    card.className = 'carta-card';
+    card.id = 'ccard-' + p.id;
+
+    const imgEl = p.foto_url
+      ? `<img class="carta-card-img" src="${p.foto_url}" onerror="this.style.display='none'" />`
+      : `<div class="carta-card-placeholder">🍽️</div>`;
+
+    const badgeEl = disponible
+      ? '<span class="carta-badge-disp carta-badge-ok">✅ Disponible</span>'
+      : '<span class="carta-badge-disp carta-badge-no">🔴 Agotado</span>';
+
+    const precioEl = cartaMostrarPrecios
+      ? `<p class="carta-card-price">RD$${precio.toLocaleString()}</p>`
+      : '';
+
+    const descEl = p.descripcion
+      ? `<p class="carta-card-desc">${(p.descripcion||'').replace(/</g,'&lt;')}</p>`
+      : '';
+
+    let ctrlEl = '';
+    if (disponible) {
+      if (enCarrito === 0) {
+        ctrlEl = `<button class="carta-btn-add" onclick="cartaAgregar('${p.id}')">+ Agregar</button>`;
+      } else {
+        ctrlEl = `<div class="carta-qty-box">
+          <button class="carta-qty-btn" onclick="cartaCambiar('${p.id}',-1)">−</button>
+          <span class="carta-qty-num">${enCarrito}</span>
+          <button class="carta-qty-btn" onclick="cartaCambiar('${p.id}',1)">+</button>
+        </div>`;
+      }
+    }
+
+    card.innerHTML = imgEl + `<div class="carta-card-info">
+      <p class="carta-card-nombre">${(p.nombre||'').replace(/</g,'&lt;')}</p>
+      ${descEl}
+      ${precioEl}
+      <div class="flex items-center gap-2 mt-1">${badgeEl}</div>
+      ${ctrlEl}
+    </div>`;
+
+    return card;
+  }
+
+  function cartaAgregar(id) {
+    const p = cartaProductos.find(x => x.id === id);
+    if (!p) return;
+    if (!cartaCarrito[id]) cartaCarrito[id] = { producto: p, cantidad: 0 };
+    cartaCarrito[id].cantidad++;
+    cartaActualizarFab();
+    cartaRefreshCard(id);
+  }
+
+  function cartaCambiar(id, delta) {
+    if (!cartaCarrito[id]) return;
+    cartaCarrito[id].cantidad += delta;
+    if (cartaCarrito[id].cantidad <= 0) delete cartaCarrito[id];
+    cartaActualizarFab();
+    cartaRefreshCard(id);
+  }
+
+  function cartaRefreshCard(id) {
+    const p = cartaProductos.find(x => x.id === id);
+    if (!p) return;
+    const old = document.getElementById('ccard-' + id);
+    if (old) old.replaceWith(cartaProductoCard(p));
+  }
+
+  function cartaActualizarFab() {
+    const total = Object.values(cartaCarrito).length;
+    const fab = document.getElementById('cPedidoFab');
+    if (total > 0) {
+      const subtotal = Object.values(cartaCarrito).reduce((s,{producto,cantidad}) => s + Number(producto.precio_venta||0)*cantidad, 0);
+      document.getElementById('cFabResumen').textContent = total + ' items · RD$' + subtotal.toLocaleString();
+      fab.classList.remove('hidden');
+    } else {
+      fab.classList.add('hidden');
+    }
+  }
+
+  // ── Mesa ────────────────────────────────────────────────────────────────
+  function abrirSelectorMesa() {
+    document.getElementById('cMesaModal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('cMesaInput').focus(), 100);
+  }
+  function cerrarMesaModal() { document.getElementById('cMesaModal').classList.add('hidden'); }
+  function confirmarMesa() {
+    cartaNumMesa = document.getElementById('cMesaInput').value.trim();
+    document.getElementById('cMesaLabel').textContent = cartaNumMesa ? 'Mesa ' + cartaNumMesa : 'Mesa';
+    cerrarMesaModal();
+  }
+
+  // ── Pedido modal ─────────────────────────────────────────────────────────
+  function abrirCartaPedido() {
+    cartaRenderPedidoModal();
+    document.getElementById('cModalPedido').classList.remove('hidden');
+  }
+  function cerrarCartaPedido() { document.getElementById('cModalPedido').classList.add('hidden'); }
+
+  function cartaRenderPedidoModal() {
+    const items = document.getElementById('cPedidoItems');
+    if (!Object.keys(cartaCarrito).length) {
+      items.innerHTML = '<p class="text-center text-gray-400 text-sm py-6">Tu pedido está vacío</p>';
+      document.getElementById('cTotalText').textContent = 'RD$0';
+      return;
+    }
+    let subtotal = 0;
+    items.innerHTML = '';
+    Object.values(cartaCarrito).forEach(({producto, cantidad}) => {
+      const precio = Number(producto.precio_venta||0);
+      subtotal += precio * cantidad;
+      const div = document.createElement('div');
+      div.className = 'flex items-center gap-3 py-1';
+      div.innerHTML = `
+        <div class="flex-1">
+          <p class="text-sm font-semibold text-gray-800">${(producto.nombre||'').replace(/</g,'&lt;')}</p>
+          ${cartaMostrarPrecios ? '<p class="text-xs text-gray-500">RD$' + precio.toLocaleString() + ' c/u</p>' : ''}
+        </div>
+        <div class="carta-qty-box">
+          <button class="carta-qty-btn" onclick="cartaCambiar('${producto.id}',-1);cartaRenderPedidoModal()">−</button>
+          <span class="carta-qty-num w-5 text-center">${cantidad}</span>
+          <button class="carta-qty-btn" onclick="cartaCambiar('${producto.id}',1);cartaRenderPedidoModal()">+</button>
+        </div>
+        ${cartaMostrarPrecios ? '<p class="text-sm font-bold w-20 text-right" style="color:var(--color-primary-text)">RD$' + (precio*cantidad).toLocaleString() + '</p>' : ''}
+      `;
+      items.appendChild(div);
+    });
+    document.getElementById('cTotalText').textContent = cartaMostrarPrecios ? 'RD$' + subtotal.toLocaleString() : '';
+    const mesa = cartaNumMesa ? 'Mesa ' + cartaNumMesa : '';
+    document.getElementById('cModalMesa').textContent = mesa;
+  }
+
+  // ── WhatsApp ────────────────────────────────────────────────────────────
+  function cartaEnviarWS() {
+    if (!Object.keys(cartaCarrito).length) return;
+    const notas = document.getElementById('cNotasInput').value.trim();
+    let msg = '🍽️ *Pedido — ' + empresa.nombre + '*
+
+';
+    if (cartaNumMesa) msg += '🪑 *Mesa:* ' + cartaNumMesa + '
+
+';
+    msg += '📋 *Platos:*
+';
+    let subtotal = 0;
+    Object.values(cartaCarrito).forEach(({producto, cantidad}) => {
+      const precio = Number(producto.precio_venta||0);
+      subtotal += precio * cantidad;
+      msg += '  • ' + producto.nombre + ' x' + cantidad;
+      if (cartaMostrarPrecios) msg += ' — RD$' + (precio*cantidad).toLocaleString();
+      msg += '
+';
+    });
+    if (cartaMostrarPrecios) msg += '
+✅ *Total: RD$' + subtotal.toLocaleString() + '*';
+    if (notas) msg += '
+
+📝 *Notas:* ' + notas;
+    msg += '
+
+_Pedido enviado desde NegocioPro Carta Digital_';
+
+    let num = (empresa.whatsapp || empresa.telefono || '').replace(/[^0-9]/g,'');
+    if (num.length === 10 && (num.startsWith('8') || num.startsWith('9'))) num = '1' + num;
+    if (num.length === 7) num = '1809' + num;
+    if (!num) { alert('Este negocio no tiene número de WhatsApp.'); return; }
+    window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank');
+  }
+
+  // ── Mostrar al mesero ────────────────────────────────────────────────────
+  function cartaMostrarMesero() {
+    if (!Object.keys(cartaCarrito).length) return;
+    const screen = document.getElementById('cMeseroScreen');
+    document.getElementById('cMeseroMesa').textContent = cartaNumMesa ? 'Mesa ' + cartaNumMesa : '';
+    const lista = document.getElementById('cMeseroLista');
+    lista.innerHTML = '';
+    let subtotal = 0;
+    Object.values(cartaCarrito).forEach(({producto, cantidad}) => {
+      const precio = Number(producto.precio_venta||0);
+      subtotal += precio * cantidad;
+      const item = document.createElement('div');
+      item.className = 'flex justify-between items-center py-1 border-b border-white/20';
+      item.innerHTML = `<span class="font-semibold">${(producto.nombre||'').replace(/</g,'&lt;')} x${cantidad}</span>
+        ${cartaMostrarPrecios ? '<span class="font-bold">RD$' + (precio*cantidad).toLocaleString() + '</span>' : ''}`;
+      lista.appendChild(item);
+    });
+    document.getElementById('cMeseroTotal').textContent = cartaMostrarPrecios ? 'Total: RD$' + subtotal.toLocaleString() : '';
+    cerrarCartaPedido();
+    screen.classList.remove('hidden');
+  }
+
+  // ═══════════════ FIN CARTA JS ════════════════════════════════════════════
+
+  // ── Detectar modo carta ──
+  if (new URLSearchParams(location.search).has('carta')) {
+    initCarta();
+  } else {
+    init();
+  }
 </script>
+
+<!-- ═══════════════ CARTA DIGITAL ═══════════════ -->
+<div id="cartaApp" class="hidden min-h-screen" style="background:#fafaf8">
+
+  <!-- Header -->
+  <div class="carta-header text-white sticky top-0 z-40 shadow-lg">
+    <div class="max-w-xl mx-auto px-4 py-4 flex items-center gap-3">
+      <div id="cLogoWrap" class="hidden">
+        <img id="cLogoImg" class="w-11 h-11 rounded-xl object-cover border-2 border-white/30" />
+      </div>
+      <div class="flex-1 min-w-0">
+        <h1 id="cNombre" class="text-lg font-bold leading-tight truncate">Cargando…</h1>
+        <p class="text-white/70 text-xs">🍽️ Carta Digital</p>
+      </div>
+      <button onclick="abrirSelectorMesa()"
+        class="carta-mesa-badge flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white">
+        🪑 <span id="cMesaLabel">Mesa</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mesa modal -->
+  <div id="cMesaModal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center px-6"
+    onclick="if(event.target===this)cerrarMesaModal()">
+    <div class="bg-white rounded-2xl p-6 w-full max-w-xs shadow-2xl">
+      <h2 class="text-lg font-bold text-gray-800 mb-1">¿Cuál es tu mesa?</h2>
+      <p class="text-sm text-gray-500 mb-4">Escribe el número de tu mesa</p>
+      <input id="cMesaInput" type="number" min="1" placeholder="Ej: 5"
+        class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-2xl font-bold text-center focus:outline-none mb-4"
+        style="border-color:var(--color-primary-border)" />
+      <button onclick="confirmarMesa()"
+        class="w-full text-white rounded-xl py-3 font-bold text-base" style="background:var(--color-primary)">
+        ✅ Confirmar
+      </button>
+      <button onclick="cerrarMesaModal()" class="w-full mt-2 text-gray-400 text-sm py-2">
+        Continuar sin mesa
+      </button>
+    </div>
+  </div>
+
+  <!-- Categorías -->
+  <div class="bg-white border-b border-gray-100 sticky z-30 overflow-x-auto" style="top:72px">
+    <div id="cCatBar" class="max-w-xl mx-auto px-4 py-2 flex gap-2"></div>
+  </div>
+
+  <!-- Loading -->
+  <div id="cLoading" class="text-center py-20 text-gray-400">
+    <div class="text-5xl mb-3">🍽️</div>
+    <p class="text-sm">Cargando carta…</p>
+  </div>
+
+  <!-- Error -->
+  <div id="cError" class="hidden text-center py-20 text-gray-400">
+    <div class="text-5xl mb-3">😕</div>
+    <p class="text-sm font-semibold">Carta no disponible</p>
+  </div>
+
+  <!-- Productos -->
+  <div id="cProductosWrap" class="hidden max-w-xl mx-auto px-4 pt-3 pb-36">
+    <div id="cProductosList"></div>
+  </div>
+
+  <!-- FAB pedido -->
+  <div id="cPedidoFab" class="carta-fab hidden">
+    <button onclick="abrirCartaPedido()"
+      class="w-full text-white rounded-2xl py-4 font-bold shadow-2xl flex items-center justify-between px-5"
+      style="background:var(--color-primary)">
+      <span>🛒 Ver mi pedido</span>
+      <span id="cFabResumen" class="text-sm font-bold px-3 py-1 rounded-xl" style="background:rgba(255,255,255,0.2)"></span>
+    </button>
+  </div>
+
+  <!-- Modal pedido -->
+  <div id="cModalPedido" class="fixed inset-0 bg-black/50 z-50 hidden" onclick="if(event.target===this)cerrarCartaPedido()">
+    <div class="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[88vh] overflow-y-auto slide-up" onclick="event.stopPropagation()">
+      <div class="px-5 py-4 border-b flex items-center justify-between sticky top-0 bg-white z-10 rounded-t-3xl">
+        <div>
+          <h2 class="font-bold text-lg text-gray-900">Mi pedido</h2>
+          <p id="cModalMesa" class="text-sm text-gray-500"></p>
+        </div>
+        <button onclick="cerrarCartaPedido()" class="text-gray-400 text-3xl w-8 h-8 flex items-center justify-center">&times;</button>
+      </div>
+      <div id="cPedidoItems" class="px-5 py-4 space-y-3 min-h-[80px]"></div>
+      <div class="px-5 pb-8 border-t pt-4 space-y-3">
+        <div class="rounded-2xl p-4 flex justify-between items-center" style="background:var(--color-primary-light)">
+          <span class="font-semibold" style="color:var(--color-primary-text)">Total</span>
+          <span id="cTotalText" class="text-xl font-bold" style="color:var(--color-primary-text)">RD$0</span>
+        </div>
+        <input id="cNotasInput" type="text" placeholder="📝 Notas (alergias, preferencias…)"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none" />
+        <button id="cBtnWS" onclick="cartaEnviarWS()"
+          class="hidden w-full bg-green-500 text-white rounded-xl py-3.5 font-bold text-base shadow-md">
+          📲 Enviar pedido por WhatsApp
+        </button>
+        <button onclick="cartaMostrarMesero()"
+          class="w-full border-2 border-gray-300 text-gray-700 rounded-xl py-3.5 font-bold text-base">
+          ✋ Mostrar al mesero
+        </button>
+        <p class="text-center text-xs text-gray-400 pb-1">Confirma tu pedido con el personal del local</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pantalla mesero -->
+  <div id="cMeseroScreen" class="hidden carta-mesero-screen">
+    <div class="text-6xl mb-3">🧾</div>
+    <h2 class="text-2xl font-bold mb-1">Mi pedido</h2>
+    <p id="cMeseroMesa" class="text-white/70 text-sm mb-6"></p>
+    <div id="cMeseroLista" class="w-full max-w-sm space-y-2 mb-5"></div>
+    <p id="cMeseroTotal" class="text-2xl font-bold mb-8"></p>
+    <button onclick="document.getElementById('cMeseroScreen').classList.add('hidden')"
+      class="bg-white font-bold px-10 py-3 rounded-2xl text-base" style="color:var(--color-primary-text)">
+      Cerrar
+    </button>
+  </div>
+
+</div>
+<!-- ═══════════════ FIN CARTA DIGITAL ═══════════════ -->
+
 </body>
 </html>
