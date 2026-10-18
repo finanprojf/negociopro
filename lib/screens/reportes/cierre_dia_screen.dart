@@ -7,6 +7,7 @@ import '../../utils/formatters.dart';
 import '../../services/cierre_dia_service.dart';
 import '../../services/cuadre_automatico_service.dart';
 import '../../models/cierre_dia_model.dart';
+import '../../widgets/guia_modulo_banner.dart';
 
 class CierreDiaScreen extends StatefulWidget {
   const CierreDiaScreen({super.key});
@@ -247,7 +248,8 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
     body: _cargando
         ? const Center(child: CircularProgressIndicator())
         : TabBarView(controller: _tabs,
-            children: [_tabNuevo(), _tabHistorial(), _tabAutomatico()]),
+            children: [
+            const GuiaModuloBanner(modulo: 'cuadre_caja'),_tabNuevo(), _tabHistorial(), _tabAutomatico()]),
   );
 
   // ══════════════════════ TAB 1 ════════════════════════════════

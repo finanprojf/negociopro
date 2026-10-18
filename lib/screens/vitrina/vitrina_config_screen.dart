@@ -12,6 +12,7 @@ import '../../utils/constants.dart';
 import '../../models/categoria_model.dart';
 import 'vitrina_producto_config_screen.dart';
 import 'vitrina_resenas_screen.dart';
+import '../../widgets/guia_modulo_banner.dart';
 
 class VitrinaConfigScreen extends StatefulWidget {
   const VitrinaConfigScreen({super.key});
@@ -349,6 +350,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+            const GuiaModuloBanner(modulo: 'vitrina'),
                 // Toggle principal
                 _buildCard(child: Row(children: [
                   Container(

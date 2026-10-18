@@ -95,6 +95,18 @@ class GuiaService {
       descripcion:
           'Gestiona pedidos especiales de tus clientes. Anota lo que te encargan y lleva el seguimiento hasta la entrega.',
     ),
+    'vitrina': _GuiaInfo(
+      icono: '🏪',
+      titulo: 'Vitrina Digital',
+      descripcion:
+          'Comparte tu catálogo en línea con un enlace o código QR. Tus clientes pueden ver los productos disponibles y dejar reseñas.',
+    ),
+    'cuadre_caja': _GuiaInfo(
+      icono: '🧾',
+      titulo: 'Cuadre de Caja',
+      descripcion:
+          'Cierra el día con un resumen de ventas, ingresos y efectivo. Compara lo esperado con lo real para mantener tus cuentas al día.',
+    ),
   };
 }
 
