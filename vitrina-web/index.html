@@ -283,6 +283,128 @@
   </div>
 </div>
 
+<!-- ═══════════════ CARTA DIGITAL ═══════════════ -->
+<div id="cartaApp" class="hidden min-h-screen" style="background:#fafaf8">
+
+  <!-- Header -->
+  <div class="carta-header text-white sticky top-0 z-40 shadow-lg">
+    <div class="max-w-xl mx-auto px-4 py-4 flex items-center gap-3">
+      <div id="cLogoWrap" class="hidden">
+        <img id="cLogoImg" class="w-11 h-11 rounded-xl object-cover border-2 border-white/30" />
+      </div>
+      <div class="flex-1 min-w-0">
+        <h1 id="cNombre" class="text-lg font-bold leading-tight truncate">Cargando…</h1>
+        <p class="text-white/70 text-xs">🍽️ Carta Digital</p>
+      </div>
+      <button onclick="abrirSelectorMesa()"
+        class="carta-mesa-badge flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white">
+        🪑 <span id="cMesaLabel">Mesa</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mesa modal -->
+  <div id="cMesaModal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center px-6"
+    onclick="if(event.target===this)cerrarMesaModal()">
+    <div class="bg-white rounded-2xl p-6 w-full max-w-xs shadow-2xl">
+      <h2 class="text-lg font-bold text-gray-800 mb-1">¿Cuál es tu mesa?</h2>
+      <p class="text-sm text-gray-500 mb-4">Escribe el número de tu mesa</p>
+      <input id="cMesaInput" type="number" min="1" placeholder="Ej: 5"
+        class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-2xl font-bold text-center focus:outline-none mb-4"
+        style="border-color:var(--color-primary-border)" />
+      <button onclick="confirmarMesa()"
+        class="w-full text-white rounded-xl py-3 font-bold text-base" style="background:var(--color-primary)">
+        ✅ Confirmar
+      </button>
+      <button onclick="cerrarMesaModal()" class="w-full mt-2 text-gray-400 text-sm py-2">
+        Continuar sin mesa
+      </button>
+    </div>
+  </div>
+
+  <!-- Categorías -->
+  <div class="bg-white border-b border-gray-100 sticky z-30 overflow-x-auto" style="top:72px">
+    <div id="cCatBar" class="max-w-xl mx-auto px-4 py-2 flex gap-2"></div>
+  </div>
+
+  <!-- Loading -->
+  <div id="cLoading" class="text-center py-20 text-gray-400">
+    <div class="text-5xl mb-3">🍽️</div>
+    <p class="text-sm">Cargando carta…</p>
+  </div>
+
+  <!-- Error -->
+  <div id="cError" class="hidden text-center py-16 px-6">
+    <div class="text-6xl mb-4">😕</div>
+    <p class="font-bold text-gray-700 text-lg mb-2">No se pudo cargar la carta</p>
+    <p class="text-sm text-gray-500 mb-6">Verifica tu conexión o vuelve a intentarlo</p>
+    <button onclick="location.reload()" class="px-6 py-2 rounded-xl text-white text-sm font-bold" style="background:var(--color-primary)">
+      🔄 Reintentar
+    </button>
+  </div>
+
+  <!-- Productos -->
+  <div id="cProductosWrap" class="hidden max-w-xl mx-auto px-4 pt-3 pb-36">
+    <div id="cProductosList"></div>
+  </div>
+
+  <!-- FAB pedido -->
+  <div id="cPedidoFab" class="carta-fab hidden">
+    <button onclick="abrirCartaPedido()"
+      class="w-full text-white rounded-2xl py-4 font-bold shadow-2xl flex items-center justify-between px-5"
+      style="background:var(--color-primary)">
+      <span>🛒 Ver mi pedido</span>
+      <span id="cFabResumen" class="text-sm font-bold px-3 py-1 rounded-xl" style="background:rgba(255,255,255,0.2)"></span>
+    </button>
+  </div>
+
+  <!-- Modal pedido -->
+  <div id="cModalPedido" class="fixed inset-0 bg-black/50 z-50 hidden" onclick="if(event.target===this)cerrarCartaPedido()">
+    <div class="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[88vh] overflow-y-auto slide-up" onclick="event.stopPropagation()">
+      <div class="px-5 py-4 border-b flex items-center justify-between sticky top-0 bg-white z-10 rounded-t-3xl">
+        <div>
+          <h2 class="font-bold text-lg text-gray-900">Mi pedido</h2>
+          <p id="cModalMesa" class="text-sm text-gray-500"></p>
+        </div>
+        <button onclick="cerrarCartaPedido()" class="text-gray-400 text-3xl w-8 h-8 flex items-center justify-center">&times;</button>
+      </div>
+      <div id="cPedidoItems" class="px-5 py-4 space-y-3 min-h-[80px]"></div>
+      <div class="px-5 pb-8 border-t pt-4 space-y-3">
+        <div class="rounded-2xl p-4 flex justify-between items-center" style="background:var(--color-primary-light)">
+          <span class="font-semibold" style="color:var(--color-primary-text)">Total</span>
+          <span id="cTotalText" class="text-xl font-bold" style="color:var(--color-primary-text)">RD$0</span>
+        </div>
+        <input id="cNotasInput" type="text" placeholder="📝 Notas (alergias, preferencias…)"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none" />
+        <button id="cBtnWS" onclick="cartaEnviarWS()"
+          class="hidden w-full bg-green-500 text-white rounded-xl py-3.5 font-bold text-base shadow-md">
+          📲 Enviar pedido por WhatsApp
+        </button>
+        <button onclick="cartaMostrarMesero()"
+          class="w-full border-2 border-gray-300 text-gray-700 rounded-xl py-3.5 font-bold text-base">
+          ✋ Mostrar al mesero
+        </button>
+        <p class="text-center text-xs text-gray-400 pb-1">Confirma tu pedido con el personal del local</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pantalla mesero -->
+  <div id="cMeseroScreen" class="hidden carta-mesero-screen">
+    <div class="text-6xl mb-3">🧾</div>
+    <h2 class="text-2xl font-bold mb-1">Mi pedido</h2>
+    <p id="cMeseroMesa" class="text-white/70 text-sm mb-6"></p>
+    <div id="cMeseroLista" class="w-full max-w-sm space-y-2 mb-5"></div>
+    <p id="cMeseroTotal" class="text-2xl font-bold mb-8"></p>
+    <button onclick="document.getElementById('cMeseroScreen').classList.add('hidden')"
+      class="bg-white font-bold px-10 py-3 rounded-2xl text-base" style="color:var(--color-primary-text)">
+      Cerrar
+    </button>
+  </div>
+
+</div>
+<!-- ═══════════════ FIN CARTA DIGITAL ═══════════════ -->
+
 <script>
   const SUPABASE_URL      = 'https://ljsjysphifhbyhhfxbyb.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxqc2p5c3BoaWZoYnloaGZ4YnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MDA1NzQsImV4cCI6MjA5ODE3NjU3NH0.RP9mpDSAiqSakBRvFY5AGYqFEo68JioUyvnvmlL6bV0';
@@ -1307,128 +1429,6 @@
     init();
   }
 </script>
-
-<!-- ═══════════════ CARTA DIGITAL ═══════════════ -->
-<div id="cartaApp" class="hidden min-h-screen" style="background:#fafaf8">
-
-  <!-- Header -->
-  <div class="carta-header text-white sticky top-0 z-40 shadow-lg">
-    <div class="max-w-xl mx-auto px-4 py-4 flex items-center gap-3">
-      <div id="cLogoWrap" class="hidden">
-        <img id="cLogoImg" class="w-11 h-11 rounded-xl object-cover border-2 border-white/30" />
-      </div>
-      <div class="flex-1 min-w-0">
-        <h1 id="cNombre" class="text-lg font-bold leading-tight truncate">Cargando…</h1>
-        <p class="text-white/70 text-xs">🍽️ Carta Digital</p>
-      </div>
-      <button onclick="abrirSelectorMesa()"
-        class="carta-mesa-badge flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white">
-        🪑 <span id="cMesaLabel">Mesa</span>
-      </button>
-    </div>
-  </div>
-
-  <!-- Mesa modal -->
-  <div id="cMesaModal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center px-6"
-    onclick="if(event.target===this)cerrarMesaModal()">
-    <div class="bg-white rounded-2xl p-6 w-full max-w-xs shadow-2xl">
-      <h2 class="text-lg font-bold text-gray-800 mb-1">¿Cuál es tu mesa?</h2>
-      <p class="text-sm text-gray-500 mb-4">Escribe el número de tu mesa</p>
-      <input id="cMesaInput" type="number" min="1" placeholder="Ej: 5"
-        class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-2xl font-bold text-center focus:outline-none mb-4"
-        style="border-color:var(--color-primary-border)" />
-      <button onclick="confirmarMesa()"
-        class="w-full text-white rounded-xl py-3 font-bold text-base" style="background:var(--color-primary)">
-        ✅ Confirmar
-      </button>
-      <button onclick="cerrarMesaModal()" class="w-full mt-2 text-gray-400 text-sm py-2">
-        Continuar sin mesa
-      </button>
-    </div>
-  </div>
-
-  <!-- Categorías -->
-  <div class="bg-white border-b border-gray-100 sticky z-30 overflow-x-auto" style="top:72px">
-    <div id="cCatBar" class="max-w-xl mx-auto px-4 py-2 flex gap-2"></div>
-  </div>
-
-  <!-- Loading -->
-  <div id="cLoading" class="text-center py-20 text-gray-400">
-    <div class="text-5xl mb-3">🍽️</div>
-    <p class="text-sm">Cargando carta…</p>
-  </div>
-
-  <!-- Error -->
-  <div id="cError" class="hidden text-center py-16 px-6">
-    <div class="text-6xl mb-4">😕</div>
-    <p class="font-bold text-gray-700 text-lg mb-2">No se pudo cargar la carta</p>
-    <p class="text-sm text-gray-500 mb-6">Verifica tu conexión o vuelve a intentarlo</p>
-    <button onclick="location.reload()" class="px-6 py-2 rounded-xl text-white text-sm font-bold" style="background:var(--color-primary)">
-      🔄 Reintentar
-    </button>
-  </div>
-
-  <!-- Productos -->
-  <div id="cProductosWrap" class="hidden max-w-xl mx-auto px-4 pt-3 pb-36">
-    <div id="cProductosList"></div>
-  </div>
-
-  <!-- FAB pedido -->
-  <div id="cPedidoFab" class="carta-fab hidden">
-    <button onclick="abrirCartaPedido()"
-      class="w-full text-white rounded-2xl py-4 font-bold shadow-2xl flex items-center justify-between px-5"
-      style="background:var(--color-primary)">
-      <span>🛒 Ver mi pedido</span>
-      <span id="cFabResumen" class="text-sm font-bold px-3 py-1 rounded-xl" style="background:rgba(255,255,255,0.2)"></span>
-    </button>
-  </div>
-
-  <!-- Modal pedido -->
-  <div id="cModalPedido" class="fixed inset-0 bg-black/50 z-50 hidden" onclick="if(event.target===this)cerrarCartaPedido()">
-    <div class="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[88vh] overflow-y-auto slide-up" onclick="event.stopPropagation()">
-      <div class="px-5 py-4 border-b flex items-center justify-between sticky top-0 bg-white z-10 rounded-t-3xl">
-        <div>
-          <h2 class="font-bold text-lg text-gray-900">Mi pedido</h2>
-          <p id="cModalMesa" class="text-sm text-gray-500"></p>
-        </div>
-        <button onclick="cerrarCartaPedido()" class="text-gray-400 text-3xl w-8 h-8 flex items-center justify-center">&times;</button>
-      </div>
-      <div id="cPedidoItems" class="px-5 py-4 space-y-3 min-h-[80px]"></div>
-      <div class="px-5 pb-8 border-t pt-4 space-y-3">
-        <div class="rounded-2xl p-4 flex justify-between items-center" style="background:var(--color-primary-light)">
-          <span class="font-semibold" style="color:var(--color-primary-text)">Total</span>
-          <span id="cTotalText" class="text-xl font-bold" style="color:var(--color-primary-text)">RD$0</span>
-        </div>
-        <input id="cNotasInput" type="text" placeholder="📝 Notas (alergias, preferencias…)"
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none" />
-        <button id="cBtnWS" onclick="cartaEnviarWS()"
-          class="hidden w-full bg-green-500 text-white rounded-xl py-3.5 font-bold text-base shadow-md">
-          📲 Enviar pedido por WhatsApp
-        </button>
-        <button onclick="cartaMostrarMesero()"
-          class="w-full border-2 border-gray-300 text-gray-700 rounded-xl py-3.5 font-bold text-base">
-          ✋ Mostrar al mesero
-        </button>
-        <p class="text-center text-xs text-gray-400 pb-1">Confirma tu pedido con el personal del local</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Pantalla mesero -->
-  <div id="cMeseroScreen" class="hidden carta-mesero-screen">
-    <div class="text-6xl mb-3">🧾</div>
-    <h2 class="text-2xl font-bold mb-1">Mi pedido</h2>
-    <p id="cMeseroMesa" class="text-white/70 text-sm mb-6"></p>
-    <div id="cMeseroLista" class="w-full max-w-sm space-y-2 mb-5"></div>
-    <p id="cMeseroTotal" class="text-2xl font-bold mb-8"></p>
-    <button onclick="document.getElementById('cMeseroScreen').classList.add('hidden')"
-      class="bg-white font-bold px-10 py-3 rounded-2xl text-base" style="color:var(--color-primary-text)">
-      Cerrar
-    </button>
-  </div>
-
-</div>
-<!-- ═══════════════ FIN CARTA DIGITAL ═══════════════ -->
 
 </body>
 </html>
