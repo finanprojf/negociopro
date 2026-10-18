@@ -13,6 +13,11 @@ import '../../models/cliente_model.dart';
 import 'historial_ventas_screen.dart';
 import 'dart:io';
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../../widgets/guia_modulo_banner.dart';
 class _ItemCarrito {
   final ProductoModel producto;
@@ -47,6 +52,8 @@ List<Map<String, String>> _clientesDemo = [];
   double get _total => _carrito.fold(0, (s, i) => s + i.subtotal);
   int get _totalItems => _carrito.fold(0, (s, i) => s + i.cantidad.toInt());
 double _montoIngresadoTemp = 0;
+  String? _btPrinterAddress;
+  String? _btPrinterName;
   @override
  void initState() {
     super.initState();
@@ -130,6 +137,7 @@ Future<void> _agregarClienteRapido() async {
         if (clienteNuevo['id']!.isEmpty) return;
 
         final totalAntes = _total; // guardar antes de limpiar
+        final itemsVenta1 = List<_ItemCarrito>.from(_carrito);
         await VentaService.registrarVenta(
           items: _carrito.map((i) => {
             'producto': i.producto,
@@ -147,6 +155,7 @@ Future<void> _agregarClienteRapido() async {
           _tipoPago = 'efectivo';
           _montoIngresadoTemp = 0;
         });
+        _imprimirFacturaVenta(items: itemsVenta1, tipoPago: 'fiado', total: totalAntes, montoPagado: _montoIngresadoTemp);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('¡Venta registrada! ${resultado['nombre']} debe ${AppFormatters.moneda(totalAntes - _montoIngresadoTemp)}'),
@@ -156,6 +165,120 @@ Future<void> _agregarClienteRapido() async {
       } catch (_) {}
     }
   }
+ Future<void> _imprimirFacturaVenta({
+    required List<_ItemCarrito> items,
+    required String tipoPago,
+    required double total,
+    required double montoPagado,
+    double descuento = 0,
+  }) async {
+    try {
+      // Obtener nombre del negocio
+      String nombreNegocio = 'Mi Negocio';
+      try {
+        final empresaId = await SupabaseService.getEmpresaId();
+        if (empresaId != null) {
+          final res = await SupabaseService.client
+              .from('empresas')
+              .select('nombre')
+              .eq('id', empresaId)
+              .single();
+          nombreNegocio = res['nombre'] ?? 'Mi Negocio';
+        }
+      } catch (_) {}
+
+      final ahora = DateTime.now();
+      final dStr = ahora.day.toString().padLeft(2, '0');
+      final mStr = ahora.month.toString().padLeft(2, '0');
+      final hStr = ahora.hour.toString().padLeft(2, '0');
+      final minStr = ahora.minute.toString().padLeft(2, '0');
+      final fecha = '\$dStr/\$mStr/\${ahora.year}';
+      final hora = '\$hStr:\$minStr';
+      final cambio = (tipoPago == 'efectivo' && montoPagado > total) ? (montoPagado - total) : 0.0;
+
+      // Intentar Bluetooth primero
+      if (_btPrinterAddress != null) {
+        final bool connected = await PrintBluetoothThermal.connectionStatus;
+        if (!connected) {
+          await PrintBluetoothThermal.connect(macPrinterAddress: _btPrinterAddress!);
+          await Future.delayed(const Duration(milliseconds: 600));
+        }
+        final bool ok = await PrintBluetoothThermal.connectionStatus;
+        if (ok) {
+          final List<int> bytes = [];
+          // ESC/POS commands
+          void cmd(List<int> b) => bytes.addAll(b);
+          void text(String t, {bool bold = false, bool center = false}) {
+            if (center) cmd([0x1B, 0x61, 0x01]);
+            if (bold) cmd([0x1B, 0x45, 0x01]);
+            cmd(t.codeUnits);
+            cmd([0x0A]);
+            if (bold) cmd([0x1B, 0x45, 0x00]);
+            if (center) cmd([0x1B, 0x61, 0x00]);
+          }
+          cmd([0x1B, 0x40]); // init
+          text(nombreNegocio, bold: true, center: true);
+          text('$fecha  $hora', center: true);
+          text('--------------------------------');
+          text('PRODUCTO          CANT   PRECIO');
+          text('--------------------------------');
+          for (final item in items) {
+            final nom = item.producto.nombre.length > 16
+                ? item.producto.nombre.substring(0, 16)
+                : item.producto.nombre.padRight(16);
+            final cant = item.cantidad.toInt().toString().padLeft(4);
+            final precio = AppFormatters.moneda(item.subtotal).padLeft(9);
+            text('\$nom\$cant\$precio');
+          }
+          text('--------------------------------');
+          if (descuento > 0) text('Descuento:  -\${AppFormatters.moneda(descuento)}');
+          text('TOTAL:      \${AppFormatters.moneda(total)}', bold: true);
+          final tipLabel = tipoPago == 'fiado' ? 'FIADO' : tipoPago == 'transferencia' ? 'TRANSFERENCIA' : 'EFECTIVO';
+          text('Pago:       \$tipLabel');
+          if (montoPagado > 0 && tipoPago == 'efectivo') text('Recibido:   \${AppFormatters.moneda(montoPagado)}');
+          if (cambio > 0) text('Cambio:     \${AppFormatters.moneda(cambio)}');
+          text('--------------------------------');
+          text('¡Gracias por su compra!', center: true);
+          cmd([0x0A, 0x0A, 0x0A]);
+          cmd([0x1D, 0x56, 0x00]); // corte
+          await PrintBluetoothThermal.writeBytes(Uint8List.fromList(bytes));
+          return;
+        }
+      }
+
+      // Fallback WiFi/sistema
+      final doc = pw.Document();
+      doc.addPage(pw.Page(
+        pageFormat: PdfPageFormat(58 * PdfPageFormat.mm, double.infinity, marginAll: 4 * PdfPageFormat.mm),
+        build: (pw.Context ctx) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Center(child: pw.Text(nombreNegocio, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11))),
+            pw.Center(child: pw.Text('$fecha  $hora', style: const pw.TextStyle(fontSize: 8))),
+            pw.Divider(),
+            ...items.map((item) => pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Expanded(child: pw.Text(item.producto.nombre, style: const pw.TextStyle(fontSize: 8))),
+                pw.Text('x\${item.cantidad.toInt()}  \${AppFormatters.moneda(item.subtotal)}', style: const pw.TextStyle(fontSize: 8)),
+              ],
+            )),
+            pw.Divider(),
+            if (descuento > 0) pw.Text('Descuento: -\${AppFormatters.moneda(descuento)}', style: const pw.TextStyle(fontSize: 8)),
+            pw.Text('TOTAL: \${AppFormatters.moneda(total)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+            pw.Text('Pago: \${tipoPago.toUpperCase()}', style: const pw.TextStyle(fontSize: 8)),
+            if (cambio > 0) pw.Text('Cambio: \${AppFormatters.moneda(cambio)}', style: const pw.TextStyle(fontSize: 8)),
+            pw.SizedBox(height: 8),
+            pw.Center(child: pw.Text('¡Gracias por su compra!', style: const pw.TextStyle(fontSize: 8))),
+          ],
+        ),
+      ));
+      await Printing.layoutPdf(onLayout: (_) async => doc.save());
+    } catch (_) {
+      // impresión silenciosa — no bloquear UI
+    }
+  }
+
  Future<void> _cargarProductos() async {
     setState(() => _loading = true);
     try {
@@ -793,6 +916,8 @@ Future<void> _cargarClientes() async {
                       }
                       setState(() => _tipoPago = 'fiado');
                     }
+                    final totalV2 = _total;
+                    final itemsV2 = List<_ItemCarrito>.from(_carrito);
                     await VentaService.registrarVenta(
                       items: _carrito.map((i) => {
                         'producto': i.producto,
@@ -808,6 +933,7 @@ Future<void> _cargarClientes() async {
                       final vendidos = List<_ItemCarrito>.from(_carrito);
                       setState(() { _carrito.clear(); _carritoMap.clear(); _clienteSeleccionado = null; _tipoPago = 'efectivo'; });
                       _actualizarStockLocal(vendidos);
+                      _imprimirFacturaVenta(items: itemsV2, tipoPago: opcion == 'fiado' ? 'fiado' : 'efectivo', total: totalV2, montoPagado: 0, descuento: opcion == 'descuento' ? totalV2 : 0);
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(opcion == 'fiado'
                             ? '¡Registrado en fiado!'
@@ -915,6 +1041,8 @@ Future<void> _cargarClientes() async {
       setState(() => _tipoPago = 'fiado');
     }
                     // Si es descuento, el monto ingresado es el total a cobrar
+                    final totalV3 = _total;
+                    final itemsV3 = List<_ItemCarrito>.from(_carrito);
                     await VentaService.registrarVenta(
                       items: _carrito.map((i) => {
                         'producto': i.producto,
@@ -930,6 +1058,7 @@ Future<void> _cargarClientes() async {
                       final vendidos = List<_ItemCarrito>.from(_carrito);
                       setState(() { _carrito.clear(); _carritoMap.clear(); _clienteSeleccionado = null; _tipoPago = 'efectivo'; });
                       _actualizarStockLocal(vendidos);
+                      _imprimirFacturaVenta(items: itemsV3, tipoPago: opcion == 'fiado' ? 'fiado' : 'efectivo', total: totalV3, montoPagado: montoIngresado, descuento: opcion == 'descuento' ? faltante : 0);
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(opcion == 'fiado'
                             ? '¡Venta registrada en fiado!'
@@ -941,6 +1070,9 @@ Future<void> _cargarClientes() async {
                   }
 
                   Navigator.pop(ctx);
+                  final totalV4 = _total;
+                  final itemsV4 = List<_ItemCarrito>.from(_carrito);
+                  final montoV4 = _tipoPago == 'fiado' ? 0.0 : (double.tryParse(ctrl.text) ?? _total);
                   await VentaService.registrarVenta(
                     items: _carrito.map((i) => {
                       'producto': i.producto,
@@ -948,12 +1080,13 @@ Future<void> _cargarClientes() async {
                     }).toList(),
                     tipoPago: _tipoPago,
                     clienteId: _clienteSeleccionado,
-                    montoPagado: _tipoPago == 'fiado' ? 0 : (double.tryParse(ctrl.text) ?? _total),
+                    montoPagado: montoV4,
                   );
                   if (context.mounted) {
                     final vendidos = List<_ItemCarrito>.from(_carrito);
                     setState(() { _carrito.clear(); _carritoMap.clear(); _clienteSeleccionado = null; _tipoPago = 'efectivo'; });
                     _actualizarStockLocal(vendidos);
+                    _imprimirFacturaVenta(items: itemsV4, tipoPago: _tipoPago, total: totalV4, montoPagado: montoV4);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text('¡Venta registrada!',
                           style: GoogleFonts.poppins()),
