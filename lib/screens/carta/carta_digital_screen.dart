@@ -769,9 +769,8 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
           ));
           return;
         }
-      } else {
-        await _imprimirWifi(items, mesa, notas, pedido['total'] ?? 0, horaStr);
       }
+      // sin impresora BT: pedido guardado en Supabase, no se abre diálogo
       await _cambiarEstado(pedido['id'], 'preparando');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
