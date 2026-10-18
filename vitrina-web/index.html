@@ -396,8 +396,12 @@
     <p id="cMeseroMesa" class="text-white/70 text-sm mb-6"></p>
     <div id="cMeseroLista" class="w-full max-w-sm space-y-2 mb-5"></div>
     <p id="cMeseroTotal" class="text-2xl font-bold mb-8"></p>
+    <button id="cMeseroBtnCocina"
+      class="bg-white font-bold px-6 py-3 rounded-2xl text-base mb-3 w-full max-w-xs" style="color:var(--color-primary-text)">
+      🖨️ Enviar a cocina / Imprimir
+    </button>
     <button onclick="document.getElementById('cMeseroScreen').classList.add('hidden')"
-      class="bg-white font-bold px-10 py-3 rounded-2xl text-base" style="color:var(--color-primary-text)">
+      class="font-bold px-10 py-3 rounded-2xl text-base w-full max-w-xs" style="background:rgba(255,255,255,0.2);color:white">
       Cerrar
     </button>
   </div>
@@ -406,6 +410,8 @@
 <!-- ═══════════════ FIN CARTA DIGITAL ═══════════════ -->
 
 <script>
+  window._SB_URL = window._SB_URL || (typeof SUPABASE_URL !== "undefined" ? SUPABASE_URL : '');
+  window._SB_KEY = window._SB_KEY || (typeof SUPABASE_ANON_KEY !== "undefined" ? SUPABASE_ANON_KEY : '');
   const SUPABASE_URL      = 'https://ljsjysphifhbyhhfxbyb.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxqc2p5c3BoaWZoYnloaGZ4YnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MDA1NzQsImV4cCI6MjA5ODE3NjU3NH0.RP9mpDSAiqSakBRvFY5AGYqFEo68JioUyvnvmlL6bV0';
 
@@ -471,6 +477,8 @@
       if (!cfgData.length) cfgData = await fetchSB(`vitrina_config?empresa_id=eq.${encodeURIComponent(slug)}&activa=eq.true&select=*`);
       if (!cfgData.length) { mostrarError(); return; }
       config = cfgData[0];
+      window._SB_URL = SUPABASE_URL;
+      window._SB_KEY = SUPABASE_ANON_KEY;
       if (config.color_tema) aplicarTema(config.color_tema);
 
       // Empresa
@@ -1401,6 +1409,7 @@
   // ── Mostrar al mesero ────────────────────────────────────────────────────
   function cartaMostrarMesero() {
     if (!Object.keys(cartaCarrito).length) return;
+    const notas = document.getElementById('cNotasInput').value.trim();
     const screen = document.getElementById('cMeseroScreen');
     document.getElementById('cMeseroMesa').textContent = cartaNumMesa ? 'Mesa ' + cartaNumMesa : '';
     const lista = document.getElementById('cMeseroLista');
@@ -1410,14 +1419,95 @@
       const precio = Number(producto.precio_venta||0);
       subtotal += precio * cantidad;
       const item = document.createElement('div');
-      item.className = 'flex justify-between items-center py-1 border-b border-white/20';
+      item.className = 'flex justify-between items-center py-2 border-b border-white/20';
       item.innerHTML = `<span class="font-semibold">${(producto.nombre||'').replace(/</g,'&lt;')} x${cantidad}</span>
         ${cartaMostrarPrecios ? '<span class="font-bold">RD$' + (precio*cantidad).toLocaleString() + '</span>' : ''}`;
       lista.appendChild(item);
     });
+    if (notas) {
+      const notaDiv = document.createElement('div');
+      notaDiv.className = 'mt-3 py-2 px-3 rounded-xl text-sm text-center';
+      notaDiv.style.background = 'rgba(255,255,255,0.15)';
+      notaDiv.innerHTML = '📝 <strong>Nota:</strong> ' + notas.replace(/</g,'&lt;');
+      lista.appendChild(notaDiv);
+    }
     document.getElementById('cMeseroTotal').textContent = cartaMostrarPrecios ? 'Total: RD$' + subtotal.toLocaleString() : '';
+    document.getElementById('cMeseroBtnCocina').onclick = () => cartaEnviarACocina(notas);
     cerrarCartaPedido();
     screen.classList.remove('hidden');
+  }
+
+  async function cartaEnviarACocina(notas) {
+    const btn = document.getElementById('cMeseroBtnCocina');
+    btn.disabled = true;
+    btn.textContent = '⏳ Enviando…';
+    try {
+      const items = Object.values(cartaCarrito).map(({producto, cantidad}) => ({
+        id: producto.id, nombre: producto.nombre, cantidad,
+        precio: Number(producto.precio_venta||0)
+      }));
+      const subtotal = items.reduce((s,i) => s + i.precio * i.cantidad, 0);
+      await fetch(window._SB_URL + '/rest/v1/pedidos_carta', {
+        method: 'POST',
+        headers: {
+          'apikey': window._SB_KEY,
+          'Authorization': 'Bearer ' + window._SB_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          empresa_id: config.empresa_id,
+          mesa: cartaNumMesa || null,
+          items: items,
+          notas: notas || null,
+          total: subtotal,
+          estado: 'pendiente'
+        })
+      });
+      btn.textContent = '✅ Pedido enviado a cocina';
+      btn.style.background = 'rgba(255,255,255,0.3)';
+      cartaImprimirRecibo(notas);
+    } catch(e) {
+      btn.disabled = false;
+      btn.textContent = '🖨️ Enviar a cocina / Imprimir';
+      alert('No se pudo enviar el pedido. Verifica tu conexión.');
+    }
+  }
+
+  function cartaImprimirRecibo(notas) {
+    const items = Object.values(cartaCarrito);
+    const subtotal = items.reduce((s,{producto,cantidad}) => s + Number(producto.precio_venta||0)*cantidad, 0);
+    const mesa = cartaNumMesa ? 'Mesa ' + cartaNumMesa : 'Mesa no especificada';
+    const fecha = new Date().toLocaleString('es-DO', {dateStyle:'short', timeStyle:'short'});
+    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Pedido</title>
+    <style>
+      body { font-family: monospace; font-size: 13px; width: 280px; margin: 0 auto; padding: 10px; }
+      h2 { text-align: center; font-size: 16px; margin: 4px 0; }
+      .sep { border-top: 1px dashed #000; margin: 6px 0; }
+      .row { display: flex; justify-content: space-between; margin: 2px 0; }
+      .total { font-weight: bold; font-size: 15px; }
+      .center { text-align: center; }
+      .nota { border: 1px dashed #000; padding: 4px; margin-top: 6px; font-style: italic; }
+      @media print { body { width: 100%; } }
+    </style></head><body>
+    <h2>${(empresa.nombre||'').replace(/</g,'&lt;')}</h2>
+    <div class="center">${mesa} · ${fecha}</div>
+    <div class="sep"></div>`;
+    items.forEach(({producto, cantidad}) => {
+      const precio = Number(producto.precio_venta||0);
+      html += `<div class="row"><span>${producto.nombre} x${cantidad}</span>`;
+      if (cartaMostrarPrecios) html += `<span>RD$${(precio*cantidad).toLocaleString()}</span>`;
+      html += `</div>`;
+    });
+    html += `<div class="sep"></div>`;
+    if (cartaMostrarPrecios) html += `<div class="row total"><span>TOTAL</span><span>RD$${subtotal.toLocaleString()}</span></div>`;
+    if (notas) html += `<div class="nota">📝 ${notas.replace(/</g,'&lt;')}</div>`;
+    html += `<div class="sep"></div><div class="center" style="font-size:11px">Gracias por su visita</div>
+    <script>window.onload=()=>{ window.print(); setTimeout(()=>window.close(),2000); }<\/script>
+    </body></html>`;
+    const w = window.open('', '_blank', 'width=320,height=500');
+    if (w) { w.document.write(html); w.document.close(); }
   }
 
   // ═══════════════ FIN CARTA JS ════════════════════════════════════════════
