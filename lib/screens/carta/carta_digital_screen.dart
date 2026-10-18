@@ -1056,19 +1056,21 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
                     const SizedBox(height: 10),
                     // Botones
                     Row(children: [
-                      Expanded(child: Builder(builder: (ctx) {
-                        final printing = _imprimiendo.contains(pedido['id']?.toString() ?? '');
-                        return ElevatedButton.icon(
-                          onPressed: printing ? null : () => _imprimirPedido(pedido),
-                          icon: printing
-                              ? const SizedBox(width: 16, height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : const Icon(Icons.print_rounded, size: 16),
-                          label: Text(printing ? 'Imprimiendo…' : 'Imprimir',
-                              style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                        );
-                      })),
-                      const SizedBox(width: 8),
+                      if (estado == 'pendiente') ...[
+                        Expanded(child: Builder(builder: (ctx) {
+                          final printing = _imprimiendo.contains(pedido['id']?.toString() ?? '');
+                          return ElevatedButton.icon(
+                            onPressed: printing ? null : () => _imprimirPedido(pedido),
+                            icon: printing
+                                ? const SizedBox(width: 16, height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.print_rounded, size: 16),
+                            label: Text(printing ? 'Imprimiendo…' : 'Imprimir',
+                                style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                          );
+                        })),
+                        const SizedBox(width: 8),
+                      ],
                       Expanded(child: OutlinedButton.icon(
                         onPressed: () => _cambiarEstado(pedido['id'],
                             estado == 'pendiente' ? 'preparando' : 'listo'),
