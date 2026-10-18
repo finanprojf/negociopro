@@ -1131,8 +1131,8 @@
 
     try {
       // Config
-      let cfgData = await fetchSB('vitrina_config?slug=eq.' + encodeURIComponent(slug) + '&select=carta_activa,carta_mostrar_precios,carta_permitir_ws,carta_permitir_cocina,carta_permitir_mesero,empresa_id,color_tema');
-      if (!cfgData.length) cfgData = await fetchSB('vitrina_config?empresa_id=eq.' + encodeURIComponent(slug) + '&select=carta_activa,carta_mostrar_precios,carta_permitir_ws,carta_permitir_cocina,carta_permitir_mesero,empresa_id,color_tema');
+      let cfgData = await fetchSB('vitrina_config?slug=eq.' + encodeURIComponent(slug) + '&select=*');
+      if (!cfgData.length) cfgData = await fetchSB('vitrina_config?empresa_id=eq.' + encodeURIComponent(slug) + '&select=*');
       if (!cfgData.length) throw new Error('Sin config');
       config = cfgData[0];
       if (config.color_tema) aplicarTema(config.color_tema);
@@ -1189,9 +1189,14 @@
       setTimeout(abrirSelectorMesa, 600);
 
     } catch(e) {
-      console.error('[Carta] Error:', e?.message || e);
-      document.getElementById('cLoading').classList.add('hidden');
-      document.getElementById('cError').classList.remove('hidden');
+      console.error('[Carta] Error cargando carta:', e?.message || e);
+      try {
+        document.getElementById('cLoading').classList.add('hidden');
+        const errEl = document.getElementById('cError');
+        errEl.classList.remove('hidden');
+        const errMsg = errEl.querySelector('p');
+        if (errMsg) errMsg.textContent = 'Error: ' + (e?.message || 'Sin conexión');
+      } catch(_) {}
     }
   }
 
