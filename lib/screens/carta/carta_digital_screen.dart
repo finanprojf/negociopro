@@ -1,4 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -37,6 +42,14 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
   bool _cartaActiva = false;
   bool _mostrarPrecios = true;
   bool _permitirWS     = true;
+  // ── Cocina ──
+  List<Map<String, dynamic>> _cola = [];
+  bool _cargandoCola = false;
+  bool _imprimiendo  = false;
+  String _printerMode = 'wifi'; // 'wifi' | 'bluetooth'
+  String? _btDeviceAddress;
+  String? _btDeviceName;
+  Timer? _pollingTimer;
   bool _permitirCocina = true;
   bool _permitirMesero = true;
 
@@ -57,13 +70,17 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _cargar();
+    _tabs.addListener(() {
+      if (_tabs.index == 2 && _cola.isEmpty) _cargarCola();
+    });
   }
 
   @override
   void dispose() {
     _tabs.dispose();
+    _pollingTimer?.cancel();
     super.dispose();
   }
 
@@ -213,6 +230,7 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
           tabs: const [
             Tab(icon: Icon(Icons.restaurant_menu_rounded), text: 'Carta'),
             Tab(icon: Icon(Icons.qr_code_rounded), text: 'QR'),
+            Tab(icon: Icon(Icons.kitchen_rounded), text: 'Cocina'),
           ],
         ),
       ),
@@ -220,7 +238,7 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
               controller: _tabs,
-              children: [_tabCarta(), _tabQr()],
+              children: [_tabCarta(), _tabQr(), _tabCocina()],
             ),
     );
   }
@@ -681,5 +699,341 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
         ),
       ]),
     );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // TAB 3: COCINA — Cola de pedidos
+  // ══════════════════════════════════════════════════════════════════════
+
+  Future<void> _cargarCola() async {
+    if (_cargandoCola || _empresaId.isEmpty) return;
+    setState(() => _cargandoCola = true);
+    try {
+      final data = await SupabaseService.client
+          .from('pedidos_carta')
+          .select()
+          .eq('empresa_id', _empresaId)
+          .inFilter('estado', ['pendiente', 'preparando'])
+          .order('created_at');
+      if (mounted) {
+        setState(() {
+          _cola = List<Map<String, dynamic>>.from(data as List);
+          _cargandoCola = false;
+        });
+        // Auto-polling cada 15 seg mientras esté en el tab
+        _pollingTimer?.cancel();
+        _pollingTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+          if (_tabs.index == 2) _cargarCola();
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _cargandoCola = false);
+    }
+  }
+
+  Future<void> _cambiarEstado(String pedidoId, String estado) async {
+    try {
+      await SupabaseService.client
+          .from('pedidos_carta')
+          .update({'estado': estado})
+          .eq('id', pedidoId);
+      await _cargarCola();
+    } catch (e) {
+      debugPrint('[Cocina] cambiar estado error: \$e');
+    }
+  }
+
+  Future<void> _imprimirPedido(Map<String, dynamic> pedido) async {
+    if (_imprimiendo) return;
+    setState(() => _imprimiendo = true);
+    try {
+      final items = (pedido['items'] as List? ?? []);
+      final mesa  = pedido['mesa'] ?? 'Sin mesa';
+      final notas = pedido['notas'] ?? '';
+      final total = pedido['total'] ?? 0;
+      final hora  = DateTime.parse(pedido['created_at']).toLocal();
+      final horaStr = '${hora.hour.toString().padLeft(2,'0')}:${hora.minute.toString().padLeft(2,'0')}';
+
+      if (_printerMode == 'bluetooth' && _btDeviceAddress != null) {
+        await _imprimirBluetooth(items, mesa, notas, total, horaStr);
+      } else {
+        await _imprimirWifi(items, mesa, notas, total, horaStr);
+      }
+      await _cambiarEstado(pedido['id'], 'preparando');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al imprimir: \$e'), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _imprimiendo = false);
+    }
+  }
+
+  Future<void> _imprimirWifi(List items, String mesa, String notas, dynamic total, String hora) async {
+    final pdf = pw.Document();
+    pdf.addPage(pw.Page(
+      pageFormat: PdfPageFormat(58 * PdfPageFormat.mm, double.infinity, marginAll: 4 * PdfPageFormat.mm),
+      build: (ctx) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Center(child: pw.Text(_empresaNombre, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14))),
+        pw.Center(child: pw.Text('Mesa: \$mesa  ·  \$hora', style: const pw.TextStyle(fontSize: 10))),
+        pw.Divider(),
+        ...items.map((it) => pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+          pw.Text('\${it['nombre']} x\${it['cantidad']}', style: const pw.TextStyle(fontSize: 11)),
+          pw.Text('RD\$\${((it['precio'] ?? 0) * (it['cantidad'] ?? 1)).toStringAsFixed(0)}',
+              style: const pw.TextStyle(fontSize: 11)),
+        ])).toList(),
+        pw.Divider(),
+        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+          pw.Text('TOTAL', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+          pw.Text('RD\$\${total.toString()}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+        ]),
+        if (notas.isNotEmpty) ...[
+          pw.SizedBox(height: 6),
+          pw.Text('Nota: \$notas', style: const pw.TextStyle(fontSize: 10)),
+        ],
+        pw.SizedBox(height: 12),
+        pw.Center(child: pw.Text('--- Gracias ---', style: const pw.TextStyle(fontSize: 10))),
+      ]),
+    ));
+    await Printing.layoutPdf(onLayout: (_) async => pdf.save());
+  }
+
+  Future<void> _imprimirBluetooth(List items, String mesa, String notas, dynamic total, String hora) async {
+    final List<int> ticket = [];
+    void addLine(String s) => ticket.addAll([...s.codeUnits, 10]);
+    addLine('================================');
+    addLine('  \$_empresaNombre');
+    addLine('  Mesa: \$mesa     \$hora');
+    addLine('================================');
+    for (final it in items) {
+      final nombre = (it['nombre'] ?? '').toString();
+      final cant   = it['cantidad'] ?? 1;
+      final precio = ((it['precio'] ?? 0) * cant).toStringAsFixed(0);
+      addLine('\${nombre.length > 18 ? nombre.substring(0,18) : nombre.padRight(18)} x\$cant  RD\$\$precio');
+    }
+    addLine('--------------------------------');
+    addLine('TOTAL:                  RD\$\$total');
+    if (notas.isNotEmpty) { addLine(''); addLine('Nota: \$notas'); }
+    addLine('================================');
+    addLine('       Gracias por su visita    ');
+    addLine(''); addLine(''); addLine('');
+    await PrintBluetoothThermal.writeBytes(ticket);
+  }
+
+  Future<void> _conectarBluetooth() async {
+    final devices = await PrintBluetoothThermal.pairedBluetooths;
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('Selecciona impresora', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16)),
+          const SizedBox(height: 8),
+          ...devices.map((d) => ListTile(
+            leading: const Icon(Icons.bluetooth_rounded),
+            title: Text(d.name ?? 'Desconocido'),
+            subtitle: Text(d.macAdress ?? ''),
+            onTap: () async {
+              Navigator.pop(context);
+              final ok = await PrintBluetoothThermal.connect(macPrinterAddress: d.macAdress ?? '');
+              if (mounted) {
+                setState(() {
+                  _btDeviceAddress = d.macAdress;
+                  _btDeviceName    = d.name;
+                  _printerMode     = ok ? 'bluetooth' : 'wifi';
+                });
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(ok ? '✅ Conectado a \${d.name}' : '❌ No se pudo conectar'),
+                  backgroundColor: ok ? AppColors.success : Colors.red));
+              }
+            },
+          )).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabCocina() {
+    return Column(children: [
+      // ── Barra de herramientas ──────────────────────────────────────
+      Container(
+        color: AppColors.surface,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: Row(children: [
+          // Modo impresora
+          Expanded(child: SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'wifi',      icon: Icon(Icons.wifi_rounded, size: 16),      label: Text('WiFi/USB')),
+              ButtonSegment(value: 'bluetooth', icon: Icon(Icons.bluetooth_rounded, size: 16), label: Text('Bluetooth')),
+            ],
+            selected: {_printerMode},
+            onSelectionChanged: (s) => setState(() => _printerMode = s.first),
+            style: ButtonStyle(
+              textStyle: WidgetStateProperty.all(GoogleFonts.poppins(fontSize: 11)),
+            ),
+          )),
+          if (_printerMode == 'bluetooth') ...[
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: _conectarBluetooth,
+              icon: Icon(
+                _btDeviceAddress != null ? Icons.bluetooth_connected_rounded : Icons.bluetooth_searching_rounded,
+                color: _btDeviceAddress != null ? AppColors.success : AppColors.primary,
+              ),
+              tooltip: _btDeviceName ?? 'Conectar impresora',
+            ),
+          ],
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: _cargarCola,
+            icon: _cargandoCola
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.refresh_rounded),
+            tooltip: 'Actualizar',
+          ),
+        ]),
+      ),
+
+      // ── Lista de pedidos ─────────────────────────────────────────
+      Expanded(child: _cola.isEmpty
+        ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.check_circle_outline_rounded, size: 64, color: AppColors.success.withOpacity(0.5)),
+            const SizedBox(height: 12),
+            Text('Sin pedidos pendientes', style: GoogleFonts.poppins(
+                fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _cargarCola,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Actualizar'),
+            ),
+          ]))
+        : ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: _cola.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (_, i) {
+              final pedido  = _cola[i];
+              final items   = (pedido['items'] as List? ?? []);
+              final mesa    = pedido['mesa'] ?? 'Sin mesa';
+              final notas   = pedido['notas'] ?? '';
+              final estado  = pedido['estado'] ?? 'pendiente';
+              final hora    = DateTime.parse(pedido['created_at']).toLocal();
+              final horaStr = '${hora.hour.toString().padLeft(2,'0')}:${hora.minute.toString().padLeft(2,'0')}';
+              final isPrimero = i == 0;
+
+              return Container(
+                decoration: BoxDecoration(
+                  color: isPrimero
+                      ? AppColors.primary.withOpacity(0.06)
+                      : AppColors.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isPrimero ? AppColors.primary : AppColors.border,
+                    width: isPrimero ? 2 : 1,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    // Header
+                    Row(children: [
+                      if (isPrimero) Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text('EN TURNO', style: GoogleFonts.poppins(
+                            color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
+                      ),
+                      if (!isPrimero) Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.textMuted.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text('EN ESPERA', style: GoogleFonts.poppins(
+                            fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textMuted)),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('🪑 Mesa \$mesa', style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700, fontSize: 14)),
+                      const Spacer(),
+                      Text(horaStr, style: GoogleFonts.poppins(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                    ]),
+                    const SizedBox(height: 10),
+                    // Items
+                    ...items.map((it) => Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Row(children: [
+                        Text('• ', style: TextStyle(color: AppColors.primary)),
+                        Expanded(child: Text(
+                          '\${it['nombre']} x\${it['cantidad']}',
+                          style: GoogleFonts.poppins(fontSize: 13),
+                        )),
+                        Text(
+                          'RD\$\${((it['precio'] ?? 0) * (it['cantidad'] ?? 1)).toStringAsFixed(0)}',
+                          style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ]),
+                    )).toList(),
+                    // Notas
+                    if (notas.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amber.shade300),
+                        ),
+                        child: Row(children: [
+                          const Text('📝 ', style: TextStyle(fontSize: 13)),
+                          Expanded(child: Text(notas,
+                              style: GoogleFonts.poppins(fontSize: 12, fontStyle: FontStyle.italic))),
+                        ]),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    // Botones
+                    Row(children: [
+                      if (isPrimero) Expanded(child: ElevatedButton.icon(
+                        onPressed: _imprimiendo ? null : () => _imprimirPedido(pedido),
+                        icon: _imprimiendo
+                            ? const SizedBox(width: 16, height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.print_rounded, size: 16),
+                        label: Text(_imprimiendo ? 'Imprimiendo…' : 'Imprimir',
+                            style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                      )),
+                      if (isPrimero) const SizedBox(width: 8),
+                      Expanded(child: OutlinedButton.icon(
+                        onPressed: () => _cambiarEstado(pedido['id'],
+                            estado == 'pendiente' ? 'preparando' : 'listo'),
+                        icon: Icon(
+                          estado == 'pendiente' ? Icons.local_fire_department_rounded : Icons.check_rounded,
+                          size: 16,
+                        ),
+                        label: Text(
+                          estado == 'pendiente' ? 'Preparando' : 'Listo ✓',
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: estado == 'pendiente' ? Colors.orange : AppColors.success,
+                          side: BorderSide(color: estado == 'pendiente' ? Colors.orange : AppColors.success),
+                        ),
+                      )),
+                    ]),
+                  ]),
+                ),
+              );
+            },
+          )),
+    ]);
   }
 }
