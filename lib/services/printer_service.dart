@@ -83,22 +83,23 @@ class PrinterService {
 
   // ── Prueba de impresión ───────────────────────────────────────────
   static Future<PrintResult> testPrint() async {
-    // Ultra-simple: raw text without ESC/POS to confirm connection works
-    const texto =
-        '================================
-'
-        '     PRUEBA DE IMPRESION        
-'
-        '================================
-'
-        'Sistema: NegocioPro
-'
-        'Si ves esto funciona bien!
-'
-        '================================
-'
-        '\n\n\n';
-    final bytes = texto.codeUnits.map((c) => c > 255 ? 63 : c).toList();
+    // Raw text only - no ESC/POS - confirms BT connection sends data
+    final lines = [
+      '================================',
+      '     PRUEBA DE IMPRESION        ',
+      '================================',
+      'Sistema: NegocioPro',
+      'Si ves esto funciona bien!',
+      '================================',
+      '',
+      '',
+      '',
+    ];
+    final bytes = <int>[];
+    for (final line in lines) {
+      bytes.addAll(line.codeUnits.map((c) => c > 255 ? 63 : c));
+      bytes.add(10); // newline
+    }
     return sendBytes(bytes);
   }
 
