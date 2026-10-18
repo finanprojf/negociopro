@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
@@ -803,25 +804,48 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
   }
 
   Future<void> _imprimirBluetooth(List items, String mesa, String notas, dynamic total, String hora) async {
-    final List<int> ticket = [];
-    void addLine(String s) => ticket.addAll([...s.codeUnits, 10]);
-    addLine('================================');
-    addLine('  \$_empresaNombre');
-    addLine('  Mesa: \$mesa     \$hora');
-    addLine('================================');
+    final List<int> bytes = [];
+    // ESC/POS helpers
+    void cmd(List<int> b) => bytes.addAll(b);
+    void line(String s) { bytes.addAll(s.codeUnits); bytes.add(10); }
+    void boldOn()  => cmd([0x1B, 0x45, 0x01]);
+    void boldOff() => cmd([0x1B, 0x45, 0x00]);
+    void center()  => cmd([0x1B, 0x61, 0x01]);
+    void left()    => cmd([0x1B, 0x61, 0x00]);
+
+    cmd([0x1B, 0x40]); // init
+    center(); boldOn();
+    line(_empresaNombre);
+    boldOff();
+    line('Mesa: $mesa   $hora');
+    left();
+    line('================================');
+    line('PRODUCTO           CANT   PRECIO');
+    line('================================');
     for (final it in items) {
       final nombre = (it['nombre'] ?? '').toString();
-      final cant   = it['cantidad'] ?? 1;
-      final precio = ((it['precio'] ?? 0) * cant).toStringAsFixed(0);
-      addLine('\${nombre.length > 18 ? nombre.substring(0,18) : nombre.padRight(18)} x\$cant  RD\$\$precio');
+      final cant   = (it['cantidad'] ?? 1).toString();
+      final precio = ((it['precio'] ?? 0) * (it['cantidad'] ?? 1)).toStringAsFixed(0);
+      final nom = nombre.length > 16 ? nombre.substring(0, 16) : nombre.padRight(16);
+      final cantStr = cant.padLeft(4);
+      final precStr = ('RD\$$precio').padLeft(9);
+      line('$nom$cantStr$precStr');
     }
-    addLine('--------------------------------');
-    addLine('TOTAL:                  RD\$\$total');
-    if (notas.isNotEmpty) { addLine(''); addLine('Nota: \$notas'); }
-    addLine('================================');
-    addLine('       Gracias por su visita    ');
-    addLine(''); addLine(''); addLine('');
-    await PrintBluetoothThermal.writeBytes(ticket);
+    line('--------------------------------');
+    boldOn();
+    line('TOTAL:              RD\$$total');
+    boldOff();
+    if (notas.isNotEmpty) {
+      line('');
+      line('Nota: $notas');
+    }
+    line('================================');
+    center();
+    line('  Gracias por su visita  ');
+    left();
+    cmd([0x0A, 0x0A, 0x0A]);
+    cmd([0x1D, 0x56, 0x00]); // corte parcial
+    await PrintBluetoothThermal.writeBytes(Uint8List.fromList(bytes));
   }
 
   Future<void> _conectarBluetooth() async {

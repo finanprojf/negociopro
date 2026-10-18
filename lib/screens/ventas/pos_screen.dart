@@ -193,53 +193,46 @@ Future<void> _agregarClienteRapido() async {
       final mStr = ahora.month.toString().padLeft(2, '0');
       final hStr = ahora.hour.toString().padLeft(2, '0');
       final minStr = ahora.minute.toString().padLeft(2, '0');
-      final fecha = '\$dStr/\$mStr/\${ahora.year}';
-      final hora = '\$hStr:\$minStr';
+      final fecha = '$dStr/$mStr/${ahora.year}';
+      final hora = '$hStr:$minStr';
       final cambio = (tipoPago == 'efectivo' && montoPagado > total) ? (montoPagado - total) : 0.0;
 
       // Intentar Bluetooth primero
       if (PrinterService.hasPrinter) {
-        final bool connected = await PrintBluetoothThermal.connectionStatus;
-        if (!connected) {
-          await PrintBluetoothThermal.connect(macPrinterAddress: PrinterService.address!);
-          await Future.delayed(const Duration(milliseconds: 600));
-        }
-        final bool ok = await PrintBluetoothThermal.connectionStatus;
+        final bool ok = await PrinterService.ensureConnected();
         if (ok) {
           final List<int> bytes = [];
-          // ESC/POS commands
           void cmd(List<int> b) => bytes.addAll(b);
-          void text(String t, {bool bold = false, bool center = false}) {
-            if (center) cmd([0x1B, 0x61, 0x01]);
-            if (bold) cmd([0x1B, 0x45, 0x01]);
-            cmd(t.codeUnits);
-            cmd([0x0A]);
-            if (bold) cmd([0x1B, 0x45, 0x00]);
-            if (center) cmd([0x1B, 0x61, 0x00]);
-          }
+          void txt(String s) { bytes.addAll(s.codeUnits); bytes.add(10); }
+          void boldOn()  => cmd([0x1B, 0x45, 0x01]);
+          void boldOff() => cmd([0x1B, 0x45, 0x00]);
+          void center()  => cmd([0x1B, 0x61, 0x01]);
+          void left()    => cmd([0x1B, 0x61, 0x00]);
+
           cmd([0x1B, 0x40]); // init
-          text(nombreNegocio, bold: true, center: true);
-          text('$fecha  $hora', center: true);
-          text('--------------------------------');
-          text('PRODUCTO          CANT   PRECIO');
-          text('--------------------------------');
+          center(); boldOn(); txt(nombreNegocio); boldOff();
+          txt('$fecha  $hora');
+          left();
+          txt('================================');
+          txt('PRODUCTO           CANT   PRECIO');
+          txt('================================');
           for (final item in items) {
             final nom = item.producto.nombre.length > 16
                 ? item.producto.nombre.substring(0, 16)
                 : item.producto.nombre.padRight(16);
             final cant = item.cantidad.toInt().toString().padLeft(4);
-            final precio = AppFormatters.moneda(item.subtotal).padLeft(9);
-            text('\$nom\$cant\$precio');
+            final prec = AppFormatters.moneda(item.subtotal).padLeft(9);
+            txt('$nom$cant$prec');
           }
-          text('--------------------------------');
-          if (descuento > 0) text('Descuento:  -\${AppFormatters.moneda(descuento)}');
-          text('TOTAL:      \${AppFormatters.moneda(total)}', bold: true);
+          txt('--------------------------------');
+          if (descuento > 0) txt('Descuento: -\${AppFormatters.moneda(descuento)}');
+          boldOn(); txt('TOTAL: \${AppFormatters.moneda(total)}'); boldOff();
           final tipLabel = tipoPago == 'fiado' ? 'FIADO' : tipoPago == 'transferencia' ? 'TRANSFERENCIA' : 'EFECTIVO';
-          text('Pago:       \$tipLabel');
-          if (montoPagado > 0 && tipoPago == 'efectivo') text('Recibido:   \${AppFormatters.moneda(montoPagado)}');
-          if (cambio > 0) text('Cambio:     \${AppFormatters.moneda(cambio)}');
-          text('--------------------------------');
-          text('¡Gracias por su compra!', center: true);
+          txt('Pago: \$tipLabel');
+          if (montoPagado > 0 && tipoPago == 'efectivo') txt('Recibido: \${AppFormatters.moneda(montoPagado)}');
+          if (cambio > 0) txt('Cambio: \${AppFormatters.moneda(cambio)}');
+          txt('================================');
+          center(); txt('Gracias por su compra!'); left();
           cmd([0x0A, 0x0A, 0x0A]);
           cmd([0x1D, 0x56, 0x00]); // corte
           await PrintBluetoothThermal.writeBytes(Uint8List.fromList(bytes));
@@ -249,33 +242,6 @@ Future<void> _agregarClienteRapido() async {
 
       // Sin impresora BT configurada — no imprimir nada
       return;
-      final doc = pw.Document();
-      doc.addPage(pw.Page(
-        pageFormat: PdfPageFormat(58 * PdfPageFormat.mm, double.infinity, marginAll: 4 * PdfPageFormat.mm),
-        build: (pw.Context ctx) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Center(child: pw.Text(nombreNegocio, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11))),
-            pw.Center(child: pw.Text('$fecha  $hora', style: const pw.TextStyle(fontSize: 8))),
-            pw.Divider(),
-            ...items.map((item) => pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Expanded(child: pw.Text(item.producto.nombre, style: const pw.TextStyle(fontSize: 8))),
-                pw.Text('x\${item.cantidad.toInt()}  \${AppFormatters.moneda(item.subtotal)}', style: const pw.TextStyle(fontSize: 8)),
-              ],
-            )),
-            pw.Divider(),
-            if (descuento > 0) pw.Text('Descuento: -\${AppFormatters.moneda(descuento)}', style: const pw.TextStyle(fontSize: 8)),
-            pw.Text('TOTAL: \${AppFormatters.moneda(total)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
-            pw.Text('Pago: \${tipoPago.toUpperCase()}', style: const pw.TextStyle(fontSize: 8)),
-            if (cambio > 0) pw.Text('Cambio: \${AppFormatters.moneda(cambio)}', style: const pw.TextStyle(fontSize: 8)),
-            pw.SizedBox(height: 8),
-            pw.Center(child: pw.Text('¡Gracias por su compra!', style: const pw.TextStyle(fontSize: 8))),
-          ],
-        ),
-      ));
-      await Printing.layoutPdf(onLayout: (_) async => doc.save());
     } catch (_) {
       // impresión silenciosa — no bloquear UI
     }
