@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../theme/app_colors.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../theme/app_colors.dart';
+import '../../services/printer_service.dart';
 
 class ImpresoraScreen extends StatefulWidget {
   const ImpresoraScreen({super.key});
@@ -12,8 +12,6 @@ class ImpresoraScreen extends StatefulWidget {
 
 class _ImpresoraScreenState extends State<ImpresoraScreen> {
   List<BluetoothInfo> _impresoras = [];
-  String? _macGuardada;
-  String? _nombreGuardado;
   bool _cargando = true;
   bool _probando = false;
   bool _btApagado = false;
@@ -27,11 +25,6 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
   Future<void> _cargar() async {
     setState(() => _cargando = true);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _macGuardada    = prefs.getString('printer_mac');
-      _nombreGuardado = prefs.getString('printer_name');
-
-      // Solicitar permisos Bluetooth en runtime (Android 12+)
       await [
         Permission.bluetooth,
         Permission.bluetoothConnect,
@@ -39,7 +32,6 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         Permission.locationWhenInUse,
       ].request();
 
-      // Verificar que BT está habilitado
       final btOn = await PrintBluetoothThermal.bluetoothEnabled;
       if (!btOn) {
         setState(() { _impresoras = []; _cargando = false; _btApagado = true; });
@@ -54,77 +46,55 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
   }
 
   Future<void> _seleccionar(BluetoothInfo imp) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('printer_mac',    imp.macAdress);
-    await prefs.setString('printer_name', imp.name);
-    setState(() {
-      _macGuardada    = imp.macAdress;
-      _nombreGuardado = imp.name;
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('✅ Impresora "${imp.name}" guardada'),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-      ));
-    }
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Guardando impresora...'),
+      duration: Duration(seconds: 2),
+      behavior: SnackBarBehavior.floating,
+    ));
+    final result = await PrinterService.select(imp.macAdress ?? '', imp.name);
+    if (!mounted) return;
+    setState(() {}); // refresh UI to show new selection
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(result.ok
+          ? '✅ Impresora "${imp.name}" guardada'
+          : '⚠️ Guardada, pero verifica que esté encendida al imprimir'),
+      backgroundColor: result.ok ? AppColors.success : Colors.orange,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 3),
+    ));
   }
 
   Future<void> _probar() async {
-    if (_macGuardada == null) return;
+    if (!PrinterService.hasPrinter) return;
     setState(() => _probando = true);
-    try {
-      final conectado = await PrintBluetoothThermal.connect(
-          macPrinterAddress: _macGuardada!);
-      if (!conectado) throw Exception('No se pudo conectar');
-      final linea = '================================\n';
-      final texto = '$linea'
-          '       PRUEBA DE IMPRESION      \n'
-          '$linea'
-          'Impresora: $_nombreGuardado\n'
-          'Sistema: NegocioPro\n'
-          '$linea'
-          '  Si ves esto, funciona bien!  \n'
-          '$linea'
-          '\n\n\n';
-      final bytes = texto.codeUnits.map((c) => c > 255 ? 63 : c).toList();
-      await PrintBluetoothThermal.writeBytes(bytes);
-      await Future.delayed(const Duration(milliseconds: 300));
-      await PrintBluetoothThermal.disconnect;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('✅ Impresión de prueba enviada'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('❌ Error: $e'),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
-    }
+    final result = await PrinterService.testPrint();
     setState(() => _probando = false);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(result.ok
+          ? '✅ Impresión de prueba enviada'
+          : '⚠️ No imprimió — verifica que la impresora esté encendida'),
+      backgroundColor: result.ok ? AppColors.success : Colors.orange,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 4),
+    ));
   }
 
   Future<void> _desvincular() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('printer_mac');
-    await prefs.remove('printer_name');
-    setState(() { _macGuardada = null; _nombreGuardado = null; });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Impresora desvinculada'),
-        behavior: SnackBarBehavior.floating,
-      ));
-    }
+    await PrinterService.forget();
+    setState(() {});
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Impresora desvinculada'),
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
+    final macGuardada   = PrinterService.address;
+    final nombreGuardado = PrinterService.name;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -139,38 +109,38 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // ── Impresora actual ──────────────────────────
-                if (_macGuardada != null) ...[
+                // ── Impresora guardada ──────────────────────────
+                if (macGuardada != null) ...[
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.08),
+                      color: AppColors.primary.withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                     ),
                     child: Column(children: [
                       Row(children: [
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppColors.success.withValues(alpha: 0.15),
+                            color: AppColors.primary.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(Icons.print_rounded,
-                              color: AppColors.success, size: 24),
+                              color: AppColors.primary, size: 24),
                         ),
                         const SizedBox(width: 12),
                         Expanded(child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Impresora conectada',
+                            const Text('Impresora guardada',
                                 style: TextStyle(fontFamily: 'Poppins',
-                                    fontSize: 12, color: AppColors.success,
+                                    fontSize: 12, color: AppColors.primary,
                                     fontWeight: FontWeight.w600)),
-                            Text(_nombreGuardado ?? '',
+                            Text(nombreGuardado ?? '',
                                 style: const TextStyle(fontFamily: 'Poppins',
                                     fontSize: 15, fontWeight: FontWeight.w700)),
-                            Text(_macGuardada ?? '',
+                            Text(macGuardada,
                                 style: const TextStyle(fontFamily: 'Poppins',
                                     fontSize: 11, color: AppColors.textMuted)),
                           ],
@@ -184,12 +154,12 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                               ? const SizedBox(width: 16, height: 16,
                                   child: CircularProgressIndicator(strokeWidth: 2))
                               : const Icon(Icons.print_outlined, size: 18),
-                          label: Text(_probando ? 'Probando...' : 'Imprimir prueba',
+                          label: Text(_probando ? 'Enviando...' : 'Imprimir prueba',
                               style: const TextStyle(fontFamily: 'Poppins',
                                   fontWeight: FontWeight.w600)),
                           style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.success,
-                              side: BorderSide(color: AppColors.success.withValues(alpha: 0.5))),
+                              foregroundColor: AppColors.primary,
+                              side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5))),
                         )),
                         const SizedBox(width: 10),
                         OutlinedButton(
@@ -207,7 +177,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   const SizedBox(height: 20),
                 ],
 
-                // ── Lista de dispositivos vinculados ──────────
+                // ── Lista de dispositivos ──────────────────────
                 const Text('Dispositivos Bluetooth vinculados',
                     style: TextStyle(fontFamily: 'Poppins',
                         fontSize: 13, fontWeight: FontWeight.w700,
@@ -270,17 +240,17 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   )
                 else
                   ...(_impresoras.map((imp) {
-                    final esActual = imp.macAdress == _macGuardada;
+                    final esActual = imp.macAdress == macGuardada;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       decoration: BoxDecoration(
                         color: esActual
-                            ? AppColors.success.withValues(alpha: 0.06)
+                            ? AppColors.primary.withValues(alpha: 0.06)
                             : AppColors.surface,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: esActual
-                              ? AppColors.success.withValues(alpha: 0.4)
+                              ? AppColors.primary.withValues(alpha: 0.4)
                               : AppColors.cardBorder,
                         ),
                       ),
@@ -289,7 +259,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                         child: ListTile(
                           leading: Icon(
                             esActual ? Icons.print_rounded : Icons.print_outlined,
-                            color: esActual ? AppColors.success : AppColors.textSecondary,
+                            color: esActual ? AppColors.primary : AppColors.textSecondary,
                           ),
                           title: Text(imp.name,
                               style: TextStyle(
@@ -301,11 +271,11 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                                   fontSize: 11, color: AppColors.textMuted)),
                           trailing: esActual
                               ? const Chip(
-                                  label: Text('Activa',
+                                  label: Text('Seleccionada',
                                       style: TextStyle(fontFamily: 'Poppins',
-                                          fontSize: 11, color: AppColors.success,
+                                          fontSize: 11, color: AppColors.primary,
                                           fontWeight: FontWeight.w600)),
-                                  backgroundColor: Color(0x1A4CAF50),
+                                  backgroundColor: Color(0x1A2196F3),
                                   side: BorderSide.none,
                                   padding: EdgeInsets.zero,
                                 )
