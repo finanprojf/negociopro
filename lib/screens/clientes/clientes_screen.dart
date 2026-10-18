@@ -7,6 +7,7 @@ import '../../widgets/avatar_cliente.dart';
 import 'cliente_detalle_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/cliente_service.dart';
+import '../../widgets/guia_modulo_banner.dart';
 class ClientesScreen extends StatefulWidget {
   const ClientesScreen({super.key});
 
@@ -67,6 +68,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
       appBar: AppBar(title: const Text('Clientes')),
       body: Column(
         children: [
+            const GuiaModuloBanner(modulo: 'clientes'),
           _buildBuscadorFiltros(),
           Expanded(
             child: _loading

@@ -13,6 +13,7 @@ import '../../models/cliente_model.dart';
 import 'historial_ventas_screen.dart';
 import 'dart:io';
 import 'dart:async';
+import '../../widgets/guia_modulo_banner.dart';
 class _ItemCarrito {
   final ProductoModel producto;
   double cantidad;
@@ -364,6 +365,7 @@ Future<void> _cargarClientes() async {
         ],
       ),
       body: Column(children: [
+            const GuiaModuloBanner(modulo: 'pos'),
         _buildBuscador(),
         Expanded(child: _buildGridProductos()),
         if (_carrito.isNotEmpty) _buildFooter(),

@@ -12,6 +12,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 import 'entregar_articulos_sheet.dart';
 import '../../services/recibo_service.dart';
+import '../../widgets/guia_modulo_banner.dart';
 
 class ApartadosScreen extends StatefulWidget {
   const ApartadosScreen({super.key});
@@ -82,6 +83,7 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Apartados')),
       body: Column(children: [
+            const GuiaModuloBanner(modulo: 'apartados'),
         _buildResumen(),
         _buildFiltros(),
         Expanded(

@@ -8,6 +8,7 @@ import 'fiado_cliente_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/cliente_service.dart';
 import '../../services/fiado_service.dart';
+import '../../widgets/guia_modulo_banner.dart';
 
 class _ClienteFiado {
   final ClienteModel cliente;
@@ -128,6 +129,7 @@ class _FiadoScreenState extends State<FiadoScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Fiado')),
       body: Column(children: [
+            const GuiaModuloBanner(modulo: 'fiado'),
         _buildResumenTotal(),
         _buildBuscadorFiltros(),
         Expanded(

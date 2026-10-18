@@ -8,6 +8,7 @@ import '../../services/supabase_service.dart';
 import '../../services/local_database.dart';
 import '../../services/cuadre_automatico_service.dart';
 import 'cierre_dia_screen.dart';
+import '../../widgets/guia_modulo_banner.dart';
 
 class ReportesScreen extends StatefulWidget {
   const ReportesScreen({super.key});
@@ -428,6 +429,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const GuiaModuloBanner(modulo: 'reportes'),
                   _buildSelectorPeriodo(),
                   const SizedBox(height: 12),
                   _buildCuadreBanner(),

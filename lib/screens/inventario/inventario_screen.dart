@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/inventario_service.dart';
 import 'ajuste_stock_screen.dart';
 import 'dart:io';
+import '../../widgets/guia_modulo_banner.dart';
 class InventarioScreen extends StatefulWidget {
   const InventarioScreen({super.key});
 
@@ -89,6 +90,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
       ),
       body: Column(
         children: [
+            const GuiaModuloBanner(modulo: 'inventario'),
           _buildBuscadorYFiltros(),
           _buildResumenStock(),
           Expanded(

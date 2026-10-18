@@ -11,6 +11,7 @@ import '../../services/cliente_service.dart';
 import '../../services/fiado_service.dart';
 import '../../services/recibo_service.dart';
 import '../ventas/pos_screen.dart';
+import '../../widgets/guia_modulo_banner.dart';
 
 class EncargosScreen extends StatefulWidget {
   const EncargosScreen({super.key});
@@ -922,6 +923,7 @@ class _EncargosScreenState extends State<EncargosScreen>
           : TabBarView(
               controller: _tabCtrl,
               children: [
+            const GuiaModuloBanner(modulo: 'encargos'),
                 _buildEncargos(),
                 _buildLista(),
               ],

@@ -7,6 +7,7 @@ import '../../services/gasto_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/supabase_service.dart';
 import '../../services/local_database.dart';
+import '../../widgets/guia_modulo_banner.dart';
 class GastosScreen extends StatefulWidget {
   const GastosScreen({super.key});
 
@@ -54,6 +55,7 @@ class _GastosScreenState extends State<GastosScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Gastos')),
       body: Column(children: [
+            const GuiaModuloBanner(modulo: 'gastos'),
         _buildResumen(),
         Expanded(
           child: _loading

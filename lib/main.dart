@@ -8,6 +8,9 @@ import 'theme/app_theme.dart';
 import 'utils/constants.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
+import 'screens/welcome/welcome_screen.dart';
+import 'services/guia_service.dart';
+import 'services/supabase_service.dart' as supa;
 import 'services/cuadre_automatico_service.dart';
 import 'services/pin_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -140,34 +143,89 @@ class _NegocioProAppState extends State<NegocioProApp>
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
+  @override State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _checkedGuia = false;
+  bool _mostrarBienvenida = false;
+  String _nombreNegocio = '';
+
+  Future<void> _checkBienvenida() async {
+    if (_checkedGuia) return;
+    _checkedGuia = true;
+    final mostrada = await GuiaService.bienvenidaMostrada();
+    if (!mostrada) {
+      // Intentar cargar nombre del negocio
+      try {
+        final empresa = await supa.SupabaseService.getEmpresa();
+        if (mounted) {
+          setState(() {
+            _nombreNegocio = empresa?['nombre'] as String? ?? '';
+            _mostrarBienvenida = true;
+          });
+        }
+      } catch (_) {
+        if (mounted) setState(() => _mostrarBienvenida = true);
+      }
+    }
+  }
+
+  void _irDashboard() {
+    if (mounted) setState(() => _mostrarBienvenida = false);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final session = Supabase.instance.client.auth.currentSession;
-
-   return StreamBuilder<AuthState>(
+    return StreamBuilder<AuthState>(
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
         final event = snapshot.data?.event;
 
-       if (event == AuthChangeEvent.signedIn) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const DashboardScreen()),
-              (route) => false,
-            );
+        if (event == AuthChangeEvent.signedIn) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await _checkBienvenida();
+            if (mounted && !_mostrarBienvenida) {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const DashboardScreen()),
+                (route) => false,
+              );
+            }
           });
+          if (_mostrarBienvenida) {
+            return WelcomeScreen(
+              nombreNegocio: _nombreNegocio,
+              onComenzar: _irDashboard,
+              onSaltar: _irDashboard,
+            );
+          }
           return const _SplashScreen();
         }
 
         if (event == AuthChangeEvent.signedOut) {
+          _checkedGuia = false;
+          _mostrarBienvenida = false;
           return const LoginScreen();
         }
 
         final currentSession = Supabase.instance.client.auth.currentSession;
         if (currentSession != null) {
+          // Sesión existente: chequear bienvenida en postframe
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await _checkBienvenida();
+            if (mounted && !_mostrarBienvenida) {
+              // ya en dashboard, no hacer nada
+            }
+          });
+          if (_mostrarBienvenida) {
+            return WelcomeScreen(
+              nombreNegocio: _nombreNegocio,
+              onComenzar: _irDashboard,
+              onSaltar: _irDashboard,
+            );
+          }
           return const DashboardScreen();
         }
 

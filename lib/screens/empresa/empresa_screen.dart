@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
 import '../../services/local_database.dart';
+import '../../services/guia_service.dart';
 class EmpresaScreen extends StatefulWidget {
   const EmpresaScreen({super.key});
 
@@ -232,6 +233,31 @@ SizedBox(
             ),
             const SizedBox(height: 8),
           ],
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                await GuiaService.resetearGuiasModulos();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Las guías de módulos se reiniciaron. Visita cada sección para verlas de nuevo.'),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF00B894)),
+              label: const Text('Ver guías de nuevo',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                      fontWeight: FontWeight.w600, color: Color(0xFF00B894))),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF00B894)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           SizedBox(
             width: double.infinity, height: 50,
             child: OutlinedButton.icon(
