@@ -247,7 +247,8 @@ Future<void> _agregarClienteRapido() async {
         }
       }
 
-      // Fallback WiFi/sistema
+      // Sin impresora BT configurada — no imprimir nada
+      return;
       final doc = pw.Document();
       doc.addPage(pw.Page(
         pageFormat: PdfPageFormat(58 * PdfPageFormat.mm, double.infinity, marginAll: 4 * PdfPageFormat.mm),
