@@ -13,6 +13,7 @@ import 'services/guia_service.dart';
 import 'services/supabase_service.dart' as supa;
 import 'services/cuadre_automatico_service.dart';
 import 'services/pin_service.dart';
+import 'services/printer_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/seguridad/pin_lock_screen.dart';
 
@@ -34,6 +35,7 @@ Future<void> main() async {
 
   await CuadreAutomaticoService.init();
   await CuadreAutomaticoService.reprogramarSiIntervalo();
+  await PrinterService.init();
 
   runApp(const NegocioProApp());
 }

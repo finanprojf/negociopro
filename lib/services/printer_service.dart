@@ -1,91 +1,59 @@
-import '../models/venta_model.dart';
-import '../utils/formatters.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
+/// Singleton que mantiene la impresora BT seleccionada y persistida.
+/// Todas las pantallas usan este servicio — nunca estado local.
 class PrinterService {
-  static String? _dispositivoConectado;
+  static const _keyAddress = 'printer_bt_address';
+  static const _keyName    = 'printer_bt_name';
 
-  static bool get estaConectado => _dispositivoConectado != null;
+  static String? _address;
+  static String? _name;
 
-  static Future<void> conectar(String dispositivo) async {
-    _dispositivoConectado = dispositivo;
+  static String? get address => _address;
+  static String? get name    => _name;
+  static bool    get hasPrinter => _address != null;
+
+  /// Carga la impresora guardada al iniciar la app.
+  static Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    _address = prefs.getString(_keyAddress);
+    _name    = prefs.getString(_keyName);
   }
 
-  static void desconectar() {
-    _dispositivoConectado = null;
+  /// Guarda y conecta una impresora. Devuelve true si la conexión fue exitosa.
+  static Future<bool> select(String address, String name) async {
+    final ok = await PrintBluetoothThermal.connect(macPrinterAddress: address);
+    if (ok) {
+      _address = address;
+      _name    = name;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyAddress, address);
+      await prefs.setString(_keyName, name);
+    }
+    return ok;
   }
 
-  /// Genera el texto del recibo de venta
-  static String generarReciboVenta({
-    required VentaModel venta,
-    required String nombreNegocio,
-    String? lema,
-    String? mensajePie,
-  }) {
-    final sb = StringBuffer();
-    final linea = '================================';
-
-    sb.writeln(linea);
-    sb.writeln(_centrar(nombreNegocio.toUpperCase(), 32));
-    if (lema != null && lema.isNotEmpty) {
-      sb.writeln(_centrar(lema, 32));
-    }
-    sb.writeln(linea);
-    sb.writeln('Recibo: ${venta.numeroFormateado}');
-    sb.writeln('Fecha:  ${AppFormatters.fechaHora(venta.createdAt)}');
-    if (venta.clienteNombre != null) {
-      sb.writeln('Cliente: ${venta.clienteNombre}');
-    }
-    sb.writeln(linea);
-
-    // Productos
-    for (final d in venta.detalles) {
-      sb.writeln(d.nombreProducto);
-      final cant = '${d.cantidad.toInt()} x ${AppFormatters.moneda(d.precioUnitario)}';
-      final sub = AppFormatters.moneda(d.subtotal);
-      sb.writeln('$cant${' ' * (32 - cant.length - sub.length)}$sub');
-    }
-
-    sb.writeln(linea);
-    if (venta.descuento > 0) {
-      sb.writeln(_fila('Descuento:', '-${AppFormatters.moneda(venta.descuento)}'));
-    }
-    sb.writeln(_fila('TOTAL:', AppFormatters.moneda(venta.total)));
-    sb.writeln(_fila('Pago:', venta.tipoPago.toUpperCase()));
-    if (venta.cambio > 0) {
-      sb.writeln(_fila('Cambio:', AppFormatters.moneda(venta.cambio)));
-    }
-    sb.writeln(linea);
-
-    if (mensajePie != null && mensajePie.isNotEmpty) {
-      sb.writeln(_centrar(mensajePie, 32));
-    }
-    sb.writeln(_centrar('¡Gracias por su compra!', 32));
-    sb.writeln(linea);
-    sb.writeln('');
-
-    return sb.toString();
+  /// Verifica si la impresora actualmente guardada sigue conectada.
+  static Future<bool> isConnected() async {
+    if (_address == null) return false;
+    return await PrintBluetoothThermal.connectionStatus;
   }
 
-  static String _centrar(String texto, int ancho) {
-    if (texto.length >= ancho) return texto;
-    final espacios = (ancho - texto.length) ~/ 2;
-    return ' ' * espacios + texto;
+  /// Reconecta si está desconectada. Devuelve true si queda conectada.
+  static Future<bool> ensureConnected() async {
+    if (_address == null) return false;
+    final already = await PrintBluetoothThermal.connectionStatus;
+    if (already) return true;
+    return await PrintBluetoothThermal.connect(macPrinterAddress: _address!);
   }
 
-  static String _fila(String label, String valor) {
-    final espacio = 32 - label.length - valor.length;
-    return '$label${' ' * (espacio > 0 ? espacio : 1)}$valor';
-  }
-
-  /// Imprimir recibo (requiere print_bluetooth_thermal)
-  static Future<bool> imprimirRecibo(String texto) async {
-    if (!estaConectado) return false;
-    try {
-      // TODO: integrar print_bluetooth_thermal igual que FinanPro
-      // await PrintBluetoothThermal.writeBytes(Ticket(texto));
-      return true;
-    } catch (_) {
-      return false;
-    }
+  /// Borra la impresora guardada.
+  static Future<void> forget() async {
+    _address = null;
+    _name    = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyAddress);
+    await prefs.remove(_keyName);
   }
 }

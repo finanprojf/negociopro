@@ -4,6 +4,7 @@ import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import '../../services/printer_service.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -47,8 +48,6 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
   bool _cargandoCola = false;
   bool _imprimiendo  = false;
   String _printerMode = 'wifi'; // 'wifi' | 'bluetooth'
-  String? _btDeviceAddress;
-  String? _btDeviceName;
   Timer? _pollingTimer;
   bool _permitirCocina = true;
   bool _permitirMesero = true;
@@ -754,7 +753,7 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
       final hora  = DateTime.parse(pedido['created_at']).toLocal();
       final horaStr = '${hora.hour.toString().padLeft(2,'0')}:${hora.minute.toString().padLeft(2,'0')}';
 
-      if (_printerMode == 'bluetooth' && _btDeviceAddress != null) {
+      if (_printerMode == 'bluetooth' && PrinterService.hasPrinter) {
         await _imprimirBluetooth(items, mesa, notas, total, horaStr);
       } else {
         await _imprimirWifi(items, mesa, notas, total, horaStr);
@@ -828,34 +827,72 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
   Future<void> _conectarBluetooth() async {
     final devices = await PrintBluetoothThermal.pairedBluetooths;
     if (!mounted) return;
+    // Verificar cuál está realmente conectada ahora mismo
+    final bool currentlyConnected = await PrintBluetoothThermal.connectionStatus;
+
     await showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text('Selecciona impresora', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16)),
-          const SizedBox(height: 8),
-          ...devices.map((d) => ListTile(
-            leading: const Icon(Icons.bluetooth_rounded),
-            title: Text(d.name ?? 'Desconocido'),
-            subtitle: Text(d.macAdress ?? ''),
-            onTap: () async {
-              Navigator.pop(context);
-              final ok = await PrintBluetoothThermal.connect(macPrinterAddress: d.macAdress ?? '');
-              if (mounted) {
-                setState(() {
-                  _btDeviceAddress = d.macAdress;
-                  _btDeviceName    = d.name;
-                  _printerMode     = ok ? 'bluetooth' : 'wifi';
-                });
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(ok ? '✅ Conectado a \${d.name}' : '❌ No se pudo conectar'),
-                  backgroundColor: ok ? AppColors.success : Colors.red));
-              }
-            },
-          )).toList(),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setBS) => ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Row(children: [
+              Expanded(child: Text('Selecciona impresora', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16))),
+              if (PrinterService.hasPrinter)
+                TextButton.icon(
+                  onPressed: () async {
+                    await PrinterService.forget();
+                    setBS(() {});
+                    if (mounted) setState(() => _printerMode = 'wifi');
+                  },
+                  icon: const Icon(Icons.bluetooth_disabled_rounded, size: 16),
+                  label: const Text('Olvidar'),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                ),
+            ]),
+            const SizedBox(height: 4),
+            if (devices.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: Text('No hay dispositivos Bluetooth emparejados',
+                    style: GoogleFonts.poppins(color: Colors.grey))),
+              ),
+            ...devices.map((d) {
+              final isSelected = PrinterService.address == d.macAdress;
+              final isConnected = isSelected && currentlyConnected;
+              return ListTile(
+                leading: Icon(
+                  isConnected ? Icons.bluetooth_connected_rounded : Icons.bluetooth_rounded,
+                  color: isConnected ? AppColors.success : (isSelected ? AppColors.primary : Colors.grey),
+                ),
+                title: Text(d.name ?? 'Desconocido', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14)),
+                subtitle: Text(
+                  isConnected ? '✅ Conectada' : (isSelected ? '⚠️ Sin señal — toca para reconectar' : d.macAdress ?? ''),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isConnected ? AppColors.success : (isSelected ? AppColors.warning : Colors.grey),
+                  ),
+                ),
+                trailing: isSelected ? const Icon(Icons.check_circle_rounded, color: AppColors.primary) : null,
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Conectando a \${d.name ?? d.macAdress}...'), duration: const Duration(seconds: 2)));
+                  final ok = await PrinterService.select(d.macAdress ?? '', d.name ?? 'Impresora');
+                  if (mounted) {
+                    setState(() => _printerMode = ok ? 'bluetooth' : _printerMode);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(ok ? '✅ Conectado a \${d.name}' : '❌ No se pudo conectar. ¿El Bluetooth está activo y la impresora encendida?'),
+                      backgroundColor: ok ? AppColors.success : Colors.red,
+                      duration: const Duration(seconds: 3),
+                    ));
+                  }
+                },
+              );
+            }).toList(),
+          ],
+        ),
       ),
     );
   }
@@ -884,10 +921,10 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
             IconButton(
               onPressed: _conectarBluetooth,
               icon: Icon(
-                _btDeviceAddress != null ? Icons.bluetooth_connected_rounded : Icons.bluetooth_searching_rounded,
-                color: _btDeviceAddress != null ? AppColors.success : AppColors.primary,
+                PrinterService.hasPrinter ? Icons.bluetooth_connected_rounded : Icons.bluetooth_searching_rounded,
+                color: PrinterService.hasPrinter ? AppColors.primary : Colors.grey,
               ),
-              tooltip: _btDeviceName ?? 'Conectar impresora',
+              tooltip: PrinterService.name ?? 'Conectar impresora',
             ),
           ],
           const SizedBox(width: 8),

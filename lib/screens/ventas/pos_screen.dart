@@ -9,6 +9,7 @@ import '../../utils/formatters.dart';
 import '../../services/inventario_service.dart';
 import '../../services/venta_service.dart';
 import '../../services/supabase_service.dart';
+import '../../services/printer_service.dart';
 import '../../services/cliente_service.dart';
 import '../../models/cliente_model.dart';
 import 'historial_ventas_screen.dart';
@@ -53,8 +54,7 @@ List<Map<String, String>> _clientesDemo = [];
   double get _total => _carrito.fold(0, (s, i) => s + i.subtotal);
   int get _totalItems => _carrito.fold(0, (s, i) => s + i.cantidad.toInt());
 double _montoIngresadoTemp = 0;
-  String? _btPrinterAddress;
-  String? _btPrinterName;
+
   @override
  void initState() {
     super.initState();
@@ -198,10 +198,10 @@ Future<void> _agregarClienteRapido() async {
       final cambio = (tipoPago == 'efectivo' && montoPagado > total) ? (montoPagado - total) : 0.0;
 
       // Intentar Bluetooth primero
-      if (_btPrinterAddress != null) {
+      if (PrinterService.hasPrinter) {
         final bool connected = await PrintBluetoothThermal.connectionStatus;
         if (!connected) {
-          await PrintBluetoothThermal.connect(macPrinterAddress: _btPrinterAddress!);
+          await PrintBluetoothThermal.connect(macPrinterAddress: PrinterService.address!);
           await Future.delayed(const Duration(milliseconds: 600));
         }
         final bool ok = await PrintBluetoothThermal.connectionStatus;
