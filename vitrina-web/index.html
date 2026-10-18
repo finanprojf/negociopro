@@ -1482,14 +1482,18 @@
           total: subtotal, estado: 'pendiente'
         })
       });
-      btn.textContent = '✅ ¡Enviado a cocina!';
+      btn.textContent = '✅ ¡Enviado!';
       btn.style.background = '#16a34a';
-      cartaImprimirRecibo(notas);
+      // Show in-process message — no print dialog on customer phone
+      const modalPedido = document.getElementById('cModalPedido');
+      if (modalPedido) modalPedido.classList.add('hidden');
+      cartaMostrarPedidoEnProceso();
+      // Reset button after delay
       setTimeout(() => {
         btn.disabled = false;
         btn.textContent = '🖨️ Enviar a cocina';
         btn.style.background = '';
-      }, 4000);
+      }, 5000);
     } catch(e) {
       btn.disabled = false;
       btn.textContent = '🖨️ Enviar a cocina';
@@ -1526,12 +1530,33 @@
       });
       btn.textContent = '✅ Pedido enviado a cocina';
       btn.style.background = 'rgba(255,255,255,0.3)';
-      cartaImprimirRecibo(notas);
+      // No print dialog on customer phone
+      cartaMostrarPedidoEnProceso();
     } catch(e) {
       btn.disabled = false;
       btn.textContent = '🖨️ Enviar a cocina / Imprimir';
       alert('No se pudo enviar el pedido. Verifica tu conexión.');
     }
+  }
+
+  function cartaMostrarPedidoEnProceso() {
+    // Clear cart
+    cartaCarrito = {};
+    cartaRenderCarrito && cartaRenderCarrito();
+    // Show success screen
+    const existing = document.getElementById('cartaPedidoEnProceso');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'cartaPedidoEnProceso';
+    overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;text-align:center;';
+    overlay.innerHTML = `
+      <div style='font-size:64px'>✅</div>
+      <h2 style='font-size:22px;font-weight:700;color:#16a34a;margin:0'>¡Pedido enviado!</h2>
+      <p style='font-size:15px;color:#555;margin:0'>Tu pedido está en proceso.<br>En un momento estará listo.</p>
+      <button onclick='document.getElementById("cartaPedidoEnProceso").remove()'
+        style='margin-top:12px;padding:12px 32px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer'>Hacer otro pedido</button>
+    `;
+    document.body.appendChild(overlay);
   }
 
   function cartaImprimirRecibo(notas) {
@@ -1575,12 +1600,6 @@
   // ── Detectar modo carta ──
   (function() {
     const esCarta = new URLSearchParams(location.search).has('carta');
-    // Debug banner — 5 seg
-    const dbg = document.createElement('div');
-    dbg.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1e40af;color:#fff;font-size:13px;padding:6px 12px;text-align:center';
-    dbg.textContent = esCarta ? '🍽️ Modo carta detectado…' : '🏪 Modo vitrina…';
-    document.body.appendChild(dbg);
-    setTimeout(() => dbg.remove(), 6000);
     if (esCarta) {
       initCarta().catch(err => {
         console.error('[Carta] uncaught:', err);
