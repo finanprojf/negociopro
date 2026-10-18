@@ -747,24 +747,35 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
     if (_imprimiendo) return;
     setState(() => _imprimiendo = true);
     try {
-      final items = (pedido['items'] as List? ?? []);
-      final mesa  = pedido['mesa'] ?? 'Sin mesa';
-      final notas = pedido['notas'] ?? '';
-      final total = pedido['total'] ?? 0;
-      final hora  = DateTime.parse(pedido['created_at']).toLocal();
-      final horaStr = '${hora.hour.toString().padLeft(2,'0')}:${hora.minute.toString().padLeft(2,'0')}';
+      final items   = (pedido['items'] as List? ?? []);
+      final mesa    = pedido['mesa'] ?? 'Sin mesa';
+      final notas   = pedido['notas'] ?? '';
+      final horaObj = DateTime.parse(pedido['created_at']).toLocal();
+      final horaStr = '${horaObj.hour.toString().padLeft(2,'0')}:${horaObj.minute.toString().padLeft(2,'0')}';
 
       if (_printerMode == 'bluetooth' && PrinterService.hasPrinter) {
-        await _imprimirBluetooth(items, mesa, notas, total, horaStr);
+        final result = await PrinterService.printKitchenTicket(
+          empresaNombre: _empresaNombre,
+          mesa: mesa,
+          hora: horaStr,
+          items: items,
+          notas: notas,
+        );
+        if (!result.ok && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('🖨️ ${result.error}'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 4),
+          ));
+          return;
+        }
       } else {
-        await _imprimirWifi(items, mesa, notas, total, horaStr);
+        await _imprimirWifi(items, mesa, notas, pedido['total'] ?? 0, horaStr);
       }
       await _cambiarEstado(pedido['id'], 'preparando');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al imprimir: \$e'), backgroundColor: Colors.red));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _imprimiendo = false);
     }
@@ -803,51 +814,6 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
     await Printing.layoutPdf(onLayout: (_) async => pdf.save());
   }
 
-  Future<void> _imprimirBluetooth(List items, String mesa, String notas, dynamic total, String hora) async {
-    final List<int> bytes = [];
-    // ESC/POS helpers
-    void cmd(List<int> b) => bytes.addAll(b);
-    void line(String s) { bytes.addAll(s.codeUnits); bytes.add(10); }
-    void boldOn()  => cmd([0x1B, 0x45, 0x01]);
-    void boldOff() => cmd([0x1B, 0x45, 0x00]);
-    void center()  => cmd([0x1B, 0x61, 0x01]);
-    void left()    => cmd([0x1B, 0x61, 0x00]);
-
-    cmd([0x1B, 0x40]); // init
-    center(); boldOn();
-    line(_empresaNombre);
-    boldOff();
-    line('Mesa: $mesa   $hora');
-    left();
-    line('================================');
-    line('PRODUCTO           CANT   PRECIO');
-    line('================================');
-    for (final it in items) {
-      final nombre = (it['nombre'] ?? '').toString();
-      final cant   = (it['cantidad'] ?? 1).toString();
-      final precio = ((it['precio'] ?? 0) * (it['cantidad'] ?? 1)).toStringAsFixed(0);
-      final nom = nombre.length > 16 ? nombre.substring(0, 16) : nombre.padRight(16);
-      final cantStr = cant.padLeft(4);
-      final precStr = ('RD\$$precio').padLeft(9);
-      line('$nom$cantStr$precStr');
-    }
-    line('--------------------------------');
-    boldOn();
-    line('TOTAL:              RD\$$total');
-    boldOff();
-    if (notas.isNotEmpty) {
-      line('');
-      line('Nota: $notas');
-    }
-    line('================================');
-    center();
-    line('  Gracias por su visita  ');
-    left();
-    cmd([0x0A, 0x0A, 0x0A]);
-    cmd([0x1D, 0x56, 0x00]); // corte parcial
-    await PrintBluetoothThermal.writeBytes(Uint8List.fromList(bytes));
-  }
-
   Future<void> _conectarBluetooth() async {
     final devices = await PrintBluetoothThermal.pairedBluetooths;
     if (!mounted) return;
@@ -876,6 +842,25 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
                 ),
             ]),
             const SizedBox(height: 4),
+            if (PrinterService.hasPrinter) ...[
+              const SizedBox(height: 4),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Enviando prueba...'), duration: Duration(seconds: 2)));
+                  final r = await PrinterService.testPrint();
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(r.ok ? '✅ Prueba enviada' : '❌ ${r.error}'),
+                    backgroundColor: r.ok ? AppColors.success : Colors.red,
+                    duration: const Duration(seconds: 3),
+                  ));
+                },
+                icon: const Icon(Icons.print_rounded, size: 16),
+                label: Text('Imprimir prueba (${PrinterService.name ?? ''})',
+                    style: GoogleFonts.poppins(fontSize: 13)),
+              ),
+              const Divider(height: 20),
+            ],
             if (devices.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
@@ -903,13 +888,15 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Conectando a \${d.name ?? d.macAdress}...'), duration: const Duration(seconds: 2)));
-                  final ok = await PrinterService.select(d.macAdress ?? '', d.name ?? 'Impresora');
+                  final result = await PrinterService.select(d.macAdress ?? '', d.name ?? 'Impresora');
                   if (mounted) {
-                    setState(() => _printerMode = ok ? 'bluetooth' : _printerMode);
+                    if (result.ok) setState(() => _printerMode = 'bluetooth');
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(ok ? '✅ Conectado a \${d.name}' : '❌ No se pudo conectar. ¿El Bluetooth está activo y la impresora encendida?'),
-                      backgroundColor: ok ? AppColors.success : Colors.red,
-                      duration: const Duration(seconds: 3),
+                      content: Text(result.ok
+                          ? '✅ Conectado a ${d.name ?? d.macAdress}'
+                          : '❌ ${result.error}'),
+                      backgroundColor: result.ok ? AppColors.success : Colors.red,
+                      duration: const Duration(seconds: 4),
                     ));
                   }
                 },
