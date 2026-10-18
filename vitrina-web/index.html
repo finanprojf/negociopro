@@ -1131,12 +1131,20 @@
 
     try {
       // Config
-      let cfgData = await fetchSB('vitrina_config?slug=eq.' + encodeURIComponent(slug) + '&select=*');
-      if (!cfgData.length) cfgData = await fetchSB('vitrina_config?empresa_id=eq.' + encodeURIComponent(slug) + '&select=*');
+      let cfgData = await fetchSB('vitrina_config?slug=eq.' + encodeURIComponent(slug) + '&select=carta_activa,carta_mostrar_precios,carta_permitir_ws,carta_permitir_cocina,carta_permitir_mesero,empresa_id,color_tema');
+      if (!cfgData.length) cfgData = await fetchSB('vitrina_config?empresa_id=eq.' + encodeURIComponent(slug) + '&select=carta_activa,carta_mostrar_precios,carta_permitir_ws,carta_permitir_cocina,carta_permitir_mesero,empresa_id,color_tema');
       if (!cfgData.length) throw new Error('Sin config');
       config = cfgData[0];
       if (config.color_tema) aplicarTema(config.color_tema);
       cartaMostrarPrecios = config.carta_mostrar_precios !== false;
+      // Ocultar botones según preferencias del negocio
+      if (config.carta_permitir_ws === false)
+        document.getElementById('cBtnWS').style.display = 'none';
+      if (config.carta_permitir_cocina === false)
+        document.getElementById('cMeseroBtnCocina').style.display = 'none';
+      if (config.carta_permitir_mesero === false) {
+        document.querySelectorAll('[onclick="cartaMostrarMesero()"]').forEach(el => el.style.display = 'none');
+      }
 
       // Empresa
       const empRes = await fetchSB('empresas?id=eq.' + config.empresa_id + '&select=nombre,whatsapp,telefono,logo_url');
