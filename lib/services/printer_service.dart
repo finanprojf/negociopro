@@ -87,9 +87,12 @@ class PrinterService {
   // ── Prueba de impresión ───────────────────────────────────────────
   static Future<PrintResult> testPrint() async {
     final b = EscPos.init()
-      ..center()..bold()..text('-- PRUEBA --')..bold(on: false)
-      ..left()..text('Impresora lista ✓')
-      ..text('NegocioPro')
+      ..center()..bold()..text('** PRUEBA DE IMPRESION **')..bold(on: false)
+      ..left()..divider()
+      ..text('Impresora lista y funcionando')
+      ..text('Sistema: NegocioPro')
+      ..divider()
+      ..center()..text('Si ves esto, funciona bien!')..left()
       ..feed(3)..cut();
     return sendBytes(b.bytes);
   }
@@ -174,7 +177,8 @@ class EscPos {
   }
 
   EscPos text(String s) {
-    bytes.addAll(s.codeUnits);
+    // Clamp to Latin-1 — ESC/POS printers speak 8-bit; chars > 255 become '?'
+    bytes.addAll(s.codeUnits.map((c) => c > 255 ? 63 : c));
     bytes.add(10);
     return this;
   }
