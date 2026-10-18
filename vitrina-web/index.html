@@ -378,13 +378,17 @@
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none" />
         <button id="cBtnWS" onclick="cartaEnviarWS()"
           class="hidden w-full bg-green-500 text-white rounded-xl py-3.5 font-bold text-base shadow-md">
-          📲 Enviar pedido por WhatsApp
+          📲 Enviar por WhatsApp
         </button>
-        <button onclick="cartaMostrarMesero()"
+        <button id="cBtnCocina" onclick="cartaEnviarDirectoCocina()"
+          class="w-full text-white rounded-xl py-3.5 font-bold text-base shadow-md" style="background:var(--color-primary)">
+          🖨️ Enviar a cocina
+        </button>
+        <button id="cBtnMesero" onclick="cartaMostrarMesero()"
           class="w-full border-2 border-gray-300 text-gray-700 rounded-xl py-3.5 font-bold text-base">
           ✋ Mostrar al mesero
         </button>
-        <p class="text-center text-xs text-gray-400 pb-1">Confirma tu pedido con el personal del local</p>
+        <p class="text-center text-xs text-gray-400 pb-1">Elige cómo confirmar tu pedido</p>
       </div>
     </div>
   </div>
@@ -1140,11 +1144,12 @@
       // Ocultar botones según preferencias del negocio
       if (config.carta_permitir_ws === false)
         document.getElementById('cBtnWS').style.display = 'none';
-      if (config.carta_permitir_cocina === false)
+      if (config.carta_permitir_cocina === false) {
+        document.getElementById('cBtnCocina').style.display = 'none';
         document.getElementById('cMeseroBtnCocina').style.display = 'none';
-      if (config.carta_permitir_mesero === false) {
-        document.querySelectorAll('[onclick="cartaMostrarMesero()"]').forEach(el => el.style.display = 'none');
       }
+      if (config.carta_permitir_mesero === false)
+        document.getElementById('cBtnMesero').style.display = 'none';
 
       // Empresa
       const empRes = await fetchSB('empresas?id=eq.' + config.empresa_id + '&select=nombre,whatsapp,telefono,logo_url');
@@ -1448,6 +1453,48 @@
     document.getElementById('cMeseroBtnCocina').onclick = () => cartaEnviarACocina(notas);
     cerrarCartaPedido();
     screen.classList.remove('hidden');
+  }
+
+  async function cartaEnviarDirectoCocina() {
+    if (!Object.keys(cartaCarrito).length) return;
+    const btn = document.getElementById('cBtnCocina');
+    const notas = document.getElementById('cNotasInput').value.trim();
+    btn.disabled = true;
+    btn.textContent = '⏳ Enviando…';
+    try {
+      const items = Object.values(cartaCarrito).map(({producto, cantidad}) => ({
+        id: producto.id, nombre: producto.nombre, cantidad,
+        precio: Number(producto.precio_venta||0)
+      }));
+      const subtotal = items.reduce((s,i) => s + i.precio * i.cantidad, 0);
+      await fetch(window._SB_URL + '/rest/v1/pedidos_carta', {
+        method: 'POST',
+        headers: {
+          'apikey': window._SB_KEY,
+          'Authorization': 'Bearer ' + window._SB_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          empresa_id: config.empresa_id,
+          mesa: cartaNumMesa || null,
+          items, notas: notas || null,
+          total: subtotal, estado: 'pendiente'
+        })
+      });
+      btn.textContent = '✅ ¡Enviado a cocina!';
+      btn.style.background = '#16a34a';
+      cartaImprimirRecibo(notas);
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = '🖨️ Enviar a cocina';
+        btn.style.background = '';
+      }, 4000);
+    } catch(e) {
+      btn.disabled = false;
+      btn.textContent = '🖨️ Enviar a cocina';
+      alert('No se pudo enviar. Verifica tu conexión.');
+    }
   }
 
   async function cartaEnviarACocina(notas) {
