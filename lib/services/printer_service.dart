@@ -111,19 +111,19 @@ class PrinterService {
     required String notas,
   }) async {
     final b = EscPos.init()
-      ..center()..bold()..text(empresaNombre)..bold(on: false)
+      ..center()..size()..bold()..text(empresaNombre)..bold(on: false)..size(large: false)
       ..text('Mesa: $mesa   $hora')
       ..left()..divider()
-      ..text('PEDIDO DE COCINA')..divider();
+      ..size()..text('PEDIDO DE COCINA')..size(large: false)..divider();
     for (final it in items) {
       final nombre = (it['nombre'] ?? '').toString();
       final cant   = (it['cantidad'] ?? 1).toString();
-      final nom = nombre.length > 20 ? nombre.substring(0, 20) : nombre;
-      b.text('$nom  x$cant');
+      final nom = nombre.length > 14 ? nombre.substring(0, 14) : nombre;
+      b.size()..text('$nom  x$cant')..size(large: false);
     }
     b.divider();
     if (notas.isNotEmpty) {
-      b.bold()..text('NOTA: $notas')..bold(on: false)..text('');
+      b.bold()..text('NOTA: $notas')..bold(on: false);
     }
     b.center()..text('- Gracias -')..left()..feed(3)..cut();
     return sendBytes(b.bytes);
@@ -147,10 +147,10 @@ class PrinterService {
         : tipoPago == 'transferencia' ? 'TRANSFERENCIA' : 'EFECTIVO';
 
     final b = EscPos.init()
-      ..center()..bold()..text(empresaNombre)..bold(on: false)
+      ..center()..size()..bold()..text(empresaNombre)..bold(on: false)..size(large: false)
       ..text('$fecha  $hora')
       ..left()..divider()
-      ..text('PRODUCTO           CANT  PRECIO')
+      ..text('PRODUCTO        CANT PRECIO')
       ..divider();
     for (final item in items) {
       final nom  = (item['nombre'] as String).length > 16
@@ -162,7 +162,7 @@ class PrinterService {
     }
     b.divider();
     if (descuento > 0) b.text('Descuento: -RD\$${descuento.toStringAsFixed(0)}');
-    b.bold()..text('TOTAL: RD\$${total.toStringAsFixed(0)}')..bold(on: false)
+    b.size()..bold()..text('TOTAL: RD\$${total.toStringAsFixed(0)}')..bold(on: false)..size(large: false)
      .text('Pago: $tipLabel');
     if (montoPagado > 0 && tipoPago == 'efectivo') {
       b.text('Recibido: RD\$${montoPagado.toStringAsFixed(0)}');
@@ -209,6 +209,12 @@ class EscPos {
 
   EscPos cut() {
     bytes.addAll([0x1D, 0x56, 0x00]);
+    return this;
+  }
+
+  /// GS ! — character size. double=true → 2x width + 2x height
+  EscPos size({bool large = true}) {
+    bytes.addAll([0x1D, 0x21, large ? 0x11 : 0x00]);
     return this;
   }
 }
