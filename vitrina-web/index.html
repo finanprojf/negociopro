@@ -1018,12 +1018,21 @@
         cartaCategorias = await fetchSB('categorias?empresa_id=eq.' + config.empresa_id + '&select=id,nombre&order=nombre');
       } catch(_) { cartaCategorias = []; }
 
-      // Productos carta
-      cartaProductos = await fetchSB(
-        'productos?empresa_id=eq.' + config.empresa_id +
-        '&carta_disponible=eq.true&activo=eq.true' +
-        '&select=id,nombre,descripcion,precio_venta,stock_actual,foto_url,categoria_id&order=nombre'
-      );
+      // Productos carta (intenta con carta_disponible, fallback a todos activos)
+      try {
+        cartaProductos = await fetchSB(
+          'productos?empresa_id=eq.' + config.empresa_id +
+          '&carta_disponible=eq.true&activo=eq.true' +
+          '&select=id,nombre,descripcion,precio_venta,stock_actual,foto_url,categoria_id&order=nombre'
+        );
+      } catch(_) {
+        // Columna carta_disponible no existe aún — mostrar todos los activos
+        cartaProductos = await fetchSB(
+          'productos?empresa_id=eq.' + config.empresa_id +
+          '&activo=eq.true' +
+          '&select=id,nombre,descripcion,precio_venta,stock_actual,foto_url,categoria_id&order=nombre'
+        );
+      }
 
       // Render
       cartaRenderHeader();
@@ -1042,7 +1051,7 @@
       setTimeout(abrirSelectorMesa, 600);
 
     } catch(e) {
-      console.error('[Carta]', e);
+      console.error('[Carta] Error:', e?.message || e);
       document.getElementById('cLoading').classList.add('hidden');
       document.getElementById('cError').classList.remove('hidden');
     }
@@ -1350,9 +1359,13 @@
   </div>
 
   <!-- Error -->
-  <div id="cError" class="hidden text-center py-20 text-gray-400">
-    <div class="text-5xl mb-3">😕</div>
-    <p class="text-sm font-semibold">Carta no disponible</p>
+  <div id="cError" class="hidden text-center py-16 px-6">
+    <div class="text-6xl mb-4">😕</div>
+    <p class="font-bold text-gray-700 text-lg mb-2">No se pudo cargar la carta</p>
+    <p class="text-sm text-gray-500 mb-6">Verifica tu conexión o vuelve a intentarlo</p>
+    <button onclick="location.reload()" class="px-6 py-2 rounded-xl text-white text-sm font-bold" style="background:var(--color-primary)">
+      🔄 Reintentar
+    </button>
   </div>
 
   <!-- Productos -->
