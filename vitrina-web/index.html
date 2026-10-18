@@ -1540,9 +1540,19 @@
   }
 
   function cartaMostrarPedidoEnProceso() {
+    // Collect ids to refresh BEFORE clearing
+    const idsToRefresh = Object.keys(cartaCarrito);
     // Clear cart
     cartaCarrito = {};
-    cartaRenderCarrito && cartaRenderCarrito();
+    // Close modals if open
+    const modal = document.getElementById('cModalPedido');
+    if (modal) modal.classList.add('hidden');
+    const meseroScreen = document.getElementById('cMeseroScreen');
+    if (meseroScreen) meseroScreen.classList.add('hidden');
+    // Update FAB (hide it)
+    cartaActualizarFab();
+    // Refresh product cards so counters reset to 0
+    idsToRefresh.forEach(id => cartaRefreshCard(id));
     // Show success screen
     const existing = document.getElementById('cartaPedidoEnProceso');
     if (existing) existing.remove();
@@ -1557,6 +1567,13 @@
         style='margin-top:12px;padding:12px 32px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer'>Hacer otro pedido</button>
     `;
     document.body.appendChild(overlay);
+    // Push history state so Android back button dismisses the overlay
+    history.pushState({ cartaOverlay: true }, '');
+    const onPop = () => {
+      overlay.remove();
+      window.removeEventListener('popstate', onPop);
+    };
+    window.addEventListener('popstate', onPop);
   }
 
   function cartaImprimirRecibo(notas) {

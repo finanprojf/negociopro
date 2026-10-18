@@ -47,7 +47,7 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
   // ── Cocina ──
   List<Map<String, dynamic>> _cola = [];
   bool _cargandoCola = false;
-  bool _imprimiendo  = false;
+  final Set<String> _imprimiendo = {};  // pedido IDs currently printing
   String _printerMode = 'wifi'; // 'wifi' | 'bluetooth'
   Timer? _pollingTimer;
   bool _permitirCocina = true;
@@ -744,8 +744,9 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
   }
 
   Future<void> _imprimirPedido(Map<String, dynamic> pedido) async {
-    if (_imprimiendo) return;
-    setState(() => _imprimiendo = true);
+    final pid = pedido['id']?.toString() ?? '';
+    if (_imprimiendo.contains(pid)) return;
+    setState(() => _imprimiendo.add(pid));
     try {
       final items   = (pedido['items'] as List? ?? []);
       final mesa    = pedido['mesa'] ?? 'Sin mesa';
@@ -776,7 +777,7 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
-      if (mounted) setState(() => _imprimiendo = false);
+      if (mounted) setState(() => _imprimiendo.remove(pid));
     }
   }
 
@@ -1055,16 +1056,19 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
                     const SizedBox(height: 10),
                     // Botones
                     Row(children: [
-                      if (isPrimero) Expanded(child: ElevatedButton.icon(
-                        onPressed: _imprimiendo ? null : () => _imprimirPedido(pedido),
-                        icon: _imprimiendo
-                            ? const SizedBox(width: 16, height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.print_rounded, size: 16),
-                        label: Text(_imprimiendo ? 'Imprimiendo…' : 'Imprimir',
-                            style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                      )),
-                      if (isPrimero) const SizedBox(width: 8),
+                      Expanded(child: Builder(builder: (ctx) {
+                        final printing = _imprimiendo.contains(pedido['id']?.toString() ?? '');
+                        return ElevatedButton.icon(
+                          onPressed: printing ? null : () => _imprimirPedido(pedido),
+                          icon: printing
+                              ? const SizedBox(width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.print_rounded, size: 16),
+                          label: Text(printing ? 'Imprimiendo…' : 'Imprimir',
+                              style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                        );
+                      })),
+                      const SizedBox(width: 8),
                       Expanded(child: OutlinedButton.icon(
                         onPressed: () => _cambiarEstado(pedido['id'],
                             estado == 'pendiente' ? 'preparando' : 'listo'),
