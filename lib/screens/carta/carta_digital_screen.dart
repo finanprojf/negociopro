@@ -817,8 +817,6 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
   Future<void> _conectarBluetooth() async {
     final devices = await PrintBluetoothThermal.pairedBluetooths;
     if (!mounted) return;
-    // Verificar cuál está realmente conectada ahora mismo
-    final bool currentlyConnected = await PrintBluetoothThermal.connectionStatus;
 
     await showModalBottomSheet(
       context: context,
@@ -850,9 +848,9 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
                     content: Text('Enviando prueba...'), duration: Duration(seconds: 2)));
                   final r = await PrinterService.testPrint();
                   if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(r.ok ? '✅ Prueba enviada' : '❌ ${r.error}'),
-                    backgroundColor: r.ok ? AppColors.success : Colors.red,
-                    duration: const Duration(seconds: 3),
+                    content: Text(r.ok ? '✅ Prueba enviada' : '⚠️ No imprimió — verifica que la impresora esté encendida'),
+                    backgroundColor: r.ok ? AppColors.success : Colors.orange,
+                    duration: const Duration(seconds: 4),
                   ));
                 },
                 icon: const Icon(Icons.print_rounded, size: 16),
@@ -869,18 +867,17 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
               ),
             ...devices.map((d) {
               final isSelected = PrinterService.address == d.macAdress;
-              final isConnected = isSelected && currentlyConnected;
               return ListTile(
                 leading: Icon(
-                  isConnected ? Icons.bluetooth_connected_rounded : Icons.bluetooth_rounded,
-                  color: isConnected ? AppColors.success : (isSelected ? AppColors.primary : Colors.grey),
+                  isSelected ? Icons.bluetooth_connected_rounded : Icons.bluetooth_rounded,
+                  color: isSelected ? AppColors.primary : Colors.grey,
                 ),
                 title: Text(d.name ?? 'Desconocido', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14)),
                 subtitle: Text(
-                  isConnected ? '✅ Conectada' : (isSelected ? '⚠️ Sin señal — toca para reconectar' : d.macAdress ?? ''),
+                  isSelected ? 'Seleccionada' : (d.macAdress ?? ''),
                   style: TextStyle(
                     fontSize: 12,
-                    color: isConnected ? AppColors.success : (isSelected ? AppColors.warning : Colors.grey),
+                    color: isSelected ? AppColors.primary : Colors.grey,
                   ),
                 ),
                 trailing: isSelected ? const Icon(Icons.check_circle_rounded, color: AppColors.primary) : null,

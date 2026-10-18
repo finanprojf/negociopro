@@ -48,7 +48,7 @@ class PrinterService {
       }
       return const PrintResult.fail('La impresora no respondió. ¿Está encendida?');
     } catch (e) {
-      return PrintResult.fail('Error al conectar: $e');
+      return PrintResult.fail('Verifica que la impresora esté encendida y el Bluetooth activo');
     }
   }
 
@@ -72,12 +72,12 @@ class PrinterService {
       await Future.delayed(const Duration(milliseconds: 800));
       final connected = await PrintBluetoothThermal.connectionStatus;
       if (!connected) {
-        return const PrintResult.fail('No se pudo conectar. ¿La impresora está encendida y cerca?');
+        return const PrintResult.fail('Verifica que la impresora esté encendida y cerca');
       }
       await PrintBluetoothThermal.writeBytes(Uint8List.fromList(bytes));
       return const PrintResult.success();
     } catch (e) {
-      return PrintResult.fail('Error al imprimir: $e');
+      return PrintResult.fail('No se pudo imprimir. Verifica que la impresora esté encendida');
     }
   }
 
