@@ -31,6 +31,9 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
   String? _logoUrl;
 
 bool _esAdmin = false;
+String _userEmail   = '';
+String _userNombre  = '';
+String _userTelefono = '';
 
 @override
 void initState() {
@@ -45,11 +48,20 @@ Future<void> _verificarAdmin() async {
     if (userId == null) return;
     final res = await SupabaseService.client
         .from('usuarios')
-        .select('es_admin')
+        .select('es_admin, nombre, telefono')
         .eq('id', userId)
         .single();
-    if (mounted) setState(() => _esAdmin = res['es_admin'] == true);
-  } catch (_) {}
+    final authEmail = Supabase.instance.client.auth.currentUser?.email ?? '';
+    if (mounted) setState(() {
+      _esAdmin       = res['es_admin'] == true;
+      _userNombre    = res['nombre']   as String? ?? '';
+      _userTelefono  = res['telefono'] as String? ?? '';
+      _userEmail     = authEmail;
+    });
+  } catch (_) {
+    final authEmail = Supabase.instance.client.auth.currentUser?.email ?? '';
+    if (mounted) setState(() => _userEmail = authEmail);
+  }
 }
   Future<void> _cargarDatos() async {
     try {
@@ -169,6 +181,10 @@ Future<void> _verificarAdmin() async {
           _campo(_direccionCtrl, 'Dirección', Icons.location_on_outlined),
           const SizedBox(height: 12),
           _campo(_lemaCtrl, 'Lema / eslogan', Icons.format_quote_rounded),
+          const SizedBox(height: 24),
+          _seccion('Mi información'),
+          const SizedBox(height: 12),
+          _buildInfoUsuario(),
           const SizedBox(height: 24),
           _seccion('Cuenta'),
           const SizedBox(height: 12),
@@ -516,6 +532,59 @@ SizedBox(
   }
 
   // ─── WIDGETS ─────────────────────────────────────────────────────────────
+
+  Widget _buildInfoUsuario() {
+    Widget _fila(IconData icon, String label, String valor) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(children: [
+        Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: AppColors.primary, size: 20),
+        ),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(
+              fontSize: 11, color: Color(0xFF8A9AB0),
+              fontFamily: 'Poppins', fontWeight: FontWeight.w500)),
+          Text(
+            valor.isEmpty ? '—' : valor,
+            style: TextStyle(
+              fontSize: 14.5, fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              color: valor.isEmpty ? AppColors.textSecondary : AppColors.textPrimary,
+            ),
+          ),
+        ])),
+      ]),
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+      ),
+      child: Column(children: [
+        _fila(Icons.email_outlined,       'Correo',   _userEmail),
+        Divider(height: 1, color: AppColors.primary.withOpacity(0.08)),
+        if (_userNombre.isNotEmpty) ...[
+          _fila(Icons.person_outline_rounded, 'Nombre',   _userNombre),
+          Divider(height: 1, color: AppColors.primary.withOpacity(0.08)),
+        ],
+        if (_userTelefono.isNotEmpty) ...[
+          _fila(Icons.phone_outlined,     'Teléfono', _userTelefono),
+          Divider(height: 1, color: AppColors.primary.withOpacity(0.08)),
+        ],
+        _fila(Icons.badge_outlined,       'ID usuario',
+            Supabase.instance.client.auth.currentUser?.id.substring(0, 8).toUpperCase() ?? '—'),
+      ]),
+    );
+  }
 
   Widget _buildOpcionCuenta(IconData icon, String label, VoidCallback onTap,
       {bool esDestructivo = false}) {
