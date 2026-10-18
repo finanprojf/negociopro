@@ -313,7 +313,7 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
         child: Row(children: [
-          const Icon(Icons.whatsapp_rounded, size: 16, color: AppColors.textMuted),
+          const Icon(Icons.chat_rounded, size: 16, color: AppColors.textMuted),
           const SizedBox(width: 6),
           Text('Permitir envío por WhatsApp',
               style: GoogleFonts.poppins(fontSize: 12.5, color: AppColors.textSecondary)),
@@ -778,11 +778,15 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
         pw.Center(child: pw.Text(_empresaNombre, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14))),
         pw.Center(child: pw.Text('Mesa: \$mesa  ·  \$hora', style: const pw.TextStyle(fontSize: 10))),
         pw.Divider(),
-        ...items.map((it) => pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-          pw.Text('\${it['nombre']} x\${it['cantidad']}', style: const pw.TextStyle(fontSize: 11)),
-          pw.Text('RD\$\${((it['precio'] ?? 0) * (it['cantidad'] ?? 1)).toStringAsFixed(0)}',
-              style: const pw.TextStyle(fontSize: 11)),
-        ])).toList(),
+        ...items.map((it) {
+          final nome = it['nombre'] ?? '';
+          final cant = it['cantidad'] ?? 1;
+          final prec = ((it['precio'] ?? 0) * cant).toStringAsFixed(0);
+          return pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+            pw.Text('$nome x$cant', style: const pw.TextStyle(fontSize: 11)),
+            pw.Text('RD\$$prec', style: const pw.TextStyle(fontSize: 11)),
+          ]);
+        }).toList(),
         pw.Divider(),
         pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
           pw.Text('TOTAL', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
@@ -932,7 +936,7 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
                       : AppColors.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: isPrimero ? AppColors.primary : AppColors.border,
+                    color: isPrimero ? AppColors.primary : AppColors.cardBorder,
                     width: isPrimero ? 2 : 1,
                   ),
                 ),
@@ -968,20 +972,25 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
                     ]),
                     const SizedBox(height: 10),
                     // Items
-                    ...items.map((it) => Padding(
-                      padding: const EdgeInsets.only(bottom: 3),
-                      child: Row(children: [
-                        Text('• ', style: TextStyle(color: AppColors.primary)),
-                        Expanded(child: Text(
-                          '\${it['nombre']} x\${it['cantidad']}',
-                          style: GoogleFonts.poppins(fontSize: 13),
-                        )),
-                        Text(
-                          'RD\$\${((it['precio'] ?? 0) * (it['cantidad'] ?? 1)).toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary),
-                        ),
-                      ]),
-                    )).toList(),
+                    ...items.map((it) {
+                      final nome = it['nombre'] ?? '';
+                      final cant = it['cantidad'] ?? 1;
+                      final prec = ((it['precio'] ?? 0) * cant).toStringAsFixed(0);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Row(children: [
+                          Text('• ', style: TextStyle(color: AppColors.primary)),
+                          Expanded(child: Text(
+                            '$nome x$cant',
+                            style: GoogleFonts.poppins(fontSize: 13),
+                          )),
+                          Text(
+                            'RD\$$prec',
+                            style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ]),
+                      );
+                    }).toList(),
                     // Notas
                     if (notas.isNotEmpty) ...[
                       const SizedBox(height: 6),
