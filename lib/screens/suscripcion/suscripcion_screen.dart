@@ -450,14 +450,14 @@ class _PlanCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: onActivar,
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    child: FittedBox(fit: BoxFit.scaleDown, child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.rocket_launch_rounded, color: Colors.white, size: btnFz + 2),
                       const SizedBox(width: 6),
                       Text('Activar $nombre',
                         style: GoogleFonts.poppins(
                           color: Colors.white, fontSize: btnFz,
                           fontWeight: FontWeight.w700, letterSpacing: 0.3)),
-                    ]),
+                    ])),
                   ),
                 ),
               ),
