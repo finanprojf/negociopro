@@ -146,11 +146,11 @@ Future<void> _cargarVersion() async {
       await VentaService.sincronizarPendientes();
       final online = await SupabaseService.isOnlineAsync;
 // Verificar suscripción y cargar plan
+      await PlanService.cargar(); // usa Supabase si hay internet, caché si no
       if (online) {
-        await PlanService.cargar();
         final sus = await SupabaseService.getSuscripcion();
         if (sus != null && sus['suscripcion_vence'] != null) {
-          final vence = DateTime.parse(sus['suscripcion_vence']);
+          final vence = DateTime.parse(sus['suscripcion_vence'].toString().replaceAll('+00:00', 'Z'));
           final dias = vence.difference(DateTime.now()).inDays;
           if (mounted) {
             setState(() {
@@ -158,6 +158,15 @@ Future<void> _cargarVersion() async {
               _suscripcionVencida = dias < 0;
             });
           }
+        }
+      } else {
+        // Sin internet: usar fecha de vencimiento guardada localmente
+        final cached = await PlanService.diasRestantesOffline();
+        if (cached.dias != null && mounted) {
+          setState(() {
+            _diasRestantes = cached.dias!;
+            _suscripcionVencida = cached.vencida;
+          });
         }
       }
     // Si no hay internet cargar desde SQLite
