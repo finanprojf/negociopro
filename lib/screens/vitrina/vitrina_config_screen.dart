@@ -14,6 +14,7 @@ import 'vitrina_producto_config_screen.dart';
 import 'vitrina_resenas_screen.dart';
 import '../../widgets/guia_modulo_banner.dart';
 import '../../widgets/pro_gate.dart';
+import '../carta/carta_digital_screen.dart';
 
 class VitrinaConfigScreen extends StatefulWidget {
   const VitrinaConfigScreen({super.key});
@@ -22,7 +23,8 @@ class VitrinaConfigScreen extends StatefulWidget {
   State<VitrinaConfigScreen> createState() => _VitrinaConfigScreenState();
 }
 
-class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
+class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabCtrl;
   bool _loading = true;
   bool _saving = false;
   bool _sincronizando = false;
@@ -56,10 +58,12 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
   static const String _baseUrl = 'https://vitrina-web-beta.vercel.app/t/';
 
   String get _linkCompleto => '$_baseUrl${_slug.isNotEmpty ? _slug : _empresaId}';
+  String get _linkCarta    => '$_linkCompleto?carta=1';
 
   @override
   void initState() {
     super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
     _cargar();
   }
 
@@ -70,6 +74,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
     _zonaCtrl.dispose();
     _horarioCtrl.dispose();
     _mensajeCtrl.dispose();
+    _tabCtrl.dispose();
     super.dispose();
   }
 
@@ -125,7 +130,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
       // Cargar productos con estado vitrina
       final prods = await SupabaseService.client
           .from('productos')
-          .select('id, nombre, precio_venta, stock_actual, foto_url, activo, categoria_id')
+          .select('id, nombre, precio_venta, stock_actual, foto_url, activo, categoria_id, carta_disponible')
           .eq('empresa_id', empresaId)
           .eq('activo', true)
           .order('nombre');
@@ -165,6 +170,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
           'disponibilidad':       vp?['disponibilidad'] ?? 'stock',
           'fecha_disponibilidad': vp?['fecha_disponibilidad'],
           'permitir_resenas':     vp?['permitir_resenas'] ?? false,
+          'carta_disponible':     p['carta_disponible'] == true || p['carta_disponible'] == 1,
         };
       }).toList();
 
@@ -220,6 +226,16 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
               'fecha_disponibilidad': p['fecha_disponibilidad'],
               'permitir_resenas':     p['permitir_resenas'] ?? false,
             }, onConflict: 'empresa_id,producto_id');
+      }
+
+      // Guardar carta_disponible en tabla productos
+      for (final p in _productos) {
+        try {
+          await SupabaseService.client
+              .from('productos')
+              .update({'carta_disponible': p['carta_disponible'] ?? false})
+              .eq('id', p['id'] as String);
+        } catch (_) {}
       }
 
       setState(() => _slug = slug);
@@ -337,6 +353,19 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
     );
   }
 
+  void _copiarLinkCarta() {
+    Clipboard.setData(ClipboardData(text: _linkCarta));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Link de carta copiado'), duration: Duration(seconds: 2)));
+  }
+
+  void _compartirLinkCarta() {
+    Share.share(
+      '🍽️ Ve la carta digital de $_empresaNombre:\n$_linkCarta',
+      subject: '$_empresaNombre — Carta Digital',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ProGate(
@@ -345,10 +374,20 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Mi Vitrina Digital'),
-        actions: [
-        ],
+        bottom: TabBar(
+          controller: _tabCtrl,
+          tabs: const [
+            Tab(icon: Icon(Icons.storefront_rounded), text: 'Vitrina'),
+            Tab(icon: Icon(Icons.restaurant_menu_rounded), text: 'Carta / Cocina'),
+          ],
+        ),
       ),
-      body: _loading
+      body: TabBarView(
+        controller: _tabCtrl,
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          // ── Tab 1: Vitrina ─────────────────────────────────────
+          _loading
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : ListView(
               padding: const EdgeInsets.all(16),
@@ -387,64 +426,115 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
                 // Link de la vitrina
                 if (_activa) ...[
                   _buildCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Tu link', style: GoogleFonts.poppins(
+                    Text('Compartir', style: GoogleFonts.poppins(
                         fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMuted)),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
+
+                    // ── Vitrina ──────────────────────────────────────
+                    Row(children: [
+                      Icon(Icons.storefront_rounded, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Text('Vitrina / Tienda', style: GoogleFonts.poppins(
+                          fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                    ]),
+                    const SizedBox(height: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
                         color: AppColors.primary.withValues(alpha: 0.07),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                       ),
-                      child: Row(children: [
-                        Expanded(child: Text(_linkCompleto,
-                            style: GoogleFonts.poppins(
-                                fontSize: 12, color: AppColors.primary,
-                                fontWeight: FontWeight.w600))),
-                      ]),
+                      child: Text(_linkCompleto,
+                          style: GoogleFonts.poppins(
+                              fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600)),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     Row(children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _copiarLink,
-                          icon: const Icon(Icons.copy_rounded, size: 16),
-                          label: const Text('Copiar'),
-                          style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: AppColors.primary)),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _compartirLink,
-                          icon: const Icon(Icons.share_rounded, size: 16),
-                          label: const Text('Compartir'),
-                        ),
+                      Expanded(child: OutlinedButton.icon(
+                        onPressed: _copiarLink,
+                        icon: const Icon(Icons.copy_rounded, size: 15),
+                        label: const Text('Copiar'),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(vertical: 8)),
+                      )),
+                      const SizedBox(width: 8),
+                      Expanded(child: ElevatedButton.icon(
+                        onPressed: _compartirLink,
+                        icon: const Icon(Icons.share_rounded, size: 15),
+                        label: const Text('Compartir'),
+                        style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 8)),
+                      )),
+                      const SizedBox(width: 8),
+                      OutlinedButton(
+                        onPressed: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => VitrinaQrScreen(
+                            url: _linkCompleto, empresaNombre: _empresaNombre))),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            padding: const EdgeInsets.all(9)),
+                        child: const Icon(Icons.qr_code_rounded, size: 20),
                       ),
                     ]),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => VitrinaQrScreen(
-                            url: _linkCompleto,
-                            empresaNombre: _empresaNombre,
-                          )),
-                        ),
-                        icon: const Icon(Icons.qr_code_rounded, size: 18),
-                        label: const Text('Ver mi código QR'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          side: const BorderSide(color: AppColors.primary),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
+
+                    const Divider(height: 20),
+
+                    // ── Carta Digital ────────────────────────────────
+                    Row(children: [
+                      const Icon(Icons.menu_book_rounded, size: 16, color: Color(0xFFD97706)),
+                      const SizedBox(width: 6),
+                      Text('Carta Digital', style: GoogleFonts.poppins(
+                          fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFD97706))),
+                    ]),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFCD34D)),
                       ),
+                      child: Text(_linkCarta,
+                          style: GoogleFonts.poppins(
+                              fontSize: 11, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
                     ),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(child: OutlinedButton.icon(
+                        onPressed: _copiarLinkCarta,
+                        icon: const Icon(Icons.copy_rounded, size: 15),
+                        label: const Text('Copiar'),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: Color(0xFFD97706),
+                            side: const BorderSide(color: Color(0xFFFCD34D)),
+                            padding: const EdgeInsets.symmetric(vertical: 8)),
+                      )),
+                      const SizedBox(width: 8),
+                      Expanded(child: ElevatedButton.icon(
+                        onPressed: _compartirLinkCarta,
+                        icon: const Icon(Icons.share_rounded, size: 15),
+                        label: const Text('Compartir'),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Color(0xFFD97706),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 8)),
+                      )),
+                      const SizedBox(width: 8),
+                      OutlinedButton(
+                        onPressed: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => VitrinaQrScreen(
+                            url: _linkCarta, empresaNombre: '$_empresaNombre — Carta'))),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: Color(0xFFD97706),
+                            side: const BorderSide(color: Color(0xFFFCD34D)),
+                            padding: const EdgeInsets.all(9)),
+                        child: const Icon(Icons.qr_code_rounded, size: 20),
+                      ),
+                    ]),
                   ])),
                   const SizedBox(height: 12),
                 ],
@@ -613,6 +703,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
                     producto: p,
                     onChanged: (v) => setState(() => p['en_vitrina'] = v),
                     onChangedResenas: (v) => setState(() => p['permitir_resenas'] = v),
+                    onChangedCarta: (v) => setState(() => p['carta_disponible'] = v),
                     onTap: () => _abrirConfigProducto(p),
                   )),
                 ])),
@@ -695,6 +786,10 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> {
                 const SizedBox(height: 40),
               ],
             ),
+          // ── Tab 2: Carta / Cocina ──────────────────────────────
+          const CartaDigitalScreen(),
+        ],
+      ),
     ));
   }
 
@@ -753,12 +848,14 @@ class _ProductoVitrinaRow extends StatelessWidget {
   final Map<String, dynamic> producto;
   final ValueChanged<bool> onChanged;
   final ValueChanged<bool> onChangedResenas;
+  final ValueChanged<bool> onChangedCarta;
   final VoidCallback onTap;
 
   const _ProductoVitrinaRow({
     required this.producto,
     required this.onChanged,
     required this.onChangedResenas,
+    required this.onChangedCarta,
     required this.onTap,
   });
 
@@ -767,7 +864,7 @@ class _ProductoVitrinaRow extends StatelessWidget {
     'hoy':    'Disponible hoy',
     'manana': 'Disponible mañana',
     'pronto': 'Disponible pronto',
-    'fecha':  null, // se construye con la fecha
+    'fecha':  null,
   };
   static const _dispColors = {
     'hoy':    Color(0xFF3b82f6),
@@ -783,6 +880,7 @@ class _ProductoVitrinaRow extends StatelessWidget {
     final stock           = (producto['stock_actual'] as num?)?.toDouble() ?? 0;
     final visible         = producto['en_vitrina'] as bool? ?? true;
     final permitirResenas = producto['permitir_resenas'] as bool? ?? false;
+    final enCarta         = producto['carta_disponible'] as bool? ?? false;
     final enOferta  = producto['precio_oferta'] != null;
     final pct       = (producto['descuento_porcentaje'] as num?)?.toDouble();
     final disp      = producto['disponibilidad'] as String? ?? 'stock';
@@ -813,22 +911,6 @@ class _ProductoVitrinaRow extends StatelessWidget {
           border: Border.all(color: AppColors.cardBorder),
         ),
         child: Row(children: [
-          // Icono visible/oculto
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(
-              color: visible
-                  ? AppColors.primary.withValues(alpha: 0.08)
-                  : AppColors.textMuted.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              visible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-              size: 18,
-              color: visible ? AppColors.primary : AppColors.textMuted,
-            ),
-          ),
-          const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(nombre, style: GoogleFonts.poppins(
                 fontSize: 13, fontWeight: FontWeight.w600,
@@ -868,48 +950,78 @@ class _ProductoVitrinaRow extends StatelessWidget {
               ],
             ]),
           ])),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              // Switch visible en vitrina
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.visibility_rounded,
-                    size: 13, color: visible ? AppColors.primary : AppColors.textMuted),
-                const SizedBox(width: 4),
-                Transform.scale(
-                  scale: 0.8,
-                  child: Switch(
-                    value: visible,
-                    onChanged: onChanged,
-                    activeColor: AppColors.primary,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ]),
-              // Switch permitir reseñas (solo si está visible)
-              if (visible)
-                GestureDetector(
-                  onTap: () => onChangedResenas(!permitirResenas),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text('⭐',
-                        style: TextStyle(fontSize: 11,
-                            color: permitirResenas ? const Color(0xFFf59e0b) : AppColors.textMuted)),
-                    const SizedBox(width: 2),
-                    Transform.scale(
-                      scale: 0.7,
-                      child: Switch(
-                        value: permitirResenas,
-                        onChanged: onChangedResenas,
-                        activeColor: const Color(0xFFf59e0b),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ),
-                  ]),
-                ),
-            ],
-          ),
+          const SizedBox(width: 8),
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            _IconToggleBtn(
+              icon: visible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+              active: visible,
+              activeColor: AppColors.primary,
+              tooltip: visible ? 'Visible' : 'Oculto',
+              onTap: () => onChanged(!visible),
+            ),
+            const SizedBox(width: 6),
+            _IconToggleBtn(
+              icon: Icons.star_rounded,
+              active: permitirResenas,
+              activeColor: const Color(0xFFf59e0b),
+              tooltip: permitirResenas ? 'Reseñas on' : 'Sin reseñas',
+              onTap: () => onChangedResenas(!permitirResenas),
+            ),
+            const SizedBox(width: 6),
+            _IconToggleBtn(
+              icon: Icons.restaurant_menu_rounded,
+              active: enCarta,
+              activeColor: const Color(0xFFFF6B35),
+              tooltip: enCarta ? 'En Carta' : 'Fuera de Carta',
+              onTap: () => onChangedCarta(!enCarta),
+            ),
+          ]),
         ]),
+      ),
+    );
+  }
+}
+
+class _IconToggleBtn extends StatelessWidget {
+  final IconData icon;
+  final bool active;
+  final Color activeColor;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _IconToggleBtn({
+    required this.icon,
+    required this.active,
+    required this.activeColor,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: active
+                ? activeColor.withValues(alpha: 0.12)
+                : AppColors.textMuted.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: active
+                  ? activeColor.withValues(alpha: 0.35)
+                  : AppColors.cardBorder,
+              width: 1,
+            ),
+          ),
+          child: Icon(icon, size: 16,
+              color: active ? activeColor : AppColors.textMuted),
+        ),
       ),
     );
   }

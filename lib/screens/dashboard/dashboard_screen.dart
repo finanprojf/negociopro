@@ -732,17 +732,31 @@ Widget _buildVitrinaWidget() {
           icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
           onPressed: () { _cargarNombre(); _cargarResumen(); setState(() {}); },
         ),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined, color: AppColors.textSecondary),
-              onPressed: () async {
-                await Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const RecordatoriosScreen()));
-                _cargarRecordatoriosHoy();
-              },
-            ),
+        GestureDetector(
+          onTap: () async {
+            await Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const RecordatoriosScreen()));
+            _cargarRecordatoriosHoy();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.notifications_outlined, color: AppColors.textSecondary, size: 24),
+                    const Text('Recordatorios',
+                      style: TextStyle(
+                        fontSize: 7.5,
+                        color: AppColors.textSecondary,
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w500,
+                        height: 1.1,
+                      )),
+                  ],
+                ),
             if (_recordatoriosHoy.isNotEmpty)
               Positioned(
                 top: 6, right: 6,
@@ -767,7 +781,9 @@ Widget _buildVitrinaWidget() {
                   ),
                 ),
               ),
-          ],
+              ],
+            ),
+          ),
         ),
       GestureDetector(
           onTap: () => showModalBottomSheet(
@@ -1039,6 +1055,7 @@ Widget _buildVitrinaWidget() {
           AppColors.colorGastos, const GastosScreen()),
       _ModuleItem('Reportes', Icons.bar_chart_rounded,
           AppColors.colorReportes, const ReportesScreen()),
+
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Módulos', style: GoogleFonts.poppins(
