@@ -84,7 +84,7 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
           onPressed: () {
             Navigator.pop(context);
             _abrirURL(
-              'https://wa.me/18098765432?text=Hola,%20quiero%20activar%20el%20plan%20$plan%20de%20NegocioPro%20($precio%20·%20$periodo)');
+              'https://wa.me/18093190140?text=Hola,%20quiero%20activar%20el%20plan%20$plan%20de%20NegocioPro%20($precio%20·%20$periodo)');
           },
           child: Text('Activar', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
         ),
@@ -99,17 +99,17 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Planes')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
         child: Column(children: [
 
           // ── Encabezado ───────────────────────────────────────────
           _Header(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 8),
 
           // ── Banner trial ─────────────────────────────────────────
           if (PlanService.enTrial) ...[
             _TrialBanner(dias: PlanService.diasTrial ?? 30),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
           ],
 
           // ── Selector de período ──────────────────────────────────
@@ -166,64 +166,70 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
               }),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
 
-          // ── Tarjeta BÁSICO ───────────────────────────────────────
-          _PlanCard(
-            nombre: 'Básico',
-            icono: Icons.store_outlined,
-            precio: p.precioBasico,
-            porMes: p.porMesBasico,
-            ahorro: p.ahorroBasico,
-            periodo: _periodos[_periodoIdx].label,
-            colorTop: const Color(0xFF4A90D9),
-            colorBottom: const Color(0xFF357ABD),
-            badge: null,
-            features: const [
-              ('🛒', 'Punto de Venta (POS)'),
-              ('📦', 'Inventario ilimitado'),
-              ('👥', 'Clientes ilimitados'),
-              ('📋', 'Control de Fiado'),
-              ('💸', 'Control de Gastos'),
-              ('📊', 'Reportes de ventas'),
-              ('☁️', 'Respaldo en la nube'),
-              ('📵', 'Funciona sin internet'),
+          // ── Tarjetas lado a lado: BÁSICO | PRO ──────────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _PlanCard(
+                nombre: 'Básico',
+                icono: Icons.store_outlined,
+                precio: p.precioBasico,
+                porMes: p.porMesBasico,
+                ahorro: p.ahorroBasico,
+                periodo: _periodos[_periodoIdx].label,
+                colorTop: const Color(0xFF4A90D9),
+                colorBottom: const Color(0xFF357ABD),
+                badge: null,
+                compact: true,
+                features: const [
+                  ('🛒', 'POS'),
+                  ('📦', 'Inventario'),
+                  ('👥', 'Clientes'),
+                  ('📋', 'Fiado'),
+                  ('💸', 'Gastos'),
+                  ('📊', 'Reportes'),
+                  ('☁️', 'Nube'),
+                  ('📵', 'Sin internet'),
+                ],
+                onActivar: () => _confirmarPlan('Básico', p.precioBasico, _periodos[_periodoIdx].label),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _PlanCard(
+                nombre: 'Pro',
+                icono: Icons.workspace_premium_rounded,
+                precio: p.precioPro,
+                porMes: p.porMesPro,
+                ahorro: p.ahorroPro,
+                periodo: _periodos[_periodoIdx].label,
+                colorTop: const Color(0xFFFFD700),
+                colorBottom: const Color(0xFFFFA500),
+                badge: 'POPULAR',
+                compact: true,
+                features: const [
+                  ('✅', 'Todo Básico'),
+                  ('🏷️', 'Apartados'),
+                  ('🧾', 'Cuadre Caja'),
+                  ('🏪', 'Vitrina QR'),
+                  ('🍽️', 'Carta Digital'),
+                  ('📝', 'Encargos'),
+                  ('🖨️', 'Térmica'),
+                  ('💬', 'WhatsApp'),
+                  ('⭐', 'Soporte VIP'),
+                ],
+                onActivar: () => _confirmarPlan('Pro', p.precioPro, _periodos[_periodoIdx].label),
+              )),
             ],
-            onActivar: () => _confirmarPlan('Básico', p.precioBasico, _periodos[_periodoIdx].label),
           ),
-          const SizedBox(height: 16),
-
-          // ── Tarjeta PRO ──────────────────────────────────────────
-          _PlanCard(
-            nombre: 'Pro',
-            icono: Icons.workspace_premium_rounded,
-            precio: p.precioPro,
-            porMes: p.porMesPro,
-            ahorro: p.ahorroPro,
-            periodo: _periodos[_periodoIdx].label,
-            colorTop: const Color(0xFFFFD700),
-            colorBottom: const Color(0xFFFFA500),
-            badge: 'MÁS POPULAR',
-            features: const [
-              ('✅', 'Todo lo del Plan Básico'),
-              ('🏷️', 'Apartados con pagos parciales'),
-              ('🧾', 'Cuadre de Caja diario'),
-              ('🏪', 'Vitrina Digital con QR'),
-              ('📝', 'Encargos de clientes'),
-              ('🖨️', 'Impresora Térmica'),
-              ('💬', 'Recibos por WhatsApp'),
-              ('⭐', 'Soporte Prioritario'),
-            ],
-            onActivar: () => _confirmarPlan('Pro', p.precioPro, _periodos[_periodoIdx].label),
-          ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 10),
 
           // ── Garantía ─────────────────────────────────────────────
           _GarantiaCard(),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
 
           // ── Soporte ──────────────────────────────────────────────
-          _SoporteCard(onTap: () => _abrirURL('https://wa.me/18098765432')),
+          _SoporteCard(onTap: () => _abrirURL('https://wa.me/18093190140')),
         ]),
       ),
     );
@@ -290,29 +296,29 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
         colors: [Color(0xFF1A1F36), Color(0xFF2D3561)],
         begin: Alignment.topLeft, end: Alignment.bottomRight,
       ),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
     ),
-    child: Column(children: [
+    child: Row(children: [
       Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.12), shape: BoxShape.circle,
         ),
-        child: const Icon(Icons.store_rounded, color: Colors.white, size: 34),
+        child: const Icon(Icons.store_rounded, color: Colors.white, size: 22),
       ),
-      const SizedBox(height: 12),
-      Text('NegocioPro', style: GoogleFonts.poppins(
-        color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-      const SizedBox(height: 4),
-      Text('Elige el plan y el período que más te convenga',
-        textAlign: TextAlign.center,
-        style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12.5)),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('NegocioPro', style: GoogleFonts.poppins(
+          color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+        Text('Elige el plan que más te convenga',
+          style: GoogleFonts.poppins(color: Colors.white70, fontSize: 11)),
+      ])),
     ]),
   );
 }
@@ -324,126 +330,138 @@ class _PlanCard extends StatelessWidget {
   final Color colorTop, colorBottom;
   final List<(String, String)> features;
   final VoidCallback onActivar;
+  final bool compact;
 
   const _PlanCard({
     required this.nombre, required this.icono, required this.precio,
     required this.porMes, required this.periodo,
     required this.colorTop, required this.colorBottom,
     required this.features, required this.onActivar,
-    this.ahorro, this.badge,
+    this.ahorro, this.badge, this.compact = false,
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(20),
-      border: badge != null
-          ? Border.all(color: colorTop.withOpacity(0.6), width: 2)
-          : Border.all(color: AppColors.cardBorder),
-      boxShadow: badge != null ? [
-        BoxShadow(color: colorTop.withOpacity(0.18),
-            blurRadius: 20, offset: const Offset(0, 6)),
-      ] : null,
-    ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Column(children: [
-        // Cabecera
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [colorTop, colorBottom],
-                begin: Alignment.topLeft, end: Alignment.bottomRight),
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Icon(icono, color: Colors.white, size: 24),
-              const SizedBox(width: 8),
-              Text(nombre, style: GoogleFonts.poppins(
-                color: Colors.white, fontSize: 19, fontWeight: FontWeight.w700)),
-              const Spacer(),
-              if (badge != null) Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.22),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(badge!, style: GoogleFonts.poppins(
-                  color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w700,
-                  letterSpacing: 0.4)),
-              ),
-            ]),
-            const SizedBox(height: 12),
-            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text(precio, style: GoogleFonts.poppins(
-                color: Colors.white, fontSize: 34,
-                fontWeight: FontWeight.w800, height: 1)),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(porMes, style: GoogleFonts.poppins(
-                  color: Colors.white70, fontSize: 11.5)),
-              ),
-            ]),
-            if (ahorro != null) ...[
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(ahorro!, style: GoogleFonts.poppins(
-                  color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-              ),
-            ],
-          ]),
-        ),
-        // Features
-        Container(
-          color: AppColors.surface,
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
-          child: Column(children: [
-            ...features.map((f) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(children: [
-                Text(f.$1, style: const TextStyle(fontSize: 17)),
-                const SizedBox(width: 10),
-                Expanded(child: Text(f.$2, style: GoogleFonts.poppins(
-                  fontSize: 13, color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w500))),
-                Icon(Icons.check_circle_rounded, color: colorTop, size: 17),
-              ]),
-            )),
-            const SizedBox(height: 6),
-            SizedBox(
-              width: double.infinity, height: 50,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [colorTop, colorBottom],
-                      begin: Alignment.centerLeft, end: Alignment.centerRight),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: onActivar,
-                  child: Text('Activar Plan $nombre',
-                    style: GoogleFonts.poppins(
-                      color: Colors.white, fontSize: 15,
-                      fontWeight: FontWeight.w700)),
-                ),
-              ),
+  Widget build(BuildContext context) {
+    final hPad = compact ? 12.0 : 20.0;
+    final vPadTop = compact ? 12.0 : 18.0;
+    final nameFz = compact ? 15.0 : 19.0;
+    final priceFz = compact ? 21.0 : 34.0;
+    final subFz = compact ? 9.5 : 11.5;
+    final featFz = compact ? 11.0 : 13.0;
+    final emojiFz = compact ? 14.0 : 17.0;
+    final btnH = compact ? 42.0 : 50.0;
+    final btnFz = compact ? 12.0 : 15.0;
+    final checkSz = compact ? 14.0 : 17.0;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: badge != null
+            ? Border.all(color: colorTop.withOpacity(0.6), width: 2)
+            : Border.all(color: AppColors.cardBorder),
+        boxShadow: badge != null ? [
+          BoxShadow(color: colorTop.withOpacity(0.18),
+              blurRadius: 20, offset: const Offset(0, 6)),
+        ] : null,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(children: [
+          // Cabecera
+          Container(
+            padding: EdgeInsets.fromLTRB(hPad, vPadTop - 4, hPad, vPadTop - 4),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [colorTop, colorBottom],
+                  begin: Alignment.topLeft, end: Alignment.bottomRight),
             ),
-          ]),
-        ),
-      ]),
-    ),
-  );
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(icono, color: Colors.white, size: compact ? 18 : 24),
+                SizedBox(width: compact ? 5 : 8),
+                Flexible(child: Text(nombre, style: GoogleFonts.poppins(
+                  color: Colors.white, fontSize: nameFz, fontWeight: FontWeight.w700))),
+                if (badge != null) ...[
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: compact ? 5 : 9, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.22),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(badge!, style: GoogleFonts.poppins(
+                      color: Colors.white, fontSize: compact ? 7.5 : 9.5, fontWeight: FontWeight.w700,
+                      letterSpacing: 0.4)),
+                  ),
+                ],
+              ]),
+              SizedBox(height: compact ? 8 : 12),
+              Text(precio, style: GoogleFonts.poppins(
+                color: Colors.white, fontSize: priceFz,
+                fontWeight: FontWeight.w800, height: 1)),
+              Text(porMes, style: GoogleFonts.poppins(
+                color: Colors.white70, fontSize: subFz)),
+              if (ahorro != null) ...[
+                SizedBox(height: compact ? 4 : 6),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(ahorro!, style: GoogleFonts.poppins(
+                    color: Colors.white, fontSize: compact ? 9.5 : 12, fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ]),
+          ),
+          // Features
+          Container(
+            color: AppColors.surface,
+            padding: EdgeInsets.fromLTRB(hPad, compact ? 8 : 12, hPad, compact ? 8 : 14),
+            child: Column(children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: features.map((f) => Padding(
+                  padding: EdgeInsets.only(bottom: compact ? 3 : 8),
+                  child: Row(children: [
+                    Text(f.$1, style: TextStyle(fontSize: emojiFz)),
+                    SizedBox(width: compact ? 6 : 10),
+                    Expanded(child: Text(f.$2, style: GoogleFonts.poppins(
+                      fontSize: featFz, color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w500))),
+                    Icon(Icons.check_circle_rounded, color: colorTop, size: checkSz),
+                  ]),
+                )).toList(),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                width: double.infinity, height: btnH,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [colorTop, colorBottom],
+                        begin: Alignment.centerLeft, end: Alignment.centerRight),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: onActivar,
+                    child: FittedBox(child: Text('Activar $nombre',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white, fontSize: btnFz,
+                        fontWeight: FontWeight.w700))),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
 }
 
 class _GarantiaCard extends StatelessWidget {
@@ -488,7 +506,7 @@ class _SoporteCard extends StatelessWidget {
             color: const Color(0xFF25D366).withOpacity(0.12),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.whatsapp_rounded, color: Color(0xFF25D366), size: 24),
+          child: const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: 24),
         ),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
