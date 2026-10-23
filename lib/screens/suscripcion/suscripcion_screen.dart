@@ -148,13 +148,13 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
                             decoration: BoxDecoration(
                               color: sel
                                   ? Colors.white.withOpacity(0.25)
-                                  : const Color(0xFFFFD700).withOpacity(0.2),
+                                  : const Color(0xFFE6A817).withOpacity(0.18),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(per.badge!,
                               style: GoogleFonts.poppins(
                                 fontSize: 7.5, fontWeight: FontWeight.w700,
-                                color: sel ? Colors.white : const Color(0xFFC8920A),
+                                color: sel ? Colors.white : const Color(0xFFB07010),
                                 letterSpacing: 0.3,
                               )),
                           ),
@@ -203,8 +203,8 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
                 porMes: p.porMesPro,
                 ahorro: p.ahorroPro,
                 periodo: _periodos[_periodoIdx].label,
-                colorTop: const Color(0xFFFFD700),
-                colorBottom: const Color(0xFFFFA500),
+                colorTop: const Color(0xFFE6A817),
+                colorBottom: const Color(0xFFC47F0A),
                 badge: 'POPULAR',
                 compact: true,
                 features: const [
@@ -349,8 +349,8 @@ class _PlanCard extends StatelessWidget {
     final subFz = compact ? 9.5 : 11.5;
     final featFz = compact ? 11.0 : 13.0;
     final emojiFz = compact ? 14.0 : 17.0;
-    final btnH = compact ? 42.0 : 50.0;
-    final btnFz = compact ? 12.0 : 15.0;
+    final btnH = compact ? 46.0 : 50.0;
+    final btnFz = compact ? 14.0 : 15.0;
     final checkSz = compact ? 14.0 : 17.0;
     return Container(
       decoration: BoxDecoration(
@@ -444,15 +444,20 @@ class _PlanCard extends StatelessWidget {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
+                      shadowColor: colorBottom.withOpacity(0.45),
+                      elevation: 4,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: onActivar,
-                    child: FittedBox(child: Text('Activar $nombre',
-                      style: GoogleFonts.poppins(
-                        color: Colors.white, fontSize: btnFz,
-                        fontWeight: FontWeight.w700))),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.rocket_launch_rounded, color: Colors.white, size: btnFz + 2),
+                      const SizedBox(width: 6),
+                      Text('Activar $nombre',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white, fontSize: btnFz,
+                          fontWeight: FontWeight.w700, letterSpacing: 0.3)),
+                    ]),
                   ),
                 ),
               ),
