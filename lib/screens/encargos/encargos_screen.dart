@@ -926,7 +926,6 @@ class _EncargosScreenState extends State<EncargosScreen>
           : TabBarView(
               controller: _tabCtrl,
               children: [
-            const GuiaModuloBanner(modulo: 'encargos'),
                 _buildEncargos(),
                 _buildLista(),
               ],
