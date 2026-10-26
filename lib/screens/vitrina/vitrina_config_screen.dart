@@ -481,60 +481,6 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> with SingleTi
                       ),
                     ]),
 
-                    const Divider(height: 20),
-
-                    // ── Carta Digital ────────────────────────────────
-                    Row(children: [
-                      const Icon(Icons.menu_book_rounded, size: 16, color: Color(0xFFD97706)),
-                      const SizedBox(width: 6),
-                      Text('Carta Digital', style: GoogleFonts.poppins(
-                          fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFD97706))),
-                    ]),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFFCD34D)),
-                      ),
-                      child: Text(_linkCarta,
-                          style: GoogleFonts.poppins(
-                              fontSize: 11, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Expanded(child: OutlinedButton.icon(
-                        onPressed: _copiarLinkCarta,
-                        icon: const Icon(Icons.copy_rounded, size: 15),
-                        label: const Text('Copiar'),
-                        style: OutlinedButton.styleFrom(
-                            foregroundColor: Color(0xFFD97706),
-                            side: const BorderSide(color: Color(0xFFFCD34D)),
-                            padding: const EdgeInsets.symmetric(vertical: 8)),
-                      )),
-                      const SizedBox(width: 8),
-                      Expanded(child: ElevatedButton.icon(
-                        onPressed: _compartirLinkCarta,
-                        icon: const Icon(Icons.share_rounded, size: 15),
-                        label: const Text('Compartir'),
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor: Color(0xFFD97706),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 8)),
-                      )),
-                      const SizedBox(width: 8),
-                      OutlinedButton(
-                        onPressed: () => Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => VitrinaQrScreen(
-                            url: _linkCarta, empresaNombre: '$_empresaNombre — Carta'))),
-                        style: OutlinedButton.styleFrom(
-                            foregroundColor: Color(0xFFD97706),
-                            side: const BorderSide(color: Color(0xFFFCD34D)),
-                            padding: const EdgeInsets.all(9)),
-                        child: const Icon(Icons.qr_code_rounded, size: 20),
-                      ),
-                    ]),
                   ])),
                   const SizedBox(height: 12),
                 ],
