@@ -576,8 +576,9 @@ Future<void> _cargarClientes() async {
 
 
   Widget _buildFooter() {
+    final navBottom = MediaQuery.of(context).padding.bottom;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + navBottom),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.cardBorder)),

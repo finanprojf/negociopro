@@ -28,6 +28,16 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
+  // Hacer la barra de navegación de Android transparente
+  // para que el contenido no quede tapado en teléfonos con botones
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.dark,
+  ));
+
   await Supabase.initialize(
     url: AppConstants.supabaseUrl,
     anonKey: AppConstants.supabaseAnonKey,

@@ -810,8 +810,8 @@ class _EncargosScreenState extends State<EncargosScreen>
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+      builder: (sheetCtx2) => Container(
+        padding: EdgeInsets.fromLTRB(24, 20, 24, 32 + MediaQuery.of(sheetCtx2).padding.bottom),
         decoration: const BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
