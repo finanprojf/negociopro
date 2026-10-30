@@ -465,7 +465,7 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + MediaQuery.of(context).padding.bottom),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         // Handle
         Center(child: Container(width: 40, height: 4,
@@ -541,7 +541,7 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
               child: _CampoSelector(
                 icon: Icons.access_time_rounded,
                 label: 'Hora',
-                valor: _hora != null ? _hora!.format(context) : 'Opcional',
+                valor: _hora != null ? _formatHora12(_hora!) : 'Opcional',
                 suave: _hora == null,
               ),
             ),
@@ -632,7 +632,7 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          padding: EdgeInsets.fromLTRB(24, 16, 24, 32 + MediaQuery.of(ctx).padding.bottom),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Center(child: Container(width: 40, height: 4,
                 decoration: BoxDecoration(color: Colors.grey.shade300,
@@ -840,6 +840,13 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
             content: Text('Error: $e'), behavior: SnackBarBehavior.floating));
       }
     }
+  }
+
+  String _formatHora12(TimeOfDay t) {
+    final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+    final m = t.minute.toString().padLeft(2, '0');
+    final periodo = t.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$h:$m $periodo';
   }
 
   String _formatFecha(DateTime d) {
