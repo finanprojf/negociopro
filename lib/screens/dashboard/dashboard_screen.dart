@@ -237,7 +237,29 @@ Future<void> _cargarVersion() async {
       }
 
       // Filtrar desde el último cierre (no desde medianoche)
+      // ── Sincronizar último cierre desde Supabase antes de leer local ──
+      // Esto evita que un 2do dispositivo muestre "sin cuadre" hasta sync.
       final db = await LocalDatabase.database;
+      try {
+        final remoto = await SupabaseService.client
+            .from('cierres_dia')
+            .select('id, created_at, fecha, total_ventas, cantidad_ventas, '
+                    'total_gastos, ganancia, ganancia_real, efectivo_esperado, '
+                    'efectivo_contado, diferencia, notas')
+            .eq('empresa_id', empresaId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle()
+            .timeout(const Duration(seconds: 8));
+        if (remoto != null) {
+          final m = Map<String, dynamic>.from(remoto as Map);
+          m['synced'] = 1;
+          await db.insert('cierres_dia', m,
+              conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+      } catch (_) {
+        // Si falla, continuar con lo que hay en local
+      }
       String? desdeCierre;
       final cierresOn = await db.query('cierres_dia',
           where: 'empresa_id = ?', whereArgs: [empresaId],
