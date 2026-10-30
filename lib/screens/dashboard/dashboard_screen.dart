@@ -925,7 +925,7 @@ Widget _buildVitrinaWidget() {
                     final titulo = r['titulo'] as String? ?? '';
                     final clienteNombre = r['cliente_nombre'] as String?;
                     final hora = r['hora'] as String?;
-                    final horaLabel = hora != null ? ' · $hora' : '';
+                    final horaLabel = hora != null ? ' · ${_hora12dash(hora)}' : '';
                     final label = clienteNombre != null && clienteNombre.isNotEmpty
                         ? '$titulo — $clienteNombre$horaLabel'
                         : '$titulo$horaLabel';
@@ -959,6 +959,17 @@ Widget _buildVitrinaWidget() {
         ),
       ),
     );
+  }
+
+  String _hora12dash(String hora24) {
+    try {
+      final parts = hora24.split(':');
+      final h24 = int.parse(parts[0]);
+      final min = parts[1].padLeft(2, '0');
+      final h12 = h24 % 12 == 0 ? 12 : h24 % 12;
+      final periodo = h24 < 12 ? 'AM' : 'PM';
+      return '$h12:$min $periodo';
+    } catch (_) { return hora24; }
   }
 
   Widget _buildGreeting() {
