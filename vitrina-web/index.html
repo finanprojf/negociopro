@@ -934,6 +934,7 @@
     if (!numero) { alert('Este negocio no tiene número de WhatsApp configurado.'); return; }
     if (numero.length === 10 && (numero.startsWith('8') || numero.startsWith('9'))) numero = '1' + numero;
     if (numero.length === 7) numero = '1809' + numero;
+    _wsSent = true;
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
 
     // Limpiar carrito y volver al catálogo
@@ -1649,9 +1650,31 @@
   // ═══════════════ FIN CARTA JS ════════════════════════════════════════════
 
 
-  // ── Si la página se restaura desde bfcache, recargar siempre ──
+  // ── Detectar regreso desde WhatsApp (app-switch Y bfcache) ──
+  let _wsSent = false;
+
+  function _limpiarTrasPedido() {
+    _wsSent = false;
+    carrito = {};
+    tipoEntrega = 'recoger';
+    document.getElementById('inputNombre').value = '';
+    document.getElementById('inputDireccion').value = '';
+    document.getElementById('inputPago').value = '';
+    if (typeof actualizarBotonesEntrega === 'function') actualizarBotonesEntrega();
+    if (typeof calcularVuelto === 'function') calcularVuelto();
+    if (typeof actualizarFab === 'function') actualizarFab();
+    if (typeof cerrarCarrito === 'function') cerrarCarrito();
+    if (typeof renderProductos === 'function') renderProductos();
+  }
+
+  // Regreso por app-switch (WhatsApp → Chrome, tab sigue vivo)
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && _wsSent) _limpiarTrasPedido();
+  });
+
+  // Regreso por bfcache (back button)
   window.addEventListener('pageshow', function(e) {
-    if (e.persisted) location.reload();
+    if (e.persisted && _wsSent) _limpiarTrasPedido();
   });
 
   // ── Detectar modo carta ──
