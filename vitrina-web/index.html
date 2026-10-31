@@ -935,10 +935,7 @@
     if (!numero) { alert('Este negocio no tiene número de WhatsApp configurado.'); return; }
     if (numero.length === 10 && (numero.startsWith('8') || numero.startsWith('9'))) numero = '1' + numero;
     if (numero.length === 7) numero = '1809' + numero;
-    pedidoEnviado = true;
-    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
-
-    // Limpiar carrito y volver al catálogo
+    // Limpiar carrito ANTES de abrir WhatsApp (para bfcache)
     carrito = {};
     document.getElementById('inputNombre').value = '';
     document.getElementById('inputDireccion').value = '';
@@ -949,6 +946,9 @@
     actualizarFab();
     cerrarCarrito();
     renderProductos();
+
+    pedidoEnviado = true;
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
   }
 
   // ─── RESEÑAS ───────────────────────────────────────────────────────────────
