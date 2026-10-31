@@ -427,7 +427,6 @@
   let productos             = [];
   let categorias            = [];
   let carrito               = {};
-  let pedidoEnviado         = false;
   let tipoEntrega           = 'recoger';
   let categoriaActiva       = 'todas';
   let resenas               = {};   // { [productoId|'__negocio__']: [...] }
@@ -935,7 +934,9 @@
     if (!numero) { alert('Este negocio no tiene número de WhatsApp configurado.'); return; }
     if (numero.length === 10 && (numero.startsWith('8') || numero.startsWith('9'))) numero = '1' + numero;
     if (numero.length === 7) numero = '1809' + numero;
-    // Limpiar carrito ANTES de abrir WhatsApp (para bfcache)
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
+
+    // Limpiar carrito y volver al catálogo
     carrito = {};
     document.getElementById('inputNombre').value = '';
     document.getElementById('inputDireccion').value = '';
@@ -946,9 +947,6 @@
     actualizarFab();
     cerrarCarrito();
     renderProductos();
-
-    pedidoEnviado = true;
-    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
   }
 
   // ─── RESEÑAS ───────────────────────────────────────────────────────────────
@@ -1651,12 +1649,8 @@
   // ═══════════════ FIN CARTA JS ════════════════════════════════════════════
 
 
-  // ── Limpiar carrito si usuario regresa desde WhatsApp (bfcache) ──
-  window.addEventListener('pageshow', function(event) {
-    if (event.persisted && pedidoEnviado) {
-      location.reload();
-    }
-  });
+  // ── Excluir del bfcache para que siempre recargue al volver ──
+  window.addEventListener('unload', function() {});
 
   // ── Detectar modo carta ──
   (function() {
