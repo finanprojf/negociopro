@@ -660,6 +660,7 @@ Widget _buildVitrinaWidget() {
   }
 
   Widget _buildBannerVencida() {
+    final pal = AppPalette.of(context);
     return GestureDetector(
       onTap: () => Navigator.push(context,
           MaterialPageRoute(builder: (_) => const SuscripcionScreen())),
@@ -828,9 +829,9 @@ Widget _buildVitrinaWidget() {
             backgroundColor: Colors.transparent,
             builder: (_) => Container(
               padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: pal.surface,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 ListTile(
@@ -874,7 +875,7 @@ Widget _buildVitrinaWidget() {
           ),
           child: Container(
             margin: const EdgeInsets.only(right: 12),
-            child: const CircleAvatar(
+            child: CircleAvatar(
               radius: 18,
               backgroundColor: pal.primarySurface,
               child: Icon(Icons.person_outline, color: pal.primary, size: 20),
