@@ -827,8 +827,9 @@ Widget _buildVitrinaWidget() {
           onTap: () => showModalBottomSheet(
             context: context,
             backgroundColor: Colors.transparent,
-            builder: (_) => Container(
-              padding: const EdgeInsets.all(24),
+            useSafeArea: true,
+            builder: (ctx) => Container(
+              padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.of(ctx).padding.bottom),
               decoration: BoxDecoration(
                 color: pal.surface,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
