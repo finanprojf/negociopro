@@ -274,7 +274,10 @@
           <span id="totalText" class="theme-total">RD$0</span>
         </div>
       </div>
-      <button onclick="enviarPorWhatsApp()"
+      <div id="faltaBox" class="hidden text-center text-sm font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+        ⚠️ Faltan <span id="faltaTexto">RD$0</span> para cubrir el total
+      </div>
+      <button id="btnEnviarWS" onclick="enviarPorWhatsApp()"
         class="w-full bg-green-500 hover:bg-green-600 text-white rounded-xl py-3.5 font-bold text-base shadow-md transition-colors">
         📲 Enviar pedido por WhatsApp
       </button>
@@ -863,12 +866,31 @@
     const costoDelivery = tipoEntrega === 'delivery' ? (config?.precio_delivery || 0) : 0;
     const total = subtotal + costoDelivery;
     const pago  = parseFloat(document.getElementById('inputPago')?.value || 0);
-    const box   = document.getElementById('vueltoBox');
-    if (pago >= total && pago > 0) {
+    const box       = document.getElementById('vueltoBox');
+    const faltaBox  = document.getElementById('faltaBox');
+    const btnEnviar = document.getElementById('btnEnviarWS');
+
+    if (pago > 0 && pago < total) {
+      // Monto insuficiente → mostrar falta, deshabilitar botón
+      const falta = total - pago;
+      document.getElementById('faltaTexto').textContent = `RD$${Number(falta).toLocaleString()}`;
+      faltaBox.classList.remove('hidden');
+      box.classList.add('hidden');
+      btnEnviar.disabled = true;
+      btnEnviar.className = 'w-full bg-gray-300 text-gray-500 rounded-xl py-3.5 font-bold text-base cursor-not-allowed transition-colors';
+    } else if (pago >= total && pago > 0) {
+      // Monto suficiente → mostrar vuelto, habilitar botón
       document.getElementById('vueltoTexto').textContent = `RD$${Number(pago - total).toLocaleString()}`;
       box.classList.remove('hidden');
+      faltaBox.classList.add('hidden');
+      btnEnviar.disabled = false;
+      btnEnviar.className = 'w-full bg-green-500 hover:bg-green-600 text-white rounded-xl py-3.5 font-bold text-base shadow-md transition-colors';
     } else {
+      // Sin monto ingresado → estado normal
       box.classList.add('hidden');
+      faltaBox.classList.add('hidden');
+      btnEnviar.disabled = false;
+      btnEnviar.className = 'w-full bg-green-500 hover:bg-green-600 text-white rounded-xl py-3.5 font-bold text-base shadow-md transition-colors';
     }
   }
 
