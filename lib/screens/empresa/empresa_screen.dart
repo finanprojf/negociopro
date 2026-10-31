@@ -13,6 +13,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
 import '../../services/local_database.dart';
 import '../../services/guia_service.dart';
+import '../../services/theme_service.dart';
+import '../../theme/app_theme.dart';
 class EmpresaScreen extends StatefulWidget {
   const EmpresaScreen({super.key});
 
@@ -48,17 +50,19 @@ Future<void> _verificarAdmin() async {
     if (userId == null) return;
     final res = await SupabaseService.client
         .from('usuarios')
-        .select('es_admin, nombre, telefono')
+        .select('es_admin, nombre')
         .eq('id', userId)
         .single();
     final authEmail = Supabase.instance.client.auth.currentUser?.email ?? '';
+    final esAdmin = res['es_admin'] == true;
+    debugPrint('[Admin] es_admin=$esAdmin userId=$userId');
     if (mounted) setState(() {
-      _esAdmin       = res['es_admin'] == true;
+      _esAdmin       = esAdmin;
       _userNombre    = res['nombre']   as String? ?? '';
-      _userTelefono  = res['telefono'] as String? ?? '';
       _userEmail     = authEmail;
     });
-  } catch (_) {
+  } catch (e) {
+    debugPrint('[Admin] error en _verificarAdmin: $e');
     final authEmail = Supabase.instance.client.auth.currentUser?.email ?? '';
     if (mounted) setState(() => _userEmail = authEmail);
   }
@@ -195,6 +199,8 @@ Future<void> _verificarAdmin() async {
           _buildOpcionCuenta(Icons.notifications_outlined, 'Notificaciones', _notificaciones),
           const SizedBox(height: 8),
           _buildOpcionCuenta(Icons.print_rounded, 'Impresora Térmica', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImpresoraScreen()))),
+          const SizedBox(height: 8),
+          _buildModoOscuroTile(),
           const SizedBox(height: 8),
           _buildOpcionCuenta(
             Icons.delete_forever_rounded,
@@ -583,6 +589,106 @@ SizedBox(
         _fila(Icons.badge_outlined,       'ID usuario',
             Supabase.instance.client.auth.currentUser?.id.substring(0, 8).toUpperCase() ?? '—'),
       ]),
+    );
+  }
+
+  Widget _buildModoOscuroTile() {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeMode,
+      builder: (context, mode, _) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        // Opciones cíclicas: sistema → claro → oscuro → sistema
+        final isSystem = mode == ThemeMode.system;
+        final isLight  = mode == ThemeMode.light;
+        final isDarkMode = mode == ThemeMode.dark;
+
+        String subtitle;
+        if (isSystem) subtitle = 'Sigue el sistema';
+        else if (isLight) subtitle = 'Modo claro';
+        else subtitle = 'Modo oscuro';
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: isDark ? AppColorsDark.surface : AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? AppColorsDark.cardBorder : AppColors.cardBorder,
+            ),
+          ),
+          child: Row(children: [
+            Icon(
+              isDarkMode
+                  ? Icons.dark_mode_rounded
+                  : isSystem
+                      ? Icons.brightness_auto_rounded
+                      : Icons.light_mode_rounded,
+              color: isDark ? AppColorsDark.primary : AppColors.primary,
+              size: 20,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Apariencia',
+                      style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 14,
+                        color: isDark ? AppColorsDark.textPrimary : AppColors.textPrimary,
+                      )),
+                  Text(subtitle,
+                      style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 12,
+                        color: isDark ? AppColorsDark.textMuted : AppColors.textMuted,
+                      )),
+                ],
+              ),
+            ),
+            // Selector de tres opciones
+            Row(children: [
+              _themeChip('☀️', ThemeMode.light, mode),
+              const SizedBox(width: 6),
+              _themeChip('🌙', ThemeMode.dark, mode),
+              const SizedBox(width: 6),
+              _themeChip('Auto', ThemeMode.system, mode),
+            ]),
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _themeChip(String label, ThemeMode target, ThemeMode current) {
+    final isDark = current == ThemeMode.dark ||
+        (current == ThemeMode.system &&
+            WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark);
+    final selected = current == target;
+    return GestureDetector(
+      onTap: () => ThemeService.setMode(target),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? (isDark ? AppColorsDark.primary : AppColors.primary)
+              : (isDark ? AppColorsDark.surfaceAlt : AppColors.surfaceAlt),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected
+                ? Colors.transparent
+                : (isDark ? AppColorsDark.cardBorder : AppColors.cardBorder),
+          ),
+        ),
+        child: Text(label,
+            style: TextStyle(
+              fontSize: 12,
+              fontFamily: 'Poppins',
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              color: selected
+                  ? Colors.white
+                  : (isDark ? AppColorsDark.textSecondary : AppColors.textSecondary),
+            )),
+      ),
     );
   }
 

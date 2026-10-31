@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'theme/app_theme.dart';
+import 'services/theme_service.dart';
 import 'utils/constants.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
@@ -47,6 +48,7 @@ Future<void> main() async {
   await CuadreAutomaticoService.reprogramarSiIntervalo();
   await PrinterService.init();
 
+  await ThemeService.init();
   runApp(const NegocioProApp());
 }
 
@@ -131,27 +133,33 @@ class _NegocioProAppState extends State<NegocioProApp>
 
   @override
   Widget build(BuildContext context) {
-    final app = MaterialApp(
-      title: AppConstants.appName,
-      debugShowCheckedModeBanner: false,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('es', 'DO'),
-        Locale('en'),
-      ],
-      theme: AppTheme.light,
-      home: _bloqueado
-          ? PinLockScreen(onUnlocked: () async {
-            await _limpiarPendiente(); // limpiamos aquí, no en resumed
-            if (mounted) setState(() => _bloqueado = false);
-          })
-          : const AuthWrapper(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeMode,
+      builder: (context, mode, _) {
+        return MaterialApp(
+          title: AppConstants.appName,
+          debugShowCheckedModeBanner: false,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('es', 'DO'),
+            Locale('en'),
+          ],
+          theme: AppTheme.light,
+          darkTheme: AppThemeDark.dark,
+          themeMode: mode,
+          home: _bloqueado
+              ? PinLockScreen(onUnlocked: () async {
+                await _limpiarPendiente();
+                if (mounted) setState(() => _bloqueado = false);
+              })
+              : const AuthWrapper(),
+        );
+      },
     );
-    return app;
   }
 }
 
