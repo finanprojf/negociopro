@@ -158,6 +158,7 @@ class LocalDatabase {
         costo_pedido REAL DEFAULT 0,
         estado TEXT DEFAULT 'pendiente',
         es_lista_propia INTEGER DEFAULT 0,
+        categoria TEXT,
         notas TEXT, synced INTEGER DEFAULT 0,
         created_at TEXT, updated_at TEXT
       )
@@ -327,6 +328,14 @@ class LocalDatabase {
     if (oldV < 15) {
       // Agregar synced a recordatorios para habilitar sync multi-dispositivo.
       try { await db.execute('ALTER TABLE recordatorios ADD COLUMN synced INTEGER DEFAULT 0'); } catch (_) {}
+    }
+    if (oldV < 17) {
+      try { await db.execute('ALTER TABLE encargos ADD COLUMN categoria TEXT'); } catch (_) {}
+    }
+    if (oldV < 16) {
+      // Carta Digital: disponibilidad diaria por producto y toggle de carta activa.
+      try { await db.execute('ALTER TABLE productos ADD COLUMN carta_disponible INTEGER DEFAULT 1'); } catch (_) {}
+      try { await db.execute('ALTER TABLE vitrina_config ADD COLUMN carta_activa INTEGER DEFAULT 0'); } catch (_) {}
     }
   }
 

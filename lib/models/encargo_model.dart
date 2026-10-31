@@ -4,12 +4,13 @@ class EncargoModel {
   final String? clienteId;
   final String descripcion;
   final double cantidad;
-  final double precioEstimado; // precio de venta al cliente
-  final double costoPedido;    // costo de compra (opcional)
+  final double precioEstimado;
+  final double costoPedido;
   final String estado;
   final bool esListaPropia;
   final String? notas;
   final String? clienteNombre;
+  final String? categoria;
   final DateTime? createdAt;
 
   EncargoModel({
@@ -24,6 +25,7 @@ class EncargoModel {
     this.esListaPropia = false,
     this.notas,
     this.clienteNombre,
+    this.categoria,
     this.createdAt,
   });
 
@@ -32,7 +34,6 @@ class EncargoModel {
   bool get entregado => estado == 'entregado';
   bool get comprado => estado == 'comprado';
 
-  /// Ganancia estimada (solo si se tienen ambos montos)
   double get gananciaEstimada =>
       (precioEstimado > 0 && costoPedido > 0) ? precioEstimado - costoPedido : 0;
 
@@ -49,6 +50,7 @@ class EncargoModel {
       esListaPropia: map['es_lista_propia'] == true || map['es_lista_propia'] == 1,
       notas: map['notas'],
       clienteNombre: map['clientes']?['nombre'] ?? map['cliente_nombre'],
+      categoria: map['categoria'],
       createdAt: map['created_at'] != null
           ? DateTime.parse(map['created_at']) : null,
     );
@@ -65,6 +67,7 @@ class EncargoModel {
       'estado': estado,
       'es_lista_propia': esListaPropia ? 1 : 0,
       'notas': notas,
+      'categoria': categoria,
     };
   }
 }

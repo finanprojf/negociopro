@@ -24,6 +24,12 @@ class EncargosScreen extends StatefulWidget {
 class _EncargosScreenState extends State<EncargosScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
+
+  static const List<String> _categoriasPredef = [
+    'Supermercado', 'Farmacia', 'Ferretería', 'Panadería',
+    'Carnicería', 'Limpieza', 'Bebidas', 'Electrónica',
+    'Ropa', 'Otro',
+  ];
   List<EncargoModel> _encargos = [];
   List<EncargoModel> _lista = [];
   bool _loading = true;
@@ -223,6 +229,7 @@ class _EncargosScreenState extends State<EncargosScreen>
   // FORMULARIO NUEVO / EDITAR
   // ──────────────────────────────────────────────────────────────
 
+
   void _mostrarFormulario({EncargoModel? editar}) {
     final esEdicion = editar != null;
     final descCtrl = TextEditingController(text: editar?.descripcion ?? '');
@@ -240,6 +247,11 @@ class _EncargosScreenState extends State<EncargosScreen>
     String? clienteId = editar?.clienteId;
     String? clienteNombre = editar?.clienteNombre;
     bool esListaPropia = editar?.esListaPropia ?? (_tabCtrl.index == 1);
+    String? categoriaSeleccionada = editar?.categoria;
+    final categoriaCtrl = TextEditingController(
+        text: editar?.categoria != null && !_categoriasPredef.contains(editar!.categoria)
+            ? editar.categoria!
+            : '');
 
     showModalBottomSheet(
       context: context,
@@ -381,7 +393,82 @@ class _EncargosScreenState extends State<EncargosScreen>
                   const SizedBox(height: 12),
                 ],
 
-                // ── Notas ──
+
+                // ── Categoría ──
+                Text('Categoría',
+                    style: GoogleFonts.poppins(
+                        fontSize: 12, fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ..._categoriasPredef.map((cat) {
+                      final esOtro = cat == 'Otro';
+                      final seleccionado = esOtro
+                          ? (categoriaSeleccionada != null &&
+                              !_categoriasPredef
+                                  .sublist(0, _categoriasPredef.length - 1)
+                                  .contains(categoriaSeleccionada))
+                          : categoriaSeleccionada == cat;
+                      return GestureDetector(
+                        onTap: () {
+                          setModal(() {
+                            if (esOtro) {
+                              categoriaSeleccionada = categoriaCtrl.text.trim().isEmpty
+                                  ? 'Otro' : categoriaCtrl.text.trim();
+                            } else {
+                              categoriaSeleccionada = seleccionado ? null : cat;
+                              categoriaCtrl.clear();
+                            }
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: seleccionado ? AppColors.primary : AppColors.surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: seleccionado ? AppColors.primary : AppColors.cardBorder,
+                              width: seleccionado ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Text(
+                            esOtro ? '✏️ Otra' : _categoriaEmoji(cat) + ' ' + cat,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: seleccionado ? FontWeight.w700 : FontWeight.w500,
+                              color: seleccionado ? Colors.white : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+                // Campo texto para categoría personalizada
+                if (categoriaSeleccionada != null &&
+                    !_categoriasPredef
+                        .sublist(0, _categoriasPredef.length - 1)
+                        .contains(categoriaSeleccionada)) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: categoriaCtrl,
+                    style: GoogleFonts.poppins(fontSize: 14),
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: (v) => setModal(() {
+                      categoriaSeleccionada = v.trim().isEmpty ? 'Otro' : v.trim();
+                    }),
+                    decoration: const InputDecoration(
+                      labelText: 'Escribe la categoría',
+                      prefixIcon: Icon(Icons.edit_outlined),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+
+                                // ── Notas ──
                 TextField(
                   controller: notasCtrl,
                   style: GoogleFonts.poppins(fontSize: 14),
@@ -416,6 +503,9 @@ class _EncargosScreenState extends State<EncargosScreen>
                           notas: notasCtrl.text.trim().isEmpty
                               ? null
                               : notasCtrl.text.trim(),
+                          categoria: (categoriaSeleccionada == 'Otro' || categoriaSeleccionada == null)
+                              ? (categoriaCtrl.text.trim().isEmpty ? null : categoriaCtrl.text.trim())
+                              : categoriaSeleccionada,
                         ),
                         esNuevo: !esEdicion,
                       );
@@ -1024,51 +1114,140 @@ class _EncargosScreenState extends State<EncargosScreen>
       ]));
     }
 
+    // Agrupar por categoría manteniendo orden de inserción
+    final Map<String, List<EncargoModel>> grupos = {};
+    for (final item in _lista) {
+      final cat = item.categoria ?? 'Sin categoría';
+      grupos.putIfAbsent(cat, () => []).add(item);
+    }
+
+    // Construir lista plana de widgets
+    final items = <_ListaItem>[];
+    for (final cat in grupos.keys) {
+      items.add(_ListaItem.header(cat));
+      for (final enc in grupos[cat]!) {
+        items.add(_ListaItem.encargo(enc));
+      }
+    }
+
     return RefreshIndicator(
       onRefresh: _cargar,
-      child: ListView.separated(
+      child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-        itemCount: _lista.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (_, i) => _ListaCard(
-          encargo: _lista[i],
-          onComprado: () async {
-            final nuevoEstado = _lista[i].estado == 'comprado' ? 'pendiente' : 'comprado';
-            await EncargoService.actualizarEstado(_lista[i].id, nuevoEstado);
-            _cargar();
-          },
-          onEliminar: () async {
-            final ok = await showDialog<bool>(
-              context: context,
-              builder: (_) => AlertDialog(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                title: Text('¿Eliminar item?',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
-                content: Text(
-                    '¿Eliminar "${_lista[i].descripcion}"?',
-                    style: GoogleFonts.poppins(fontSize: 14)),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text('Cancelar',
-                        style: GoogleFonts.poppins(color: AppColors.textMuted))),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: Text('Eliminar',
-                        style: GoogleFonts.poppins(
-                            color: AppColors.danger, fontWeight: FontWeight.w700))),
-                ],
-              ),
-            );
-            if (ok == true) {
-              await EncargoService.eliminarEncargo(_lista[i].id);
-              _cargar();
-            }
-          },
-        ),
+        itemCount: items.length,
+        itemBuilder: (_, i) {
+          final item = items[i];
+          if (item.isHeader) {
+            return _buildCategoriaHeader(item.categoria!);
+          }
+          final encargo = item.encargo!;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _ListaCard(
+              encargo: encargo,
+              onComprado: () async {
+                final nuevoEstado = encargo.estado == 'comprado' ? 'pendiente' : 'comprado';
+                await EncargoService.actualizarEstado(encargo.id, nuevoEstado);
+                _cargar();
+              },
+              onEliminar: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    title: Text('¿Eliminar item?',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+                    content: Text(
+                        '¿Eliminar "${encargo.descripcion}"?',
+                        style: GoogleFonts.poppins(fontSize: 14)),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text('Cancelar',
+                            style: GoogleFonts.poppins(color: AppColors.textMuted))),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text('Eliminar',
+                            style: GoogleFonts.poppins(
+                                color: AppColors.danger, fontWeight: FontWeight.w700))),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  await EncargoService.eliminarEncargo(encargo.id);
+                  _cargar();
+                }
+              },
+            ),
+          );
+        },
       ),
     );
   }
+
+  Widget _buildCategoriaHeader(String categoria) {
+    final sinCat = categoria == 'Sin categoría';
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 10),
+      child: Row(children: [
+        if (!sinCat) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(_categoriaEmoji(categoria),
+                  style: const TextStyle(fontSize: 14)),
+              const SizedBox(width: 6),
+              Text(categoria,
+                  style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary)),
+            ]),
+          ),
+        ] else ...[
+          Text('General',
+              style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textMuted)),
+        ],
+        const SizedBox(width: 10),
+        Expanded(child: Container(height: 1, color: AppColors.cardBorder)),
+      ]),
+    );
+  }
+}
+
+String _categoriaEmoji(String cat) {
+  switch (cat) {
+    case 'Supermercado': return '🛒';
+    case 'Farmacia': return '💊';
+    case 'Ferretería': return '🔧';
+    case 'Panadería': return '🍞';
+    case 'Carnicería': return '🥩';
+    case 'Limpieza': return '🧹';
+    case 'Bebidas': return '🧃';
+    case 'Electrónica': return '💡';
+    case 'Ropa': return '👕';
+    default: return '📦';
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// HELPER para lista agrupada
+// ──────────────────────────────────────────────────────────────
+
+class _ListaItem {
+  final bool isHeader;
+  final String? categoria;
+  final EncargoModel? encargo;
+
+  _ListaItem.header(this.categoria) : isHeader = true, encargo = null;
+  _ListaItem.encargo(this.encargo) : isHeader = false, categoria = null;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1194,6 +1373,23 @@ class _EncargoCard extends StatelessWidget {
               ]),
             ],
 
+            if (encargo.categoria != null) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySurface,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${_categoriaEmoji(encargo.categoria!)} ${encargo.categoria}',
+                  style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary),
+                ),
+              ),
+            ],
             if (encargo.notas != null) ...[
               const SizedBox(height: 6),
               Text(encargo.notas!,
