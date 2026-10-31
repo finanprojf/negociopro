@@ -8,7 +8,7 @@ class ThemeService {
 
   /// Notificador global: escúchalo en el widget raíz.
   static final ValueNotifier<ThemeMode> themeMode =
-      ValueNotifier(ThemeMode.system);
+      ValueNotifier(ThemeMode.light);
 
   /// Carga la preferencia guardada. Llamar en main() antes de runApp().
   static Future<void> init() async {
@@ -28,7 +28,7 @@ class ThemeService {
     switch (s) {
       case 'light':  return ThemeMode.light;
       case 'dark':   return ThemeMode.dark;
-      default:       return ThemeMode.system;
+      default:       return ThemeMode.light;
     }
   }
 
