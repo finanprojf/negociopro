@@ -886,11 +886,11 @@
       btnEnviar.disabled = false;
       btnEnviar.className = 'w-full bg-green-500 hover:bg-green-600 text-white rounded-xl py-3.5 font-bold text-base shadow-md transition-colors';
     } else {
-      // Sin monto ingresado → estado normal
+      // Sin monto ingresado → botón gris, no puede enviar
       box.classList.add('hidden');
       faltaBox.classList.add('hidden');
-      btnEnviar.disabled = false;
-      btnEnviar.className = 'w-full bg-green-500 hover:bg-green-600 text-white rounded-xl py-3.5 font-bold text-base shadow-md transition-colors';
+      btnEnviar.disabled = true;
+      btnEnviar.className = 'w-full bg-gray-300 text-gray-500 rounded-xl py-3.5 font-bold text-base cursor-not-allowed transition-colors';
     }
   }
 
@@ -935,6 +935,18 @@
     if (numero.length === 10 && (numero.startsWith('8') || numero.startsWith('9'))) numero = '1' + numero;
     if (numero.length === 7) numero = '1809' + numero;
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
+
+    // Limpiar carrito y volver al catálogo
+    carrito = {};
+    document.getElementById('inputNombre').value = '';
+    document.getElementById('inputDireccion').value = '';
+    document.getElementById('inputPago').value = '';
+    tipoEntrega = 'recoger';
+    actualizarBotonesEntrega();
+    calcularVuelto();
+    actualizarFab();
+    cerrarCarrito();
+    renderProductos();
   }
 
   // ─── RESEÑAS ───────────────────────────────────────────────────────────────
