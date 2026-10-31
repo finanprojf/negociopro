@@ -1649,8 +1649,10 @@
   // ═══════════════ FIN CARTA JS ════════════════════════════════════════════
 
 
-  // ── Excluir del bfcache para que siempre recargue al volver ──
-  window.addEventListener('unload', function() {});
+  // ── Si la página se restaura desde bfcache, recargar siempre ──
+  window.addEventListener('pageshow', function(e) {
+    if (e.persisted) location.reload();
+  });
 
   // ── Detectar modo carta ──
   (function() {
