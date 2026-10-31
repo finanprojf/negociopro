@@ -427,6 +427,7 @@
   let productos             = [];
   let categorias            = [];
   let carrito               = {};
+  let pedidoEnviado         = false;
   let tipoEntrega           = 'recoger';
   let categoriaActiva       = 'todas';
   let resenas               = {};   // { [productoId|'__negocio__']: [...] }
@@ -934,6 +935,7 @@
     if (!numero) { alert('Este negocio no tiene número de WhatsApp configurado.'); return; }
     if (numero.length === 10 && (numero.startsWith('8') || numero.startsWith('9'))) numero = '1' + numero;
     if (numero.length === 7) numero = '1809' + numero;
+    pedidoEnviado = true;
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
 
     // Limpiar carrito y volver al catálogo
@@ -1647,6 +1649,21 @@
   }
 
   // ═══════════════ FIN CARTA JS ════════════════════════════════════════════
+
+
+  // ── Limpiar carrito si usuario regresa desde WhatsApp (bfcache) ──
+  window.addEventListener('pageshow', function(event) {
+    if (event.persisted && pedidoEnviado) {
+      pedidoEnviado = false;
+      carrito = {};
+      tipoEntrega = 'recoger';
+      if (typeof actualizarBotonesEntrega === 'function') actualizarBotonesEntrega();
+      if (typeof calcularVuelto === 'function') calcularVuelto();
+      if (typeof actualizarFab === 'function') actualizarFab();
+      if (typeof cerrarCarrito === 'function') cerrarCarrito();
+      if (typeof renderProductos === 'function') renderProductos();
+    }
+  });
 
   // ── Detectar modo carta ──
   (function() {
