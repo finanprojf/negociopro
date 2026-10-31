@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../utils/formatters.dart';
 import '../ventas/pos_screen.dart';
 import '../inventario/inventario_screen.dart';
@@ -468,26 +469,27 @@ Future<void> _cargarVersion() async {
 
  @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     if (_suscripcionVencida) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: pal.background,
         body: SafeArea(
           child: Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Icon(Icons.lock_rounded,
-                    size: 80, color: AppColors.danger),
+                Icon(Icons.lock_rounded,
+                    size: 80, color: pal.danger),
                 const SizedBox(height: 24),
                 Text('Suscripción vencida', style: GoogleFonts.poppins(
                     fontSize: 24, fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary)),
+                    color: pal.textPrimary)),
                 const SizedBox(height: 12),
                 Text('Tu acceso a NegocioPro ha expirado. Renueva tu plan para continuar.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
-                        fontSize: 14, color: AppColors.textSecondary)),
+                        fontSize: 14, color: pal.textSecondary)),
                 const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity, height: 52,
@@ -514,10 +516,10 @@ Future<void> _cargarVersion() async {
                         );
                       }
                     },
-                    icon: const Icon(Icons.logout_rounded,
-                        color: AppColors.textMuted),
+                    icon: Icon(Icons.logout_rounded,
+                        color: pal.textMuted),
                     label: Text('Cerrar sesión', style: GoogleFonts.poppins(
-                        color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                        color: pal.textMuted, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ]),
@@ -534,7 +536,7 @@ Future<void> _cargarVersion() async {
           ? FloatingActionButton(
               onPressed: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const PosScreen())),
-              backgroundColor: AppColors.primary,
+              backgroundColor: pal.primary,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -551,6 +553,7 @@ Future<void> _cargarVersion() async {
     );
   }
 Widget _buildVitrinaWidget() {
+    final pal = AppPalette.of(context);
     return GestureDetector(
       onTap: () => Navigator.push(context,
           MaterialPageRoute(builder: (_) => const VitrinaConfigScreen()))
@@ -561,14 +564,14 @@ Widget _buildVitrinaWidget() {
           gradient: LinearGradient(
             colors: _vitrinaActiva
                 ? [const Color(0xFF0F7B5B), const Color(0xFF0A5C44)]
-                : [AppColors.surfaceAlt, AppColors.surfaceAlt],
+                : [pal.surfaceAlt, pal.surfaceAlt],
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
           borderRadius: BorderRadius.circular(16),
           border: _vitrinaActiva
               ? null
-              : Border.all(color: AppColors.cardBorder),
+              : Border.all(color: pal.cardBorder),
         ),
         child: Row(children: [
           Container(
@@ -576,11 +579,11 @@ Widget _buildVitrinaWidget() {
             decoration: BoxDecoration(
               color: _vitrinaActiva
                   ? Colors.white.withValues(alpha: 0.2)
-                  : AppColors.primary.withValues(alpha: 0.1),
+                  : pal.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(Icons.storefront_rounded,
-                color: _vitrinaActiva ? Colors.white : AppColors.primary,
+                color: _vitrinaActiva ? Colors.white : pal.primary,
                 size: 20),
           ),
           const SizedBox(width: 12),
@@ -590,13 +593,13 @@ Widget _buildVitrinaWidget() {
               Text('Vitrina Online',
                   style: GoogleFonts.poppins(
                       fontSize: 13, fontWeight: FontWeight.w700,
-                      color: _vitrinaActiva ? Colors.white : AppColors.textPrimary)),
+                      color: _vitrinaActiva ? Colors.white : pal.textPrimary)),
               Text(_vitrinaActiva ? 'Tu tienda está activa y visible' : 'Tu tienda está desactivada',
                   style: GoogleFonts.poppins(
                       fontSize: 11,
                       color: _vitrinaActiva
                           ? Colors.white.withValues(alpha: 0.75)
-                          : AppColors.textMuted)),
+                          : pal.textMuted)),
             ],
           )),
           // Botones rápidos
@@ -623,7 +626,7 @@ Widget _buildVitrinaWidget() {
             ),
           ] else ...[
             Icon(Icons.chevron_right_rounded,
-                color: AppColors.textMuted, size: 20),
+                color: pal.textMuted, size: 20),
           ],
         ]),
       ),
@@ -636,6 +639,7 @@ Widget _buildVitrinaWidget() {
     required VoidCallback onTap,
     bool light = false,
   }) {
+    final pal = AppPalette.of(context);
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
@@ -645,11 +649,11 @@ Widget _buildVitrinaWidget() {
           decoration: BoxDecoration(
             color: light
                 ? Colors.white.withValues(alpha: 0.2)
-                : AppColors.primary.withValues(alpha: 0.1),
+                : pal.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(9),
           ),
           child: Icon(icon,
-              color: light ? Colors.white : AppColors.primary, size: 17),
+              color: light ? Colors.white : pal.primary, size: 17),
         ),
       ),
     );
@@ -662,7 +666,7 @@ Widget _buildVitrinaWidget() {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
-        color: AppColors.danger,
+        color: pal.danger,
         child: Row(children: [
           const Icon(Icons.lock_rounded, color: Colors.white, size: 20),
           const SizedBox(width: 12),
@@ -680,7 +684,8 @@ Widget _buildVitrinaWidget() {
   }
 
   Widget _buildBannerAviso() {
-    final color = _diasRestantes <= 3 ? AppColors.danger : AppColors.warning;
+    final pal = AppPalette.of(context);
+    final color = _diasRestantes <= 3 ? pal.danger : pal.warning;
     final texto = _diasRestantes <= 0
         ? 'Tu suscripción vence hoy'
         : 'Tu suscripción vence en $_diasRestantes día${_diasRestantes == 1 ? '' : 's'}';
@@ -739,16 +744,17 @@ Widget _buildVitrinaWidget() {
   }
 
   SliverAppBar _buildAppBar() {
+    final pal = AppPalette.of(context);
     return SliverAppBar(
       floating: true,
       snap: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: pal.surface,
       elevation: 0,
       title: Row(children: [
         Container(
           width: 36, height: 36,
           decoration: BoxDecoration(
-            color: AppColors.primary,
+            color: pal.primary,
             borderRadius: BorderRadius.circular(10),
           ),
           child: const Icon(Icons.store_rounded, color: Colors.white, size: 20),
@@ -756,11 +762,11 @@ Widget _buildVitrinaWidget() {
         const SizedBox(width: 10),
         Text('NegocioPro', style: GoogleFonts.poppins(
             fontSize: 18, fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary)),
+            color: pal.textPrimary)),
       ]),
       actions: [
         IconButton(
-          icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+          icon: Icon(Icons.refresh_rounded, color: pal.textSecondary),
           onPressed: () { _cargarNombre(); _cargarResumen(); setState(() {}); },
         ),
         GestureDetector(
@@ -777,11 +783,11 @@ Widget _buildVitrinaWidget() {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.notifications_outlined, color: AppColors.textSecondary, size: 24),
-                    const Text('Recordatorios',
+                    Icon(Icons.notifications_outlined, color: pal.textSecondary, size: 24),
+                    Text('Recordatorios',
                       style: TextStyle(
                         fontSize: 7.5,
-                        color: AppColors.textSecondary,
+                        color: pal.textSecondary,
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w500,
                         height: 1.1,
@@ -795,9 +801,9 @@ Widget _buildVitrinaWidget() {
                   child: Container(
                     width: 18, height: 18,
                     decoration: BoxDecoration(
-                      color: AppColors.danger,
+                      color: pal.danger,
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.surface, width: 1.5),
+                      border: Border.all(color: pal.surface, width: 1.5),
                     ),
                     alignment: Alignment.center,
                     child: Text(
@@ -823,12 +829,12 @@ Widget _buildVitrinaWidget() {
             builder: (_) => Container(
               padding: const EdgeInsets.all(24),
               decoration: const BoxDecoration(
-                color: AppColors.surface,
+                color: pal.surface,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 ListTile(
-                  leading: const Icon(Icons.store_rounded, color: AppColors.primary),
+                  leading: Icon(Icons.store_rounded, color: pal.primary),
                   title: Text('Mi empresa', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                   onTap: () {
                     Navigator.pop(context);
@@ -836,17 +842,17 @@ Widget _buildVitrinaWidget() {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.storefront_rounded, color: AppColors.colorApartados),
+                  leading: Icon(Icons.storefront_rounded, color: pal.colorApartados),
                   title: Text('Mi Vitrina Digital', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                   subtitle: Text('Catálogo público para clientes',
-                      style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted)),
+                      style: GoogleFonts.poppins(fontSize: 11, color: pal.textMuted)),
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const VitrinaConfigScreen()));
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.workspace_premium_rounded, color: AppColors.colorVentas),
+                  leading: Icon(Icons.workspace_premium_rounded, color: pal.colorVentas),
                   title: Text('Suscripción', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                   onTap: () {
                     Navigator.pop(context);
@@ -854,10 +860,10 @@ Widget _buildVitrinaWidget() {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.lock_rounded, color: AppColors.textSecondary),
+                  leading: Icon(Icons.lock_rounded, color: pal.textSecondary),
                   title: Text('Seguridad y PIN', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                   subtitle: Text('PIN de acceso y acciones rápidas',
-                      style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted)),
+                      style: GoogleFonts.poppins(fontSize: 11, color: pal.textMuted)),
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const PinConfiguracionScreen()));
@@ -870,8 +876,8 @@ Widget _buildVitrinaWidget() {
             margin: const EdgeInsets.only(right: 12),
             child: const CircleAvatar(
               radius: 18,
-              backgroundColor: AppColors.primarySurface,
-              child: Icon(Icons.person_outline, color: AppColors.primary, size: 20),
+              backgroundColor: pal.primarySurface,
+              child: Icon(Icons.person_outline, color: pal.primary, size: 20),
             ),
           ),
         ),
@@ -880,6 +886,7 @@ Widget _buildVitrinaWidget() {
   }
 
   Widget _buildRecordatoriosHoy() {
+    final pal = AppPalette.of(context);
     final count = _recordatoriosHoy.length;
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -889,9 +896,9 @@ Widget _buildVitrinaWidget() {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.07),
+          color: pal.primary.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.22)),
+          border: Border.all(color: pal.primary.withValues(alpha: 0.22)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -899,11 +906,11 @@ Widget _buildVitrinaWidget() {
             Container(
               width: 34, height: 34,
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.15),
+                color: pal.primary.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(Icons.notifications_active_rounded,
-                  size: 18, color: AppColors.primary),
+                  size: 18, color: pal.primary),
             ),
             const SizedBox(width: 11),
             Expanded(
@@ -917,7 +924,7 @@ Widget _buildVitrinaWidget() {
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
+                      color: pal.primary,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -935,7 +942,7 @@ Widget _buildVitrinaWidget() {
                         '• $label',
                         style: GoogleFonts.poppins(
                           fontSize: 11.5,
-                          color: AppColors.textSecondary,
+                          color: pal.textSecondary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -947,14 +954,14 @@ Widget _buildVitrinaWidget() {
                       '+ ${count - 2} más...',
                       style: GoogleFonts.poppins(
                         fontSize: 11,
-                        color: AppColors.textMuted,
+                        color: pal.textMuted,
                       ),
                     ),
                 ],
               ),
             ),
             Icon(Icons.chevron_right_rounded,
-                size: 18, color: AppColors.primary.withValues(alpha: 0.6)),
+                size: 18, color: pal.primary.withValues(alpha: 0.6)),
           ],
         ),
       ),
@@ -973,15 +980,16 @@ Widget _buildVitrinaWidget() {
   }
 
   Widget _buildGreeting() {
+    final pal = AppPalette.of(context);
     final hora = DateTime.now().hour;
     final saludo = hora < 12 ? 'Buenos días'
         : hora < 18 ? 'Buenas tardes' : 'Buenas noches';
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(saludo, style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textMuted)),
+      Text(saludo, style: GoogleFonts.poppins(fontSize: 14, color: pal.textMuted)),
       const SizedBox(height: 2),
       Row(children: [
         Expanded(child: Text(_nombreNegocio, style: GoogleFonts.poppins(
-            fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
+            fontSize: 22, fontWeight: FontWeight.w700, color: pal.textPrimary))),
         GestureDetector(
           onTap: () => Navigator.push(context,
               MaterialPageRoute(builder: (_) => const VitrinaConfigScreen()))
@@ -990,18 +998,18 @@ Widget _buildVitrinaWidget() {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: _vitrinaActiva
-                  ? AppColors.primary.withValues(alpha: 0.1)
-                  : AppColors.cardBorder,
+                  ? pal.primary.withValues(alpha: 0.1)
+                  : pal.cardBorder,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.storefront_rounded, size: 11,
-                  color: _vitrinaActiva ? AppColors.primary : AppColors.textMuted),
+                  color: _vitrinaActiva ? pal.primary : pal.textMuted),
               const SizedBox(width: 4),
               Text(_vitrinaActiva ? '● Vitrina activa' : '○ Vitrina inactiva',
                   style: GoogleFonts.poppins(
                       fontSize: 11, fontWeight: FontWeight.w600,
-                      color: _vitrinaActiva ? AppColors.primary : AppColors.textMuted)),
+                      color: _vitrinaActiva ? pal.primary : pal.textMuted)),
             ]),
           ),
         ),
@@ -1009,7 +1017,7 @@ Widget _buildVitrinaWidget() {
       const SizedBox(height: 4),
       Row(children: [
         Expanded(child: Text(AppFormatters.fechaHora(DateTime.now()),
-            style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textMuted))),
+            style: GoogleFonts.poppins(fontSize: 12, color: pal.textMuted))),
         if (_vitrinaActiva) ...[
           const SizedBox(width: 8),
           GestureDetector(
@@ -1018,7 +1026,7 @@ Widget _buildVitrinaWidget() {
                   url: _vitrinaUrl,
                   empresaNombre: _nombreNegocio,
                 ))),
-            child: Icon(Icons.qr_code_rounded, size: 16, color: AppColors.primary),
+            child: Icon(Icons.qr_code_rounded, size: 16, color: pal.primary),
           ),
           const SizedBox(width: 10),
           GestureDetector(
@@ -1026,7 +1034,7 @@ Widget _buildVitrinaWidget() {
               '🛍️ Mira el catálogo de $_nombreNegocio:\n$_vitrinaUrl',
               subject: 'Catálogo de $_nombreNegocio',
             ),
-            child: Icon(Icons.share_rounded, size: 16, color: AppColors.primary),
+            child: Icon(Icons.share_rounded, size: 16, color: pal.primary),
           ),
         ],
       ]),
@@ -1034,27 +1042,29 @@ Widget _buildVitrinaWidget() {
   }
 
   Widget _buildStatCards() {
+    final pal = AppPalette.of(context);
     return Row(children: [
       Expanded(child: _StatCard(
         label: 'Ventas hoy', value: AppFormatters.moneda(_ventasHoy),
-        icon: Icons.trending_up_rounded, color: AppColors.colorVentas,
+        icon: Icons.trending_up_rounded, color: pal.colorVentas,
         trend: 'Hoy', trendPositive: true,
       )),
       const SizedBox(width: 12),
       Expanded(child: _StatCard(
         label: 'Ganancias hoy', value: AppFormatters.moneda(_gananciasHoy),
-        icon: Icons.account_balance_wallet_rounded, color: AppColors.primary,
+        icon: Icons.account_balance_wallet_rounded, color: pal.primary,
         trend: 'Hoy', trendPositive: true,
       )),
     ]);
   }
 
   Widget _buildAlertSection() {
+    final pal = AppPalette.of(context);
     final alerts = <Map<String, dynamic>>[];
     if (_productosLowStock > 0) {
       alerts.add({
         'icon': Icons.inventory_2_outlined,
-        'color': AppColors.warning, 'bg': AppColors.warningSurface,
+        'color': pal.warning, 'bg': pal.warningSurface,
         'text': '$_productosLowStock productos con stock bajo',
         'screen': const InventarioScreen(),
       });
@@ -1062,7 +1072,7 @@ Widget _buildVitrinaWidget() {
     if (_productosSinStock > 0) {
       alerts.add({
         'icon': Icons.remove_shopping_cart_rounded,
-        'color': AppColors.danger, 'bg': AppColors.dangerSurface,
+        'color': pal.danger, 'bg': pal.dangerSurface,
         'text': '$_productosSinStock productos sin stock',
         'screen': const InventarioScreen(),
       });
@@ -1070,7 +1080,7 @@ Widget _buildVitrinaWidget() {
     if (alerts.isEmpty) return const SizedBox.shrink();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Alertas', style: GoogleFonts.poppins(
-          fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          fontSize: 16, fontWeight: FontWeight.w700, color: pal.textPrimary)),
       const SizedBox(height: 10),
       ...alerts.map((a) => _AlertTile(
         icon: a['icon'] as IconData,
@@ -1084,24 +1094,24 @@ Widget _buildVitrinaWidget() {
   }
 
   Widget _buildModulesGrid() {
+    final pal = AppPalette.of(context);
     final modules = [
       _ModuleItem('Inventario', Icons.inventory_2_rounded,
-          AppColors.colorInventario, const InventarioScreen()),
+          pal.colorInventario, const InventarioScreen()),
       _ModuleItem('Clientes', Icons.people_rounded,
-          AppColors.colorClientes, const ClientesScreen()),
+          pal.colorClientes, const ClientesScreen()),
       _ModuleItem('Fiado', Icons.account_balance_wallet_rounded,
-          AppColors.colorFiado, const FiadoScreen()),
+          pal.colorFiado, const FiadoScreen()),
       _ModuleItem('Apartados', Icons.bookmark_rounded,
-          AppColors.colorApartados, const ApartadosScreen()),
+          pal.colorApartados, const ApartadosScreen()),
       _ModuleItem('Gastos', Icons.receipt_long_rounded,
-          AppColors.colorGastos, const GastosScreen()),
+          pal.colorGastos, const GastosScreen()),
       _ModuleItem('Reportes', Icons.bar_chart_rounded,
-          AppColors.colorReportes, const ReportesScreen()),
-
+          pal.colorReportes, const ReportesScreen()),
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Módulos', style: GoogleFonts.poppins(
-          fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          fontSize: 16, fontWeight: FontWeight.w700, color: pal.textPrimary)),
       const SizedBox(height: 8),
       GridView.count(
         crossAxisCount: 3, shrinkWrap: true,
@@ -1114,9 +1124,9 @@ Widget _buildVitrinaWidget() {
             if (mounted) { _cargarResumen(); setState(() {}); }
           },
           child: Container(
-            decoration: BoxDecoration(color: AppColors.surface,
+            decoration: BoxDecoration(color: pal.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.cardBorder)),
+                border: Border.all(color: pal.cardBorder)),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(
                 width: 44, height: 44,
@@ -1127,7 +1137,7 @@ Widget _buildVitrinaWidget() {
               const SizedBox(height: 6),
               Text(m.name, style: GoogleFonts.poppins(
                   fontSize: 12, fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary), textAlign: TextAlign.center),
+                  color: pal.textPrimary), textAlign: TextAlign.center),
             ]),
           ),
         )).toList(),
@@ -1136,32 +1146,34 @@ Widget _buildVitrinaWidget() {
   }
 
   Widget _buildRecentActivity() {
+    final pal = AppPalette.of(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Actividad reciente', style: GoogleFonts.poppins(
-          fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          fontSize: 16, fontWeight: FontWeight.w700, color: pal.textPrimary)),
       const SizedBox(height: 8),
       if (_empresaId != null)
         FutureBuilder<List<Map<String, dynamic>>>(
           future: _fetchActividad(_empresaId!),
           builder: (context, snapshot) {
+            final pal2 = AppPalette.of(context);
             if (!snapshot.hasData) {
               return Center(child: Text('Cargando...',
-                  style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textMuted)));
+                  style: GoogleFonts.poppins(fontSize: 14, color: pal2.textMuted)));
             }
             final actividad = snapshot.data!;
             if (actividad.isEmpty) {
               return Center(child: Text('Sin actividad reciente',
-                  style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textMuted)));
+                  style: GoogleFonts.poppins(fontSize: 14, color: pal2.textMuted)));
             }
             return Column(
               children: actividad.take(8).map((item) {
                 IconData icon; Color color;
                 switch (item['tipo']) {
-                  case 'venta': icon = Icons.shopping_cart_rounded; color = AppColors.colorVentas; break;
-                  case 'gasto': icon = Icons.receipt_long_rounded; color = AppColors.colorGastos; break;
-                  case 'fiado': icon = Icons.handshake_outlined; color = AppColors.colorFiado; break;
-                  case 'apartado': icon = Icons.bookmark_rounded; color = AppColors.colorApartados; break;
-                  default: icon = Icons.circle; color = AppColors.primary;
+                  case 'venta': icon = Icons.shopping_cart_rounded; color = pal2.colorVentas; break;
+                  case 'gasto': icon = Icons.receipt_long_rounded; color = pal2.colorGastos; break;
+                  case 'fiado': icon = Icons.handshake_outlined; color = pal2.colorFiado; break;
+                  case 'apartado': icon = Icons.bookmark_rounded; color = pal2.colorApartados; break;
+                  default: icon = Icons.circle; color = pal2.primary;
                 }
                 return _ActivityTile(
                   icon: icon, color: color,
@@ -1176,14 +1188,14 @@ Widget _buildVitrinaWidget() {
         )
       else
         Center(child: Text('Sin actividad reciente',
-            style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textMuted))),
+            style: GoogleFonts.poppins(fontSize: 14, color: pal.textMuted))),
       const SizedBox(height: 24),
       Center(
         child: Text(
           'NegocioPro $_appVersion · FinanPro Solutions',
           style: GoogleFonts.poppins(
             fontSize: 11,
-            color: AppColors.textMuted,
+            color: pal.textMuted,
             fontWeight: FontWeight.w500,
             letterSpacing: 0.3,
           ),
@@ -1476,11 +1488,12 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.surface,
+      decoration: BoxDecoration(color: pal.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.cardBorder)),
+          border: Border.all(color: pal.cardBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Container(width: 36, height: 36,
@@ -1490,18 +1503,18 @@ class _StatCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: trendPositive ? AppColors.successSurface : AppColors.dangerSurface,
+              color: trendPositive ? pal.successSurface : pal.dangerSurface,
               borderRadius: BorderRadius.circular(20)),
             child: Text(trend, style: GoogleFonts.poppins(fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: trendPositive ? AppColors.success : AppColors.danger)),
+                color: trendPositive ? pal.success : pal.danger)),
           ),
         ]),
         const SizedBox(height: 14),
-        Text(label, style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textMuted)),
+        Text(label, style: GoogleFonts.poppins(fontSize: 12, color: pal.textMuted)),
         const SizedBox(height: 4),
         Text(value, style: GoogleFonts.poppins(fontSize: 17,
-            fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            fontWeight: FontWeight.w700, color: pal.textPrimary)),
       ]),
     );
   }
@@ -1557,12 +1570,13 @@ class _ActivityTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: AppColors.surface,
+      decoration: BoxDecoration(color: pal.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.cardBorder)),
+          border: Border.all(color: pal.cardBorder)),
       child: Row(children: [
         Container(width: 40, height: 40,
             decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
@@ -1571,13 +1585,13 @@ class _ActivityTile extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title, style: GoogleFonts.poppins(fontSize: 13,
-              fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              fontWeight: FontWeight.w600, color: pal.textPrimary)),
           Text(subtitle, style: GoogleFonts.poppins(
-              fontSize: 11, color: AppColors.textMuted)),
+              fontSize: 11, color: pal.textMuted)),
         ])),
         Text(amount, style: GoogleFonts.poppins(fontSize: 14,
             fontWeight: FontWeight.w700,
-            color: positive ? AppColors.success : AppColors.danger)),
+            color: positive ? pal.success : pal.danger)),
       ]),
     );
   }
