@@ -200,7 +200,7 @@ Future<void> _verificarAdmin() async {
           const SizedBox(height: 8),
           _buildOpcionCuenta(Icons.print_rounded, 'Impresora Térmica', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImpresoraScreen()))),
           const SizedBox(height: 8),
-          _buildModoOscuroTile(),
+          _buildModoOscuroProximamente(),
           const SizedBox(height: 8),
           _buildOpcionCuenta(
             Icons.delete_forever_rounded,
@@ -588,6 +588,46 @@ SizedBox(
         ],
         _fila(Icons.badge_outlined,       'ID usuario',
             Supabase.instance.client.auth.currentUser?.id.substring(0, 8).toUpperCase() ?? '—'),
+      ]),
+    );
+  }
+
+  Widget _buildModoOscuroProximamente() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColorsDark.surface : AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColorsDark.cardBorder : AppColors.cardBorder,
+        ),
+      ),
+      child: Row(children: [
+        Icon(Icons.dark_mode_rounded,
+            color: isDark ? AppColorsDark.textMuted : AppColors.textMuted, size: 20),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text('Modo oscuro',
+              style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 14,
+                color: isDark ? AppColorsDark.textMuted : AppColors.textMuted,
+              )),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: isDark
+                ? AppColorsDark.primary.withValues(alpha: 0.15)
+                : AppColors.primarySurface,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text('Próximamente',
+              style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600,
+                color: isDark ? AppColorsDark.primary : AppColors.primary,
+              )),
+        ),
       ]),
     );
   }
