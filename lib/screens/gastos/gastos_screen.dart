@@ -163,7 +163,7 @@ class _GastosScreenState extends State<GastosScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModal) => Container(
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.of(ctx).padding.bottom + 24,
             top: 24, left: 24, right: 24,
           ),
           decoration: const BoxDecoration(

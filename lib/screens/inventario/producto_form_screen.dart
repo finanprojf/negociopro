@@ -958,7 +958,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
                     },
                   )),
                 ],
-                SizedBox(height: MediaQuery.of(ctx).viewInsets.bottom),
+                SizedBox(height: MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.of(ctx).padding.bottom),
               ],
             ),
           );

@@ -461,7 +461,7 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
   Widget build(BuildContext context) {
     final esEdicion = widget.recordatorio != null;
     return Container(
-      margin: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      margin: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),

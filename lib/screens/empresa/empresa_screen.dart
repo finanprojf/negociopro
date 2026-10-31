@@ -894,7 +894,7 @@ class _EliminarCuentaSheetState extends State<_EliminarCuentaSheet> {
   Widget build(BuildContext context) {
     return Container(
       margin: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
+        bottom: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom,
       ),
       decoration: const BoxDecoration(
         color: Colors.white,
