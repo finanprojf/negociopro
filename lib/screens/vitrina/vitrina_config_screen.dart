@@ -744,6 +744,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> with SingleTi
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (_) => VitrinaProductoConfigSheet(
         producto: p,
         onSave: (updated) {

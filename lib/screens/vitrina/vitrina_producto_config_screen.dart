@@ -20,6 +20,7 @@ class VitrinaProductoConfigSheet extends StatefulWidget {
 
 class _VitrinaProductoConfigSheetState extends State<VitrinaProductoConfigSheet> {
   late bool _visible;
+  late bool _enCarta;
   late bool _enOferta;
   late double _precioOriginal;
   double? _precioOferta;
@@ -42,6 +43,7 @@ class _VitrinaProductoConfigSheetState extends State<VitrinaProductoConfigSheet>
   void initState() {
     super.initState();
     _visible       = widget.producto['en_vitrina'] as bool? ?? true;
+    _enCarta       = widget.producto['carta_disponible'] as bool? ?? false;
     _precioOriginal = (widget.producto['precio_venta'] as num?)?.toDouble() ?? 0;
     _enOferta      = widget.producto['precio_oferta'] != null ||
                      widget.producto['descuento_porcentaje'] != null;
@@ -107,6 +109,7 @@ class _VitrinaProductoConfigSheetState extends State<VitrinaProductoConfigSheet>
   void _guardar() {
     final updated = Map<String, dynamic>.from(widget.producto);
     updated['en_vitrina']           = _visible;
+    updated['carta_disponible']     = _enCarta;
     updated['precio_oferta']        = _enOferta ? _precioOferta : null;
     updated['descuento_porcentaje'] = _enOferta ? _descuentoPct : null;
     updated['disponibilidad']       = _disponibilidad;
@@ -121,7 +124,7 @@ class _VitrinaProductoConfigSheetState extends State<VitrinaProductoConfigSheet>
   Widget build(BuildContext context) {
     final stock = (widget.producto['stock_actual'] as num?)?.toDouble() ?? 0;
     return Container(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -173,6 +176,17 @@ class _VitrinaProductoConfigSheetState extends State<VitrinaProductoConfigSheet>
             value: _visible,
             color: _visible ? AppColors.success : AppColors.textMuted,
             onChanged: (v) => setState(() => _visible = v),
+          ),
+          const SizedBox(height: 8),
+          _toggleRow(
+            icon: Icons.restaurant_menu_rounded,
+            label: _enCarta ? 'En Carta Digital' : 'No está en la Carta',
+            subtitle: _enCarta
+                ? 'Aparece en el menú QR de tu negocio'
+                : 'Actívalo para incluirlo en tu Carta Digital',
+            value: _enCarta,
+            color: const Color(0xFFFF6B35),
+            onChanged: (v) => setState(() => _enCarta = v),
           ),
 
           const SizedBox(height: 20),
