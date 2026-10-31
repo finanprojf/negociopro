@@ -947,7 +947,7 @@
     calcularVuelto();
     actualizarFab();
     cerrarCarrito();
-    renderProductos();
+    renderProductos(productosFiltrados());
   }
 
   // ─── RESEÑAS ───────────────────────────────────────────────────────────────
@@ -1664,7 +1664,7 @@
     if (typeof calcularVuelto === 'function') calcularVuelto();
     if (typeof actualizarFab === 'function') actualizarFab();
     if (typeof cerrarCarrito === 'function') cerrarCarrito();
-    if (typeof renderProductos === 'function') renderProductos();
+    if (typeof renderProductos === 'function' && typeof productosFiltrados === 'function') renderProductos(productosFiltrados());
   }
 
   // Regreso por app-switch (WhatsApp → Chrome, tab sigue vivo)
