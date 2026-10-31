@@ -78,6 +78,7 @@ class _DetalleVentaScreenState extends State<DetalleVentaScreen> {
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
+        useSafeArea: true,
         builder: (ctx) => DraggableScrollableSheet(
           initialChildSize: 0.45,
           minChildSize: 0.3,

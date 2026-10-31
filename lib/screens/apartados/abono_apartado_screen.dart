@@ -80,6 +80,7 @@ class _AbonoApartadoScreenState extends State<AbonoApartadoScreen> {
       context: context,
       useRootNavigator: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (sheetCtx) => Container(
         padding: EdgeInsets.fromLTRB(24, 20, 24, 32 + MediaQuery.of(sheetCtx).padding.bottom),
         decoration: const BoxDecoration(

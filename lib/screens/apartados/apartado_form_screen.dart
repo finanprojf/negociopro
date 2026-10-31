@@ -77,6 +77,7 @@ class _ApartadoFormScreenState extends State<ApartadoFormScreen> {
   Future<void> _abrirSelectorProducto() async {
     final result = await showModalBottomSheet<_LineaApartado>(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ProductoPicker(productos: _productos),
@@ -277,6 +278,7 @@ class _ApartadoFormScreenState extends State<ApartadoFormScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (sheetCtx2) => Container(
         padding: EdgeInsets.fromLTRB(24, 20, 24, 32 + MediaQuery.of(sheetCtx2).padding.bottom),
         decoration: const BoxDecoration(

@@ -257,6 +257,7 @@ class _EncargosScreenState extends State<EncargosScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModal) => Container(
           padding: EdgeInsets.only(
@@ -618,6 +619,7 @@ class _EncargosScreenState extends State<EncargosScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModal) {
           final precio = encargo.precioEstimado;
@@ -900,6 +902,7 @@ class _EncargosScreenState extends State<EncargosScreen>
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (sheetCtx2) => Container(
         padding: EdgeInsets.fromLTRB(24, 20, 24, 32 + MediaQuery.of(sheetCtx2).padding.bottom),
         decoration: const BoxDecoration(

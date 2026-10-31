@@ -61,6 +61,7 @@ class _ClienteDetalleScreenState extends State<ClienteDetalleScreen> {
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (_) => Container(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         decoration: const BoxDecoration(

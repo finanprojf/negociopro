@@ -25,6 +25,7 @@ class ProductoModel {
   // ── Oferta desde vitrina ────────────────────────────────────
   final double? precioOferta;
   final double? descuentoPorcentaje;
+  final bool cartaDisponible;
 
   ProductoModel({
     required this.id,
@@ -48,6 +49,7 @@ class ProductoModel {
     this.categoriaNombre,
     this.precioOferta,
     this.descuentoPorcentaje,
+    this.cartaDisponible = false,
   });
 
   // ── Getters de contabilidad ─────────────────────────────────
@@ -115,6 +117,7 @@ class ProductoModel {
         categoriaNombre: map['categoria_nombre'],
         precioOferta:       (map['precio_oferta'] as num?)?.toDouble(),
         descuentoPorcentaje:(map['descuento_porcentaje'] as num?)?.toDouble(),
+        cartaDisponible:    map['carta_disponible'] == true || map['carta_disponible'] == 1,
       );
 
   Map<String, dynamic> toMap() => {
@@ -133,6 +136,7 @@ class ProductoModel {
         'es_elaborado':       esElaborado ? 1 : 0,
         'costo_produccion':   costoProduccion,
         'unidades_producidas':unidadesProducidas,
+        'carta_disponible':   cartaDisponible ? 1 : 0,
       };
 
   ProductoModel copyWith({

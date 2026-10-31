@@ -227,9 +227,7 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
 
   // ─────────────────────────────────────────────────────────────
   @override
-  Widget build(BuildContext context) => ProGate(
-    nombreFuncion: 'Cuadre de Caja',
-    child: Scaffold(
+  Widget build(BuildContext context) => Scaffold(
     backgroundColor: AppColors.background,
     appBar: AppBar(
       backgroundColor: AppColors.primary,
@@ -977,5 +975,4 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
           ],
         ),
       );
-  )
 }

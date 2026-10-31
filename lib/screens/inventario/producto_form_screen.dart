@@ -42,6 +42,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
   String? _categoriaId;
   List<CategoriaModel> _categorias = [];
   bool   _esElaborado = false;
+  bool   _enCarta = false;
 
   File?   _imagenSeleccionada;
   String? _rutaImagenGuardada;
@@ -73,6 +74,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
       _stockMinimoCtrl.text  = p.stockMinimo.toString();
       _unidad                = p.unidad;
       _esElaborado           = p.esElaborado;
+      _enCarta               = p.cartaDisponible;
       if (p.esElaborado) {
         _costoTotalCtrl.text    = p.costoProduccion.toString();
         _unidadesProdCtrl.text  = p.unidadesProducidas.toString();
@@ -320,6 +322,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
           stockMinimo:       double.tryParse(_stockMinimoCtrl.text) ?? 5,
           unidad:            _unidad,
           esElaborado:       _esElaborado,
+          cartaDisponible:   _enCarta,
           costoProduccion:   _esElaborado ? _costoTotal : 0,
           unidadesProducidas:_esElaborado ? _unidadesProd : 1,
           codigoBarras:      _codigoCtrl.text.trim().isEmpty ? null : _codigoCtrl.text.trim(),
@@ -707,6 +710,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
   Future<void> _elegirFoto() async {
     final opcion = await showModalBottomSheet<ImageSource>(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
         padding: const EdgeInsets.all(24),
@@ -853,6 +857,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
           return Container(

@@ -159,6 +159,7 @@ class _GastosScreenState extends State<GastosScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModal) => Container(
           padding: EdgeInsets.only(

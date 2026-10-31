@@ -346,6 +346,7 @@ SizedBox(
     final picker = ImagePicker();
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
+      useSafeArea: true,
       builder: (_) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
@@ -526,6 +527,7 @@ SizedBox(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (_) => const _EliminarCuentaSheet(),
     ).then((eliminado) {
       if (eliminado == true && mounted) {

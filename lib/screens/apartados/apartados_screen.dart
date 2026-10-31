@@ -191,6 +191,7 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setModal) {
           final totalAbonado = abonos.fold(0.0, (s, a) => s + (a['monto'] as num).toDouble());
@@ -353,6 +354,7 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (_) => EntregarArticulosSheet(
         apartado: apartado,
         lineas: lineas,

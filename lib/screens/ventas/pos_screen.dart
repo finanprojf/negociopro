@@ -437,6 +437,7 @@ Future<void> _cargarClientes() async {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setModal) => Container(
           height: MediaQuery.of(context).size.height * 0.6,
@@ -633,6 +634,7 @@ Future<void> _cargarClientes() async {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModal) => AnimatedContainer(
           duration: const Duration(milliseconds: 150),

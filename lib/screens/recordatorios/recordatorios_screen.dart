@@ -263,6 +263,7 @@ class _RecordatoriosScreenState extends State<RecordatoriosScreen>
 
     final resultado = await showModalBottomSheet<bool>(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _FormularioRecordatorio(
@@ -625,6 +626,7 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
 
     final picked = await showModalBottomSheet<TimeOfDay>(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Container(
@@ -716,6 +718,7 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
   Future<void> _seleccionarCliente() async {
     final seleccionado = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
         decoration: const BoxDecoration(

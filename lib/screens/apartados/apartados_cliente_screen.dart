@@ -76,7 +76,8 @@ void _mostrarHistorial() async {
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (ctx) => StatefulBuilder(
+        useSafeArea: true,
+      builder: (ctx) => StatefulBuilder(
           builder: (ctx2, setModal) => Container(
             height: MediaQuery.of(context).size.height * 0.62,
             decoration: const BoxDecoration(
@@ -242,6 +243,7 @@ void _mostrarHistorial() async {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (_) => EntregarArticulosSheet(
         apartado: apartado,
         lineas: lineas,

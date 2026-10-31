@@ -176,6 +176,7 @@ class _FiadoDetalleScreenState extends State<FiadoDetalleScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (ctx) => Container(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,

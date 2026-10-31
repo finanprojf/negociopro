@@ -821,6 +821,7 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
     await showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      useSafeArea: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setBS) => ListView(
           padding: const EdgeInsets.all(16),

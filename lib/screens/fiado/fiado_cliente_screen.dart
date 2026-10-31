@@ -426,6 +426,7 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModal) {
           final ingresado = double.tryParse(ctrl.text) ?? 0;
@@ -557,7 +558,8 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
                       context: context,
                       useRootNavigator: true,
                       backgroundColor: Colors.transparent,
-                      builder: (sheetCtx) => Container(
+                      useSafeArea: true,
+      builder: (sheetCtx) => Container(
                         padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
                         decoration: const BoxDecoration(
                           color: AppColors.surface,
@@ -654,6 +656,7 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModal) {
           final ingresado = double.tryParse(ctrl.text) ?? 0;
@@ -805,7 +808,8 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
                         context: context,
                         useRootNavigator: true,
                         backgroundColor: Colors.transparent,
-                        builder: (sheetCtx) => Container(
+                        useSafeArea: true,
+      builder: (sheetCtx) => Container(
                           padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
                           decoration: const BoxDecoration(
                             color: AppColors.surface,
@@ -937,7 +941,8 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (_) => Container(
+        useSafeArea: true,
+      builder: (_) => Container(
           height: MediaQuery.of(context).size.height * 0.6,
           decoration: const BoxDecoration(
             color: AppColors.surface,
