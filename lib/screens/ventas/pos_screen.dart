@@ -647,7 +647,8 @@ Future<void> _cargarClientes() async {
             color: AppColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
             Container(width: 40, height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(color: AppColors.cardBorder,
@@ -1041,6 +1042,7 @@ Future<void> _cargarClientes() async {
               ),
             ),
           ]),
+            ),  // SingleChildScrollView
         ),
       ),
     );
