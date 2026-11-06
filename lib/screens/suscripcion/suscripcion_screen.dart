@@ -192,92 +192,77 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           child: Column(children: [
 
-            // ── BANNER: Plan activo ──────────────────────────────
-            if (_tienePlan) ...[
+            // ══════════════════════════════════════════════════════
+            // PLAN PRO ACTIVO → solo info del plan, sin cards
+            // ══════════════════════════════════════════════════════
+            if (_tienePro) ...[
               _PlanActivoBanner(
                 plan: _plan,
                 diasLeft: _diasLeft,
                 onCancelar: _mostrarEncuestaCancelacion,
               ),
+              const SizedBox(height: 16),
+              _BeneficiosActivos(esPro: true),
               const SizedBox(height: 10),
-            ],
+              _GarantiaCard(),
+              const SizedBox(height: 6),
+              _SoporteCard(onTap: () => launchUrl(
+                Uri.parse('https://wa.me/18093190140'),
+                mode: LaunchMode.externalApplication,
+              )),
+            ]
 
-            // ── BANNER: Trial ────────────────────────────────────
-            if (PlanService.enTrial) ...[
-              _TrialBanner(dias: PlanService.diasTrial ?? 30),
-              const SizedBox(height: 8),
-            ],
-
-            _Header(),
-            const SizedBox(height: 10),
-
-            // ── Selector de período ──────────────────────────────
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.cardBorder),
+            // ══════════════════════════════════════════════════════
+            // PLAN BÁSICO ACTIVO → info + beneficios + upgrade a Pro
+            // ══════════════════════════════════════════════════════
+            else if (_tieneBasico) ...[
+              _PlanActivoBanner(
+                plan: _plan,
+                diasLeft: _diasLeft,
+                onCancelar: _mostrarEncuestaCancelacion,
               ),
-              child: Row(
-                children: List.generate(_periodos.length, (i) {
-                  final sel = i == _periodoIdx;
-                  final per = _periodos[i];
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _periodoIdx = i),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        decoration: BoxDecoration(
-                          color: sel ? AppColors.primary : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Text(per.label,
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.poppins(
-                              fontSize: 11.5, fontWeight: FontWeight.w600,
-                              color: sel ? Colors.white : AppColors.textSecondary,
-                            )),
-                          if (per.badge != null) ...[
-                            const SizedBox(height: 2),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: sel
-                                    ? Colors.white.withOpacity(0.25)
-                                    : const Color(0xFFE6A817).withOpacity(0.18),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(per.badge!, style: GoogleFonts.poppins(
-                                fontSize: 7.5, fontWeight: FontWeight.w700,
-                                color: sel ? Colors.white : const Color(0xFFB07010),
-                                letterSpacing: 0.3,
-                              )),
-                            ),
-                          ],
-                        ]),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // ── Tarjetas ─────────────────────────────────────────
-            if (_tieneBasico)
-              // Solo tiene Básico → mostrar solo upgrade a Pro
+              const SizedBox(height: 16),
+              _BeneficiosActivos(esPro: false),
+              const SizedBox(height: 20),
+              // ── Botón elegante upgrade a Pro ──────────────────
               _UpgradeProCard(
                 periodoIdx: _periodoIdx,
                 periodos: _periodos,
                 precio: (id, fb) => _precio(id, fb),
                 cargando: _cargando,
                 onActivar: _activar,
-              )
-            else
-              // Sin plan o con Pro → mostrar ambas tarjetas
+                mostrarSelector: true,
+              ),
+              const SizedBox(height: 10),
+              _GarantiaCard(),
+              const SizedBox(height: 6),
+              _SoporteCard(onTap: () => launchUrl(
+                Uri.parse('https://wa.me/18093190140'),
+                mode: LaunchMode.externalApplication,
+              )),
+            ]
+
+            // ══════════════════════════════════════════════════════
+            // SIN PLAN / TRIAL → ambas tarjetas
+            // ══════════════════════════════════════════════════════
+            else ...[
+              if (PlanService.enTrial) ...[
+                _TrialBanner(dias: PlanService.diasTrial ?? 30),
+                const SizedBox(height: 8),
+              ],
+
+              _Header(),
+              const SizedBox(height: 10),
+
+              // ── Selector de período ────────────────────────────
+              _SelectorPeriodo(
+                periodoIdx: _periodoIdx,
+                periodos: _periodos,
+                onSelect: (i) => setState(() => _periodoIdx = i),
+              ),
+              const SizedBox(height: 10),
+
+              // ── Ambas tarjetas ─────────────────────────────────
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -297,7 +282,7 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
                       ('☁️', 'Nube'), ('📵', 'Sin internet'),
                     ],
                     cargando: _cargando,
-                    esActual: _tienePro ? false : false,
+                    esActual: false,
                     onActivar: () => _activar(_periodos[_periodoIdx].idBasico),
                   )),
                   const SizedBox(width: 10),
@@ -324,13 +309,14 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
                 ],
               ),
 
-            const SizedBox(height: 10),
-            _GarantiaCard(),
-            const SizedBox(height: 6),
-            _SoporteCard(onTap: () => launchUrl(
-              Uri.parse('https://wa.me/18093190140'),
-              mode: LaunchMode.externalApplication,
-            )),
+              const SizedBox(height: 10),
+              _GarantiaCard(),
+              const SizedBox(height: 6),
+              _SoporteCard(onTap: () => launchUrl(
+                Uri.parse('https://wa.me/18093190140'),
+                mode: LaunchMode.externalApplication,
+              )),
+            ],
           ]),
         ),
 
@@ -341,6 +327,132 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
                 color: AppColors.primary)),
           ),
       ]),
+    );
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET: Beneficios del plan activo
+// ═══════════════════════════════════════════════════════════════════════════════
+class _BeneficiosActivos extends StatelessWidget {
+  final bool esPro;
+  const _BeneficiosActivos({required this.esPro});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorTop = esPro ? const Color(0xFFE6A817) : const Color(0xFF4A90D9);
+    final basico = const [
+      ('🛒', 'Punto de Venta (POS)'),
+      ('📦', 'Gestión de inventario'),
+      ('👥', 'Base de clientes'),
+      ('📋', 'Fiado / crédito'),
+      ('💸', 'Control de gastos'),
+      ('📊', 'Reportes de ventas'),
+      ('☁️', 'Sincronización en la nube'),
+      ('📵', 'Funciona sin internet'),
+    ];
+    final pro = const [
+      ('✅', 'Todo lo del plan Básico'),
+      ('🏷️', 'Apartados de productos'),
+      ('🧾', 'Cuadre de Caja'),
+      ('🏪', 'Vitrina digital con QR'),
+      ('🍽️', 'Carta Digital'),
+      ('📝', 'Gestión de Encargos'),
+      ('🖨️', 'Impresión térmica'),
+      ('💬', 'Integración WhatsApp'),
+      ('⭐', 'Soporte VIP prioritario'),
+    ];
+    final features = esPro ? pro : basico;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Lo que incluye tu plan',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w700,
+                fontSize: 13.5, color: AppColors.textPrimary)),
+        const SizedBox(height: 12),
+        ...features.map((f) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(children: [
+            Text(f.$1, style: const TextStyle(fontSize: 16)),
+            const SizedBox(width: 10),
+            Text(f.$2, style: GoogleFonts.poppins(
+                fontSize: 13, color: AppColors.textPrimary)),
+            const Spacer(),
+            Icon(Icons.check_circle_rounded, color: colorTop, size: 18),
+          ]),
+        )),
+      ]),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET: Selector de período (extraído para reusar)
+// ═══════════════════════════════════════════════════════════════════════════════
+class _SelectorPeriodo extends StatelessWidget {
+  final int periodoIdx;
+  final List<_Periodo> periodos;
+  final ValueChanged<int> onSelect;
+  const _SelectorPeriodo({required this.periodoIdx, required this.periodos, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Row(
+        children: List.generate(periodos.length, (i) {
+          final sel = i == periodoIdx;
+          final per = periodos[i];
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onSelect(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 9),
+                decoration: BoxDecoration(
+                  color: sel ? AppColors.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(per.label, textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 11.5, fontWeight: FontWeight.w600,
+                        color: sel ? Colors.white : AppColors.textSecondary,
+                      )),
+                  if (per.badge != null) ...[
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: sel
+                            ? Colors.white.withOpacity(0.25)
+                            : const Color(0xFFE6A817).withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(per.badge!, style: GoogleFonts.poppins(
+                        fontSize: 7.5, fontWeight: FontWeight.w700,
+                        color: sel ? Colors.white : const Color(0xFFB07010),
+                        letterSpacing: 0.3,
+                      )),
+                    ),
+                  ],
+                ]),
+              ),
+            ),
+          );
+        }),
+      ),
     );
   }
 }
@@ -437,48 +549,89 @@ class _PlanActivoBanner extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 // WIDGET: Upgrade a Pro (solo para usuarios con plan Básico)
 // ═══════════════════════════════════════════════════════════════════════════════
-class _UpgradeProCard extends StatelessWidget {
+class _UpgradeProCard extends StatefulWidget {
   final int periodoIdx;
   final List<_Periodo> periodos;
   final String Function(String, String) precio;
   final bool cargando;
   final void Function(String) onActivar;
+  final bool mostrarSelector;
 
   const _UpgradeProCard({
     required this.periodoIdx, required this.periodos, required this.precio,
     required this.cargando, required this.onActivar,
+    this.mostrarSelector = false,
   });
 
   @override
+  State<_UpgradeProCard> createState() => _UpgradeProCardState();
+}
+
+class _UpgradeProCardState extends State<_UpgradeProCard> {
+  late int _idx;
+
+  @override
+  void initState() {
+    super.initState();
+    _idx = widget.periodoIdx;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final p = periodos[periodoIdx];
+    final p = widget.periodos[_idx];
     return Column(children: [
+      // ── Banner upgrade ─────────────────────────────────────────
       Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF8E1),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE6A817).withOpacity(0.5)),
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFEFB0), Color(0xFFFFF8E1)],
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE6A817).withOpacity(0.6), width: 1.5),
         ),
         child: Row(children: [
-          const Icon(Icons.arrow_circle_up_rounded, color: Color(0xFFE6A817), size: 28),
-          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE6A817).withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.workspace_premium_rounded,
+                color: Color(0xFFB07010), size: 26),
+          ),
+          const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Actualizar a Pro', style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w700, fontSize: 14,
+            Text('Actualiza a Pro', style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700, fontSize: 15,
                 color: const Color(0xFFB07010))),
-            Text('Desbloquea Apartados, Vitrina QR, Carta Digital, Encargos y más.',
-                style: GoogleFonts.poppins(fontSize: 11.5,
-                    color: const Color(0xFFB07010).withOpacity(0.8))),
+            Text('Desbloquea todas las funciones premium',
+                style: GoogleFonts.poppins(fontSize: 12,
+                    color: const Color(0xFFB07010).withOpacity(0.75))),
           ])),
+          const Icon(Icons.arrow_forward_ios_rounded,
+              color: Color(0xFFB07010), size: 16),
         ]),
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: 14),
+
+      // ── Selector de período (solo para Básico activo) ─────────
+      if (widget.mostrarSelector) ...[
+        _SelectorPeriodo(
+          periodoIdx: _idx,
+          periodos: widget.periodos,
+          onSelect: (i) => setState(() => _idx = i),
+        ),
+        const SizedBox(height: 12),
+      ],
+
+      // ── Card Pro ───────────────────────────────────────────────
       _PlanCard(
         nombre: 'Pro',
         icono: Icons.workspace_premium_rounded,
-        precio: precio(p.idPro, p.precioProfallback),
+        precio: widget.precio(p.idPro, p.precioProfallback),
         porMes: p.porMesPro,
         ahorro: p.ahorroPro,
         colorTop: const Color(0xFFE6A817),
@@ -490,9 +643,9 @@ class _UpgradeProCard extends StatelessWidget {
           ('🍽️', 'Carta Digital'), ('📝', 'Encargos'),
           ('🖨️', 'Térmica'), ('💬', 'WhatsApp'), ('⭐', 'Soporte VIP'),
         ],
-        cargando: cargando,
+        cargando: widget.cargando,
         esActual: false,
-        onActivar: () => onActivar(p.idPro),
+        onActivar: () => widget.onActivar(p.idPro),
       ),
     ]);
   }
