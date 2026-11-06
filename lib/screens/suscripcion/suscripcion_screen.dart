@@ -358,13 +358,15 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
                   const Icon(Icons.shopping_cart_rounded,
                       color: Colors.white, size: 18),
                   const SizedBox(width: 8),
-                  Flexible(child: Text(
-                    'Suscribirse al Plan $planName — $precio',
-                    style: GoogleFonts.poppins(
-                      color: Colors.white, fontSize: 15,
-                      fontWeight: FontWeight.w700, letterSpacing: 0.2,
+                  Flexible(child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Suscribir Plan $planName  •  $precio',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white, fontSize: 15,
+                        fontWeight: FontWeight.w700, letterSpacing: 0.2,
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
                   )),
                 ]),
               ),
@@ -666,46 +668,41 @@ class _PeriodoRadioList extends StatelessWidget {
               ),
               const SizedBox(width: 10),
 
-              // Label + ahorro badge
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Text(p.label, style: GoogleFonts.poppins(
-                      fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 13.5,
-                      color: sel ? colorT : AppColors.textPrimary,
+              // Label + badge
+              Expanded(child: Row(children: [
+                Text(p.label, style: GoogleFonts.poppins(
+                  fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                  fontSize: 13,
+                  color: sel ? colorT : AppColors.textPrimary,
+                )),
+                if (p.badge != null) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: badgeColor,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(p.badge!, style: GoogleFonts.poppins(
+                      fontSize: 8.5, fontWeight: FontWeight.w700,
+                      color: Colors.white, letterSpacing: 0.3,
                     )),
-                    if (p.badge != null) ...[
-                      const SizedBox(width: 7),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: badgeColor,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(p.badge!, style: GoogleFonts.poppins(
-                          fontSize: 8.5, fontWeight: FontWeight.w700,
-                          color: Colors.white, letterSpacing: 0.3,
-                        )),
-                      ),
-                    ],
-                  ]),
-                  if (ahorro != null) ...[
-                    const SizedBox(height: 2),
-                    Text(ahorro, style: GoogleFonts.poppins(
-                      fontSize: 10.5, color: AppColors.success,
-                      fontWeight: FontWeight.w600,
-                    )),
-                  ],
+                  ),
                 ],
-              )),
+              ])),
 
-              // Precio
-              Text(precio, style: GoogleFonts.poppins(
-                fontSize: 14, fontWeight: FontWeight.w800,
-                color: sel ? colorT : AppColors.textPrimary,
-              )),
+              // Precio + ahorro alineados a la derecha
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(precio, style: GoogleFonts.poppins(
+                  fontSize: 14, fontWeight: FontWeight.w800,
+                  color: sel ? colorT : AppColors.textPrimary,
+                )),
+                if (ahorro != null)
+                  Text(ahorro, style: GoogleFonts.poppins(
+                    fontSize: 10, color: AppColors.success,
+                    fontWeight: FontWeight.w600,
+                  )),
+              ]),
             ]),
           ),
         );
