@@ -456,7 +456,14 @@ class _EmpresaCardState extends State<_EmpresaCard> {
               Builder(builder: (_) {
                 final prods = e['productos'];
                 if (prods == null) return const SizedBox.shrink();
-                final count = prods is List ? prods.length : (prods is Map ? (prods['count'] ?? 0) : 0);
+                // Supabase devuelve productos(count) como [{"count": N}]
+                int count = 0;
+                if (prods is List && prods.isNotEmpty) {
+                  final first = prods.first;
+                  count = first is Map ? ((first['count'] ?? 0) as num).toInt() : prods.length;
+                } else if (prods is Map) {
+                  count = ((prods['count'] ?? 0) as num).toInt();
+                }
                 return _InfoRow(Icons.inventory_2_outlined, '$count producto${count == 1 ? '' : 's'} en inventario',
                     color: count == 0 ? AppColors.textMuted : null);
               }),
