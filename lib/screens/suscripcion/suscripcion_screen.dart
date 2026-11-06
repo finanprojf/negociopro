@@ -62,7 +62,7 @@ class SuscripcionScreen extends StatefulWidget {
 
 class _SuscripcionScreenState extends State<SuscripcionScreen> {
   int  _periodoIdx = 0;
-  int  _planIdx    = 1; // 0=Básico, 1=Pro
+  int  _planIdx    = 0; // 0=Básico, 1=Pro
   bool _cargando   = false;
   final _billing   = BillingService.instance;
 
@@ -263,41 +263,41 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
     return Stack(children: [
       Column(children: [
         Expanded(child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             // Trial banner
             if (PlanService.enTrial) ...[
               _TrialBanner(dias: PlanService.diasTrial ?? 30),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
             ],
 
             // Header branding
             _Header(),
-            const SizedBox(height: 18),
+            const SizedBox(height: 10),
 
             // ── Plan selector (Básico / Pro) ─────────────────────
             _PlanSelectorRow(
               planIdx: _planIdx,
               onSelect: (i) => setState(() => _planIdx = i),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
             // ── Features del plan seleccionado ───────────────────
             _FeatureListCompacta(esPro: esPro),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
 
             // ── Período de suscripción ───────────────────────────
             Row(children: [
               const Icon(Icons.calendar_month_rounded,
-                  size: 16, color: AppColors.textSecondary),
-              const SizedBox(width: 6),
+                  size: 14, color: AppColors.textSecondary),
+              const SizedBox(width: 5),
               Text('Período de suscripción',
                   style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w700, fontSize: 14,
+                    fontWeight: FontWeight.w700, fontSize: 13,
                     color: AppColors.textPrimary,
                   )),
             ]),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
 
             // ── Lista radio con todos los períodos ───────────────
             _PeriodoRadioList(
@@ -308,20 +308,20 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
               onSelect: (i) => setState(() => _periodoIdx = i),
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 10),
             _GarantiaCard(),
             const SizedBox(height: 6),
             _SoporteCard(onTap: () => launchUrl(
               Uri.parse('https://wa.me/18093190140'),
               mode: LaunchMode.externalApplication,
             )),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
           ]),
         )),
 
         // ── Botón sticky ─────────────────────────────────────────
         Container(
-          padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomPad),
+          padding: EdgeInsets.fromLTRB(14, 8, 14, 8 + bottomPad),
           decoration: BoxDecoration(
             color: AppColors.background,
             border: Border(
@@ -333,7 +333,7 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
             )],
           ),
           child: SizedBox(
-            width: double.infinity, height: 52,
+            width: double.infinity, height: 48,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -477,7 +477,7 @@ class _PlanSelectorRow extends StatelessWidget {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeInOut,
-                padding: const EdgeInsets.symmetric(vertical: 11),
+                padding: const EdgeInsets.symmetric(vertical: 9),
                 decoration: BoxDecoration(
                   gradient: sel ? LinearGradient(
                     colors: [colorT, colorB],
@@ -559,7 +559,7 @@ class _FeatureListCompacta extends StatelessWidget {
     final features  = esPro ? _pro : _basico;
     final planName  = esPro ? 'Plan Pro' : 'Plan Básico';
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
@@ -572,15 +572,15 @@ class _FeatureListCompacta extends StatelessWidget {
           const SizedBox(width: 6),
           Text('Incluye el $planName',
               style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w700, fontSize: 13,
+                fontWeight: FontWeight.w700, fontSize: 12.5,
                 color: AppColors.textPrimary,
               )),
         ]),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Wrap(
-          spacing: 6, runSpacing: 6,
+          spacing: 5, runSpacing: 5,
           children: features.map((f) => Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
             decoration: BoxDecoration(
               color: colorT.withOpacity(0.07),
               borderRadius: BorderRadius.circular(20),
@@ -590,7 +590,7 @@ class _FeatureListCompacta extends StatelessWidget {
               Text(f.$1, style: const TextStyle(fontSize: 12)),
               const SizedBox(width: 4),
               Text(f.$2, style: GoogleFonts.poppins(
-                  fontSize: 11, color: AppColors.textPrimary,
+                  fontSize: 10.5, color: AppColors.textPrimary,
                   fontWeight: FontWeight.w500)),
             ]),
           )).toList(),
@@ -637,8 +637,8 @@ class _PeriodoRadioList extends StatelessWidget {
           onTap: () => onSelect(i),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
               color: sel ? colorT.withOpacity(0.07) : AppColors.surface,
               borderRadius: BorderRadius.circular(12),
@@ -694,7 +694,7 @@ class _PeriodoRadioList extends StatelessWidget {
                   if (ahorro != null) ...[
                     const SizedBox(height: 2),
                     Text(ahorro, style: GoogleFonts.poppins(
-                      fontSize: 11, color: AppColors.success,
+                      fontSize: 10.5, color: AppColors.success,
                       fontWeight: FontWeight.w600,
                     )),
                   ],
@@ -703,7 +703,7 @@ class _PeriodoRadioList extends StatelessWidget {
 
               // Precio
               Text(precio, style: GoogleFonts.poppins(
-                fontSize: 15, fontWeight: FontWeight.w800,
+                fontSize: 14, fontWeight: FontWeight.w800,
                 color: sel ? colorT : AppColors.textPrimary,
               )),
             ]),
@@ -1024,7 +1024,7 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+    padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
         colors: [Color(0xFF1A1F36), Color(0xFF2D3561)],
