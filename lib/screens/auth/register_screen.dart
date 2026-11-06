@@ -22,7 +22,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _verPass = false;
 
   // País seleccionado (nombre, código de área, emoji bandera)
-  _Pais _paisSel = const _Pais('República Dominicana', '+1-809', '🇩🇴');
+  _Pais _paisSel = const _Pais('República Dominicana', '+1', '🇩🇴');
 
   @override
   void dispose() {
@@ -383,24 +383,17 @@ if (mounted) {
     );
   }
 
-  // ── Campo teléfono con prefijo automático ────────────────────────
+  // ── Campo teléfono — el usuario escribe su número normal ───────────
   Widget _buildCampoTelefono() {
     return TextFormField(
       controller: _telefonoCtrl,
       keyboardType: TextInputType.phone,
       style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-      decoration: InputDecoration(
+      decoration: const InputDecoration(
         labelText: 'Teléfono',
-        prefixIcon: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          alignment: Alignment.center,
-          child: Text(_paisSel.codigo,
-              style: const TextStyle(fontFamily: 'Poppins',
-                  fontWeight: FontWeight.w600, fontSize: 14,
-                  color: AppColors.primary)),
-        ),
-        hintText: 'Número sin código de área',
-        hintStyle: const TextStyle(fontFamily: 'Poppins',
+        prefixIcon: Icon(Icons.phone_outlined),
+        hintText: 'Ej: 8091234567',
+        hintStyle: TextStyle(fontFamily: 'Poppins',
             color: AppColors.textMuted, fontSize: 13),
       ),
       validator: (v) {
