@@ -1,7 +1,7 @@
 name: negociopro2
 description: NegocioPro — Gestión inteligente para tu negocio. Por FinanPro Solutions.
 publish_to: 'none'
-version: 1.0.0+10
+version: 1.0.0+11
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -32,6 +32,7 @@ dependencies:
   screenshot: ^3.0.0
   google_fonts: ^6.2.1
   in_app_purchase: ^3.2.0
+  in_app_update: ^3.1.0
   fl_chart: ^0.68.0
   path_provider: ^2.1.0
   flutter_launcher_icons: ^0.13.1

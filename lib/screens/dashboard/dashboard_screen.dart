@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:in_app_update/in_app_update.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../utils/formatters.dart';
@@ -62,6 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _cargarNombre();
     _cargarResumen();
     _cargarVersion();
+    _verificarActualizacion();
     _cargarRecordatoriosHoy();
     _cargarVitrina();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -91,7 +93,20 @@ class _DashboardScreenState extends State<DashboardScreen>
 
 Future<void> _cargarVersion() async {
     final info = await PackageInfo.fromPlatform();
-    if (mounted) setState(() => _appVersion = 'v${info.version}');
+    if (mounted) setState(() => _appVersion = 'v\${info.version}');
+  }
+
+  Future<void> _verificarActualizacion() async {
+    try {
+      final info = await InAppUpdate.checkForUpdate();
+      if (!mounted) return;
+      if (info.updateAvailability == UpdateAvailability.updateAvailable) {
+        await InAppUpdate.startFlexibleUpdate();
+        InAppUpdate.completeFlexibleUpdate();
+      }
+    } catch (_) {
+      // Silencioso — no interrumpir si falla (ej. en modo debug)
+    }
   }
 
   DateTime _toLocal(String dateStr) {
