@@ -58,6 +58,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           .insert({
             'nombre': _nombreNegocioCtrl.text.trim(),
             'telefono': '${_paisSel.codigo} ${_telefonoCtrl.text.trim()}'.trim(),
+            'pais': _paisSel.nombre,
             'plan_activo': 'trial',
             'suscripcion_vence': fechaFin.toIso8601String(),
           })

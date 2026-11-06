@@ -40,7 +40,7 @@ class _AdminScreenState extends State<AdminScreen> {
     try {
       final res = await SupabaseService.client
           .from('empresas')
-          .select('id, nombre, telefono, whatsapp, plan_activo, suscripcion_vence, created_at, usuarios(id, nombre, correo), productos(count)')
+          .select('id, nombre, telefono, whatsapp, pais, plan_activo, suscripcion_vence, created_at, usuarios(id, nombre, correo), productos(count)')
           .order('created_at', ascending: false);
       if (mounted) setState(() { _empresas = List<Map<String, dynamic>>.from(res); _loading = false; });
     } catch (_) { if (mounted) setState(() => _loading = false); }
@@ -450,6 +450,8 @@ class _EmpresaCardState extends State<_EmpresaCard> {
                 _InfoRow(Icons.email_outlined, (e['usuarios'] as List).first['correo'] ?? ''),
               ],
               if (telefono.isNotEmpty) _InfoRow(Icons.phone_outlined, telefono),
+              if ((e['pais'] ?? '').toString().isNotEmpty)
+                _InfoRow(Icons.public_rounded, e['pais'].toString()),
               // Conteo de productos en inventario
               Builder(builder: (_) {
                 final prods = e['productos'];
