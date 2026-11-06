@@ -189,7 +189,7 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
       ),
       body: Stack(children: [
         SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + MediaQuery.of(context).padding.bottom),
           child: Column(children: [
 
             // ══════════════════════════════════════════════════════
