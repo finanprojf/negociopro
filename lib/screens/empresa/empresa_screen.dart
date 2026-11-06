@@ -28,6 +28,7 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
   final _whatsappCtrl = TextEditingController();
   final _direccionCtrl = TextEditingController();
   final _lemaCtrl = TextEditingController();
+  final _monedaCtrl = TextEditingController();
   bool _loading = false;
   bool _subiendoLogo = false;
   String? _logoUrl;
@@ -102,7 +103,8 @@ Future<void> _verificarAdmin() async {
             _whatsappCtrl.text = res['whatsapp'] ?? '';
             _direccionCtrl.text = res['direccion'] ?? '';
             _lemaCtrl.text = res['lema'] ?? '';
-            _logoUrl = res['logo_url'];
+
+            _monedaCtrl.text = res['moneda'] ?? 'RD\$';            _logoUrl = res['logo_url'];
           });
         }
       } catch (_) {
@@ -117,6 +119,7 @@ Future<void> _verificarAdmin() async {
             _whatsappCtrl.text = r['whatsapp'] as String? ?? '';
             _direccionCtrl.text = r['direccion'] as String? ?? '';
             _lemaCtrl.text = r['lema'] as String? ?? '';
+            _monedaCtrl.text = r['moneda'] as String? ?? 'RD\$';
             _logoUrl = r['logo_url'] as String?;
           });
         }
@@ -126,7 +129,7 @@ Future<void> _verificarAdmin() async {
   @override
   void dispose() {
     _nombreCtrl.dispose(); _telefonoCtrl.dispose();
-    _whatsappCtrl.dispose(); _direccionCtrl.dispose(); _lemaCtrl.dispose();
+    _whatsappCtrl.dispose(); _direccionCtrl.dispose(); _lemaCtrl.dispose(); _monedaCtrl.dispose();
     super.dispose();
   }
 
@@ -141,6 +144,7 @@ Future<void> _verificarAdmin() async {
           'whatsapp': _whatsappCtrl.text.trim(),
           'direccion': _direccionCtrl.text.trim(),
           'lema': _lemaCtrl.text.trim(),
+          'moneda': _monedaCtrl.text.trim().isEmpty ? 'RD\$' : _monedaCtrl.text.trim(),
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         };
         // Guardar en SQLite local primero (offline-first)
@@ -185,6 +189,8 @@ Future<void> _verificarAdmin() async {
           _campo(_direccionCtrl, 'Dirección', Icons.location_on_outlined),
           const SizedBox(height: 12),
           _campo(_lemaCtrl, 'Lema / eslogan', Icons.format_quote_rounded),
+          const SizedBox(height: 12),
+          _campoMoneda(),
           const SizedBox(height: 24),
           _seccion('Mi información'),
           const SizedBox(height: 12),
@@ -819,6 +825,97 @@ SizedBox(
         prefixIcon: Icon(icon, color: AppColors.textMuted, size: 20),
       ),
     );
+  }
+
+  Widget _campoMoneda() {
+    const monedas = [
+      ('RD\$', 'Peso Dominicano (RD\$)'),
+      ('\$',   'Dólar (USD)'),
+      ('€',    'Euro (€)'),
+      ('£',    'Libra (£)'),
+      ('MX\$', 'Peso Mexicano (MX\$)'),
+      ('Q',    'Quetzal (Q)'),
+      ('L',    'Lempira (L)'),
+      ('₡',    'Colón (₡)'),
+      ('B/.',  'Balboa / Sol (B/.)'),
+      ('Bs',   'Bolívar / Boliviano (Bs)'),
+      ('CLP\$','Peso Chileno (CLP\$)'),
+      ('COP\$','Peso Colombiano (COP\$)'),
+      ('S/.',  'Sol Peruano (S/.)'),
+      ('Gs',   'Guaraní (Gs)'),
+      ('\$U',  'Peso Uruguayo (\$U)'),
+      ('AR\$', 'Peso Argentino (AR\$)'),
+      ('R\$',  'Real Brasileño (R\$)'),
+      ('__otra__', '✏️  Otra (escribir manualmente)'),
+    ];
+    final esPersonalizada = !monedas
+        .where((m) => m.\$1 != '__otra__')
+        .any((m) => m.\$1 == _monedaCtrl.text);
+    final dropValue = esPersonalizada ? '__otra__' : _monedaCtrl.text;
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.attach_money_rounded, color: AppColors.textMuted, size: 20),
+        const SizedBox(width: 8),
+        const Text('Moneda del negocio', style: TextStyle(
+            fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
+      ]),
+      const SizedBox(height: 6),
+      DropdownButtonFormField<String>(
+        value: dropValue,
+        decoration: InputDecoration(
+          prefixIcon: Container(
+            width: 56,
+            alignment: Alignment.center,
+            child: Text(
+              esPersonalizada ? '✏️' : (_monedaCtrl.text.isEmpty ? 'RD\$' : _monedaCtrl.text),
+              style: const TextStyle(fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.primary),
+            ),
+          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        ),
+        style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textPrimary),
+        items: monedas.map((m) => DropdownMenuItem(
+          value: m.\$1,
+          child: Text(m.\$2),
+        )).toList(),
+        onChanged: (v) {
+          if (v == '__otra__') {
+            setState(() => _monedaCtrl.text = '');
+          } else {
+            setState(() => _monedaCtrl.text = v ?? 'RD\$');
+          }
+        },
+      ),
+      // Campo manual — aparece solo si eligió "Otra"
+      if (esPersonalizada) ...[
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: _monedaCtrl,
+          maxLength: 6,
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+              fontWeight: FontWeight.w700, color: AppColors.primary),
+          decoration: InputDecoration(
+            labelText: 'Escribe tu símbolo de moneda',
+            hintText: 'Ej: Fr, Ksh, ₦, ฿...',
+            counterText: '',
+            prefixIcon: const Icon(Icons.edit_rounded, color: AppColors.textMuted, size: 18),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            helperText: 'Máximo 6 caracteres',
+            helperStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 11),
+          ),
+          onChanged: (_) => setState(() {}),
+          validator: (v) {
+            if (esPersonalizada && (v == null || v.trim().isEmpty)) {
+              return 'Ingresa un símbolo de moneda';
+            }
+            return null;
+          },
+        ),
+      ],
+    ]);
   }
 
   void _confirmarLogout() {

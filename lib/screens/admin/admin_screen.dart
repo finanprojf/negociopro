@@ -467,6 +467,34 @@ class _EmpresaCardState extends State<_EmpresaCard> {
               const SizedBox(height: 14),
               const Divider(height: 1, color: AppColors.cardBorder),
               const SizedBox(height: 10),
+              // ── Botones de contacto ──────────────────────────
+              if (telefono.isNotEmpty || ((e['usuarios'] as List?)?.isNotEmpty ?? false)) ...[
+                Row(children: [
+                  if (telefono.isNotEmpty) Expanded(child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final num = telefono.replaceAll(RegExp(r'[^0-9]'), '');
+                      await launchUrl(Uri.parse('https://wa.me/$num'),
+                          mode: LaunchMode.externalApplication);
+                    },
+                    icon: const Icon(Icons.chat_rounded, size: 15, color: Color(0xFF25D366)),
+                    label: Text('WhatsApp', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF25D366))),
+                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF25D366)), padding: const EdgeInsets.symmetric(vertical: 8), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  )),
+                  if (telefono.isNotEmpty && ((e['usuarios'] as List?)?.isNotEmpty ?? false)) const SizedBox(width: 8),
+                  if ((e['usuarios'] as List?)?.isNotEmpty ?? false) Expanded(child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final correo = (e['usuarios'] as List).first['correo'] ?? '';
+                      if (correo.isEmpty) return;
+                      await launchUrl(Uri.parse('mailto:$correo'),
+                          mode: LaunchMode.externalApplication);
+                    },
+                    icon: const Icon(Icons.email_outlined, size: 15, color: Color(0xFF4A90D9)),
+                    label: Text('Correo', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4A90D9))),
+                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF4A90D9)), padding: const EdgeInsets.symmetric(vertical: 8), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  )),
+                ]),
+                const SizedBox(height: 8),
+              ],
               Row(children: [
                 Expanded(child: OutlinedButton.icon(
                   onPressed: () => widget.onEditar(e),

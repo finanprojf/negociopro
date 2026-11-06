@@ -546,6 +546,7 @@ Future<void> _cargarClientes() async {
   Widget _buildGridProductos() {
     if (_loading) return const Center(
         child: CircularProgressIndicator(color: AppColors.primary));
+    if (_filtrados.isEmpty) return _buildEmptyInventario();
     return GridView.builder(
       padding: const EdgeInsets.all(8),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -575,6 +576,60 @@ Future<void> _cargarClientes() async {
   }
 
 
+
+  Widget _buildEmptyInventario() {
+    final buscando = _query.isNotEmpty;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              buscando ? Icons.search_off_rounded : Icons.inventory_2_outlined,
+              size: 56, color: AppColors.primary.withValues(alpha: 0.5)),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            buscando ? 'Sin resultados' : 'Sin productos en inventario',
+            style: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 16,
+                fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            buscando
+                ? 'No encontramos productos que coincidan con "$_query".'
+                : 'Agrega productos en el inventario para comenzar a vender.',
+            style: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 13,
+                color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          if (!buscando) ...[
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.add_box_outlined),
+              label: const Text('Ir al inventario',
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
 
   Widget _buildFooter() {
     final navBottom = MediaQuery.of(context).padding.bottom;

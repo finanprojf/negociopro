@@ -21,6 +21,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _loading = false;
   bool _verPass = false;
 
+  // País seleccionado (nombre, código de área, emoji bandera)
+  _Pais _paisSel = const _Pais('República Dominicana', '+1-809', '🇩🇴');
+
   @override
   void dispose() {
     _nombreNegocioCtrl.dispose();
@@ -54,7 +57,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           .from('empresas')
           .insert({
             'nombre': _nombreNegocioCtrl.text.trim(),
-            'telefono': _telefonoCtrl.text.trim(),
+            'telefono': '${_paisSel.codigo} ${_telefonoCtrl.text.trim()}'.trim(),
             'plan_activo': 'trial',
             'suscripcion_vence': fechaFin.toIso8601String(),
           })
@@ -135,9 +138,9 @@ if (mounted) {
                 _buildCampo(_nombreNegocioCtrl, 'Nombre del negocio',
                     Icons.store_outlined, 'Ej: Colmado La Esperanza'),
                 const SizedBox(height: 16),
-                _buildCampo(_telefonoCtrl, 'Teléfono',
-                    Icons.phone_outlined, 'Ej: 809-555-0000',
-                    tipo: TextInputType.phone),
+                _buildSelectorPais(),
+                const SizedBox(height: 10),
+                _buildCampoTelefono(),
                 const SizedBox(height: 24),
                 _buildSeccion('Tu cuenta'),
                 const SizedBox(height: 12),
@@ -356,4 +359,87 @@ if (mounted) {
       ),
     );
   }
+
+  // ── Selector de país ────────────────────────────────────────────
+  Widget _buildSelectorPais() {
+    return DropdownButtonFormField<String>(
+      value: _paisSel.nombre,
+      decoration: InputDecoration(
+        labelText: 'País',
+        prefixIcon: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          child: Text(_paisSel.bandera, style: const TextStyle(fontSize: 20)),
+        ),
+      ),
+      items: _paises.map((p) => DropdownMenuItem(
+        value: p.nombre,
+        child: Text('${p.bandera}  ${p.nombre}  (${p.codigo})',
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
+      )).toList(),
+      onChanged: (nombre) {
+        final p = _paises.firstWhere((x) => x.nombre == nombre, orElse: () => _paises.first);
+        setState(() => _paisSel = p);
+      },
+    );
+  }
+
+  // ── Campo teléfono con prefijo automático ────────────────────────
+  Widget _buildCampoTelefono() {
+    return TextFormField(
+      controller: _telefonoCtrl,
+      keyboardType: TextInputType.phone,
+      style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+      decoration: InputDecoration(
+        labelText: 'Teléfono',
+        prefixIcon: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          alignment: Alignment.center,
+          child: Text(_paisSel.codigo,
+              style: const TextStyle(fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600, fontSize: 14,
+                  color: AppColors.primary)),
+        ),
+        hintText: 'Número sin código de área',
+        hintStyle: const TextStyle(fontFamily: 'Poppins',
+            color: AppColors.textMuted, fontSize: 13),
+      ),
+      validator: (v) {
+        if (v == null || v.trim().isEmpty) return 'Ingresa tu teléfono';
+        return null;
+      },
+    );
+  }
+
 }
+
+
+// ── Modelo de país ────────────────────────────────────────────────────────────
+class _Pais {
+  final String nombre, codigo, bandera;
+  const _Pais(this.nombre, this.codigo, this.bandera);
+}
+
+const _paises = [
+  _Pais('República Dominicana', '+1',    '🇩🇴'),
+  _Pais('Estados Unidos',       '+1',    '🇺🇸'),
+  _Pais('México',               '+52',   '🇲🇽'),
+  _Pais('Guatemala',            '+502',  '🇬🇹'),
+  _Pais('Honduras',             '+504',  '🇭🇳'),
+  _Pais('El Salvador',          '+503',  '🇸🇻'),
+  _Pais('Nicaragua',            '+505',  '🇳🇮'),
+  _Pais('Costa Rica',           '+506',  '🇨🇷'),
+  _Pais('Panamá',               '+507',  '🇵🇦'),
+  _Pais('Colombia',             '+57',   '🇨🇴'),
+  _Pais('Venezuela',            '+58',   '🇻🇪'),
+  _Pais('Ecuador',              '+593',  '🇪🇨'),
+  _Pais('Perú',                 '+51',   '🇵🇪'),
+  _Pais('Bolivia',              '+591',  '🇧🇴'),
+  _Pais('Chile',                '+56',   '🇨🇱'),
+  _Pais('Argentina',            '+54',   '🇦🇷'),
+  _Pais('Uruguay',              '+598',  '🇺🇾'),
+  _Pais('Paraguay',             '+595',  '🇵🇾'),
+  _Pais('Brasil',               '+55',   '🇧🇷'),
+  _Pais('Puerto Rico',          '+1',    '🇵🇷'),
+  _Pais('Cuba',                 '+53',   '🇨🇺'),
+  _Pais('España',               '+34',   '🇪🇸'),
+];
