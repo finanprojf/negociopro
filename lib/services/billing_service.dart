@@ -122,11 +122,24 @@ class BillingService {
     }
     onCargando?.call();
     try {
+      // Las suscripciones usan buyNonConsumable en in_app_purchase
       final param = PurchaseParam(productDetails: producto);
       await InAppPurchase.instance.buyNonConsumable(purchaseParam: param);
     } catch (e) {
       onCargaCompleta?.call();
       onError?.call('No se pudo iniciar la compra: $e');
+    }
+  }
+
+  // ── Cancelar suscripción (abre Play Store para que el usuario cancele) ──
+  Future<void> abrirGestionSuscripcion() async {
+    // Google Play maneja la cancelación desde su propia interfaz
+    // El usuario cancela desde Play Store > Suscripciones
+    // Cuando cancela, Google deja de renovar — el plan sigue activo hasta que vence
+    if (_disponible) {
+      try {
+        await InAppPurchase.instance.restorePurchases();
+      } catch (_) {}
     }
   }
 
@@ -216,9 +229,33 @@ class BillingService {
 
         final empresaId = empresa['id'] as String;
 
+        // Si ya tiene plan activo del mismo tipo, extender desde el vencimiento actual
+        // (manejo de renovaciones anticipadas)
+        final empresaData = await db
+            .from('empresas')
+            .select('plan_activo, suscripcion_vence')
+            .eq('id', empresaId)
+            .maybeSingle();
+
+        DateTime baseDate = ahora;
+        if (empresaData != null &&
+            empresaData['plan_activo'] == meta['plan'] &&
+            empresaData['suscripcion_vence'] != null) {
+          final venceActual = DateTime.tryParse(empresaData['suscripcion_vence'] as String);
+          // Si aún no ha vencido, extender desde la fecha de vencimiento actual
+          if (venceActual != null && venceActual.isAfter(ahora)) {
+            baseDate = venceActual;
+          }
+        }
+
+        final venceExt = DateTime(
+          baseDate.year, baseDate.month + meses, baseDate.day,
+          baseDate.hour, baseDate.minute,
+        );
+
         await db.from('empresas').update({
           'plan_activo':        meta['plan'],
-          'suscripcion_vence':  vence.toIso8601String(),
+          'suscripcion_vence':  venceExt.toIso8601String(),
         }).eq('id', empresaId);
 
         // Historial de compra (no bloquea si falla)
@@ -230,7 +267,7 @@ class BillingService {
             'plan':        meta['plan'],
             'periodo':     meta['periodo'],
             'meses':       meses,
-            'vence':       vence.toIso8601String(),
+            'vence':       venceExt.toIso8601String(),
             'comprado_en': ahora.toIso8601String(),
           });
         } catch (_) {}
