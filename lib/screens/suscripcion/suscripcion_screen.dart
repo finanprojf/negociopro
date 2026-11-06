@@ -62,6 +62,7 @@ class SuscripcionScreen extends StatefulWidget {
 
 class _SuscripcionScreenState extends State<SuscripcionScreen> {
   int  _periodoIdx = 0;
+  int  _planIdx    = 1; // 0=Básico, 1=Pro
   bool _cargando   = false;
   final _billing   = BillingService.instance;
 
@@ -187,147 +188,198 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
           ),
         ],
       ),
-      body: Stack(children: [
-        SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + MediaQuery.of(context).padding.bottom),
-          child: Column(children: [
-
-            // ══════════════════════════════════════════════════════
-            // PLAN PRO ACTIVO → solo info del plan, sin cards
-            // ══════════════════════════════════════════════════════
-            if (_tienePro) ...[
-              _PlanActivoBanner(
-                plan: _plan,
-                diasLeft: _diasLeft,
-                onCancelar: _mostrarEncuestaCancelacion,
+      body: _tienePlan
+          ? Stack(children: [
+              SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + MediaQuery.of(context).padding.bottom),
+                child: Column(children: [
+                  if (_tienePro) ...[
+                    _PlanActivoBanner(
+                      plan: _plan,
+                      diasLeft: _diasLeft,
+                      onCancelar: _mostrarEncuestaCancelacion,
+                    ),
+                    const SizedBox(height: 16),
+                    _BeneficiosActivos(esPro: true),
+                    const SizedBox(height: 10),
+                    _GarantiaCard(),
+                    const SizedBox(height: 6),
+                    _SoporteCard(onTap: () => launchUrl(
+                      Uri.parse('https://wa.me/18093190140'),
+                      mode: LaunchMode.externalApplication,
+                    )),
+                  ] else if (_tieneBasico) ...[
+                    _PlanActivoBanner(
+                      plan: _plan,
+                      diasLeft: _diasLeft,
+                      onCancelar: _mostrarEncuestaCancelacion,
+                    ),
+                    const SizedBox(height: 16),
+                    _BeneficiosActivos(esPro: false),
+                    const SizedBox(height: 20),
+                    _UpgradeProCard(
+                      periodoIdx: _periodoIdx,
+                      periodos: _periodos,
+                      precio: (id, fb) => _precio(id, fb),
+                      cargando: _cargando,
+                      onActivar: _activar,
+                      mostrarSelector: true,
+                    ),
+                    const SizedBox(height: 10),
+                    _GarantiaCard(),
+                    const SizedBox(height: 6),
+                    _SoporteCard(onTap: () => launchUrl(
+                      Uri.parse('https://wa.me/18093190140'),
+                      mode: LaunchMode.externalApplication,
+                    )),
+                  ],
+                ]),
               ),
-              const SizedBox(height: 16),
-              _BeneficiosActivos(esPro: true),
-              const SizedBox(height: 10),
-              _GarantiaCard(),
-              const SizedBox(height: 6),
-              _SoporteCard(onTap: () => launchUrl(
-                Uri.parse('https://wa.me/18093190140'),
-                mode: LaunchMode.externalApplication,
-              )),
-            ]
-
-            // ══════════════════════════════════════════════════════
-            // PLAN BÁSICO ACTIVO → info + beneficios + upgrade a Pro
-            // ══════════════════════════════════════════════════════
-            else if (_tieneBasico) ...[
-              _PlanActivoBanner(
-                plan: _plan,
-                diasLeft: _diasLeft,
-                onCancelar: _mostrarEncuestaCancelacion,
-              ),
-              const SizedBox(height: 16),
-              _BeneficiosActivos(esPro: false),
-              const SizedBox(height: 20),
-              // ── Botón elegante upgrade a Pro ──────────────────
-              _UpgradeProCard(
-                periodoIdx: _periodoIdx,
-                periodos: _periodos,
-                precio: (id, fb) => _precio(id, fb),
-                cargando: _cargando,
-                onActivar: _activar,
-                mostrarSelector: true,
-              ),
-              const SizedBox(height: 10),
-              _GarantiaCard(),
-              const SizedBox(height: 6),
-              _SoporteCard(onTap: () => launchUrl(
-                Uri.parse('https://wa.me/18093190140'),
-                mode: LaunchMode.externalApplication,
-              )),
-            ]
-
-            // ══════════════════════════════════════════════════════
-            // SIN PLAN / TRIAL → ambas tarjetas
-            // ══════════════════════════════════════════════════════
-            else ...[
-              if (PlanService.enTrial) ...[
-                _TrialBanner(dias: PlanService.diasTrial ?? 30),
-                const SizedBox(height: 8),
-              ],
-
-              _Header(),
-              const SizedBox(height: 10),
-
-              // ── Selector de período ────────────────────────────
-              _SelectorPeriodo(
-                periodoIdx: _periodoIdx,
-                periodos: _periodos,
-                onSelect: (i) => setState(() => _periodoIdx = i),
-              ),
-              const SizedBox(height: 10),
-
-              // ── Ambas tarjetas ─────────────────────────────────
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: _PlanCard(
-                    nombre: 'Básico',
-                    icono: Icons.store_outlined,
-                    precio: _precio(_periodos[_periodoIdx].idBasico,
-                        _periodos[_periodoIdx].precioBasicoFallback),
-                    porMes: _periodos[_periodoIdx].porMesBasico,
-                    ahorro: _periodos[_periodoIdx].ahorroBasico,
-                    colorTop: const Color(0xFF4A90D9),
-                    colorBottom: const Color(0xFF357ABD),
-                    badge: null,
-                    features: const [
-                      ('🛒', 'POS'), ('📦', 'Inventario'), ('👥', 'Clientes'),
-                      ('📋', 'Fiado'), ('💸', 'Gastos'), ('📊', 'Reportes'),
-                      ('☁️', 'Nube'), ('📵', 'Sin internet'),
-                    ],
-                    cargando: _cargando,
-                    esActual: false,
-                    onActivar: () => _activar(_periodos[_periodoIdx].idBasico),
-                  )),
-                  const SizedBox(width: 10),
-                  Expanded(child: _PlanCard(
-                    nombre: 'Pro',
-                    icono: Icons.workspace_premium_rounded,
-                    precio: _precio(_periodos[_periodoIdx].idPro,
-                        _periodos[_periodoIdx].precioProfallback),
-                    porMes: _periodos[_periodoIdx].porMesPro,
-                    ahorro: _periodos[_periodoIdx].ahorroPro,
-                    colorTop: const Color(0xFFE6A817),
-                    colorBottom: const Color(0xFFC47F0A),
-                    badge: 'POPULAR',
-                    features: const [
-                      ('✅', 'Todo Básico'), ('🏷️', 'Apartados'),
-                      ('🧾', 'Cuadre Caja'), ('🏪', 'Vitrina QR'),
-                      ('🍽️', 'Carta Digital'), ('📝', 'Encargos'),
-                      ('🖨️', 'Térmica'), ('💬', 'WhatsApp'), ('⭐', 'Soporte VIP'),
-                    ],
-                    cargando: _cargando,
-                    esActual: false,
-                    onActivar: () => _activar(_periodos[_periodoIdx].idPro),
-                  )),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-              _GarantiaCard(),
-              const SizedBox(height: 6),
-              _SoporteCard(onTap: () => launchUrl(
-                Uri.parse('https://wa.me/18093190140'),
-                mode: LaunchMode.externalApplication,
-              )),
-            ],
-          ]),
-        ),
-
-        if (_cargando)
-          Container(
-            color: Colors.black.withOpacity(0.35),
-            child: const Center(child: CircularProgressIndicator(
-                color: AppColors.primary)),
-          ),
-      ]),
+              if (_cargando)
+                Container(
+                  color: Colors.black.withOpacity(0.35),
+                  child: const Center(child: CircularProgressIndicator(
+                      color: AppColors.primary)),
+                ),
+            ])
+          : _buildSinPlanUI(context),
     );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SIN PLAN / TRIAL — nueva UI estilo FinanPro
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildSinPlanUI(BuildContext context) {
+    final bottomPad  = MediaQuery.of(context).padding.bottom;
+    final periodo    = _periodos[_periodoIdx];
+    final esPro      = _planIdx == 1;
+    final productId  = esPro ? periodo.idPro    : periodo.idBasico;
+    final precioFb   = esPro ? periodo.precioProfallback : periodo.precioBasicoFallback;
+    final precio     = _precio(productId, precioFb);
+    final planName   = esPro ? 'Pro' : 'Básico';
+    final planColor  = esPro ? const Color(0xFFE6A817) : const Color(0xFF4A90D9);
+    final planColorB = esPro ? const Color(0xFFC47F0A) : const Color(0xFF357ABD);
+
+    return Stack(children: [
+      Column(children: [
+        Expanded(child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Trial banner
+            if (PlanService.enTrial) ...[
+              _TrialBanner(dias: PlanService.diasTrial ?? 30),
+              const SizedBox(height: 10),
+            ],
+
+            // Header branding
+            _Header(),
+            const SizedBox(height: 18),
+
+            // ── Plan selector (Básico / Pro) ─────────────────────
+            _PlanSelectorRow(
+              planIdx: _planIdx,
+              onSelect: (i) => setState(() => _planIdx = i),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Features del plan seleccionado ───────────────────
+            _FeatureListCompacta(esPro: esPro),
+            const SizedBox(height: 20),
+
+            // ── Período de suscripción ───────────────────────────
+            Row(children: [
+              const Icon(Icons.calendar_month_rounded,
+                  size: 16, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              Text('Período de suscripción',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700, fontSize: 14,
+                    color: AppColors.textPrimary,
+                  )),
+            ]),
+            const SizedBox(height: 10),
+
+            // ── Lista radio con todos los períodos ───────────────
+            _PeriodoRadioList(
+              periodoIdx: _periodoIdx,
+              planIdx: _planIdx,
+              periodos: _periodos,
+              getPrecio: (id, fb) => _precio(id, fb),
+              onSelect: (i) => setState(() => _periodoIdx = i),
+            ),
+
+            const SizedBox(height: 18),
+            _GarantiaCard(),
+            const SizedBox(height: 6),
+            _SoporteCard(onTap: () => launchUrl(
+              Uri.parse('https://wa.me/18093190140'),
+              mode: LaunchMode.externalApplication,
+            )),
+            const SizedBox(height: 4),
+          ]),
+        )),
+
+        // ── Botón sticky ─────────────────────────────────────────
+        Container(
+          padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomPad),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            border: Border(
+              top: BorderSide(color: AppColors.cardBorder.withOpacity(0.6)),
+            ),
+            boxShadow: [BoxShadow(
+              color: Colors.black.withOpacity(0.07),
+              blurRadius: 12, offset: const Offset(0, -3),
+            )],
+          ),
+          child: SizedBox(
+            width: double.infinity, height: 52,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [planColor, planColorB],
+                  begin: Alignment.centerLeft, end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [BoxShadow(
+                  color: planColor.withOpacity(0.38),
+                  blurRadius: 14, offset: const Offset(0, 5),
+                )],
+              ),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: _cargando ? null : () => _activar(productId),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Icon(Icons.shopping_cart_rounded,
+                      color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  Flexible(child: Text(
+                    'Suscribirse al Plan $planName — $precio',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white, fontSize: 15,
+                      fontWeight: FontWeight.w700, letterSpacing: 0.2,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  )),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ]),
+
+      if (_cargando)
+        Container(
+          color: Colors.black.withOpacity(0.35),
+          child: const Center(child: CircularProgressIndicator(
+              color: AppColors.primary)),
+        ),
+    ]);
   }
 }
 
@@ -388,6 +440,276 @@ class _BeneficiosActivos extends StatelessWidget {
           ]),
         )),
       ]),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET: Plan selector (Básico / Pro chips)
+// ═══════════════════════════════════════════════════════════════════════════════
+class _PlanSelectorRow extends StatelessWidget {
+  final int planIdx;
+  final ValueChanged<int> onSelect;
+  const _PlanSelectorRow({required this.planIdx, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    final plans = [
+      (Icons.store_outlined,           'Básico',    const Color(0xFF4A90D9), const Color(0xFF357ABD), null),
+      (Icons.workspace_premium_rounded, 'Pro',       const Color(0xFFE6A817), const Color(0xFFC47F0A), 'POPULAR'),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Row(
+        children: List.generate(plans.length, (i) {
+          final sel     = i == planIdx;
+          final p       = plans[i];
+          final colorT  = p.$3;
+          final colorB  = p.$4;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onSelect(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeInOut,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                decoration: BoxDecoration(
+                  gradient: sel ? LinearGradient(
+                    colors: [colorT, colorB],
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  ) : null,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: sel ? [BoxShadow(
+                    color: colorT.withOpacity(0.35),
+                    blurRadius: 10, offset: const Offset(0, 3),
+                  )] : null,
+                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(p.$1, size: 16,
+                      color: sel ? Colors.white : AppColors.textSecondary),
+                  const SizedBox(width: 6),
+                  Text(p.$2, style: GoogleFonts.poppins(
+                    fontSize: 14, fontWeight: FontWeight.w700,
+                    color: sel ? Colors.white : AppColors.textSecondary,
+                  )),
+                  if (p.$5 != null) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: sel
+                            ? Colors.white.withOpacity(0.22)
+                            : const Color(0xFFE6A817).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(p.$5!, style: GoogleFonts.poppins(
+                        fontSize: 7.5, fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: sel ? Colors.white : const Color(0xFFB07010),
+                      )),
+                    ),
+                  ],
+                ]),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET: Feature list compacta (para plan seleccionado)
+// ═══════════════════════════════════════════════════════════════════════════════
+class _FeatureListCompacta extends StatelessWidget {
+  final bool esPro;
+  const _FeatureListCompacta({required this.esPro});
+
+  static const _basico = [
+    ('🛒', 'Punto de Venta (POS)'),
+    ('📦', 'Gestión de inventario'),
+    ('👥', 'Base de clientes'),
+    ('📋', 'Fiado / crédito'),
+    ('💸', 'Control de gastos'),
+    ('📊', 'Reportes de ventas'),
+    ('☁️', 'Sincronización en la nube'),
+    ('📵', 'Funciona sin internet'),
+  ];
+  static const _pro = [
+    ('✅', 'Todo lo del plan Básico'),
+    ('🏷️', 'Apartados de productos'),
+    ('🧾', 'Cuadre de Caja'),
+    ('🏪', 'Vitrina digital con QR'),
+    ('🍽️', 'Carta Digital'),
+    ('📝', 'Gestión de Encargos'),
+    ('🖨️', 'Impresión térmica'),
+    ('💬', 'Integración WhatsApp'),
+    ('⭐', 'Soporte VIP prioritario'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colorT    = esPro ? const Color(0xFFE6A817) : const Color(0xFF4A90D9);
+    final features  = esPro ? _pro : _basico;
+    final planName  = esPro ? 'Plan Pro' : 'Plan Básico';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(esPro ? Icons.workspace_premium_rounded : Icons.store_outlined,
+              color: colorT, size: 16),
+          const SizedBox(width: 6),
+          Text('Incluye el $planName',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700, fontSize: 13,
+                color: AppColors.textPrimary,
+              )),
+        ]),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 6, runSpacing: 6,
+          children: features.map((f) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            decoration: BoxDecoration(
+              color: colorT.withOpacity(0.07),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: colorT.withOpacity(0.18)),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(f.$1, style: const TextStyle(fontSize: 12)),
+              const SizedBox(width: 4),
+              Text(f.$2, style: GoogleFonts.poppins(
+                  fontSize: 11, color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w500)),
+            ]),
+          )).toList(),
+        ),
+      ]),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET: Lista de períodos con radio buttons (todos visibles)
+// ═══════════════════════════════════════════════════════════════════════════════
+class _PeriodoRadioList extends StatelessWidget {
+  final int periodoIdx;
+  final int planIdx;
+  final List<_Periodo> periodos;
+  final String Function(String id, String fallback) getPrecio;
+  final ValueChanged<int> onSelect;
+  const _PeriodoRadioList({
+    required this.periodoIdx, required this.planIdx,
+    required this.periodos,   required this.getPrecio,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(periodos.length, (i) {
+        final p      = periodos[i];
+        final sel    = i == periodoIdx;
+        final esPro  = planIdx == 1;
+        final id     = esPro ? p.idPro : p.idBasico;
+        final fb     = esPro ? p.precioProfallback : p.precioBasicoFallback;
+        final precio = getPrecio(id, fb);
+        final ahorro = esPro ? p.ahorroPro : p.ahorroBasico;
+        final colorT = esPro ? const Color(0xFFE6A817) : const Color(0xFF4A90D9);
+        final badgeColor = p.badge == 'POPULAR'
+            ? const Color(0xFF00B894)
+            : p.badge == 'MEJOR PRECIO'
+                ? const Color(0xFFE6A817)
+                : Colors.transparent;
+
+        return GestureDetector(
+          onTap: () => onSelect(i),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: sel ? colorT.withOpacity(0.07) : AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: sel ? colorT : AppColors.cardBorder,
+                width: sel ? 1.8 : 1,
+              ),
+            ),
+            child: Row(children: [
+              // Radio indicator
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 20, height: 20,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: sel ? colorT : AppColors.textSecondary.withOpacity(0.4),
+                    width: 2,
+                  ),
+                  color: sel ? colorT : Colors.transparent,
+                ),
+                child: sel
+                    ? const Icon(Icons.check, color: Colors.white, size: 12)
+                    : null,
+              ),
+              const SizedBox(width: 10),
+
+              // Label + ahorro badge
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Text(p.label, style: GoogleFonts.poppins(
+                      fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 13.5,
+                      color: sel ? colorT : AppColors.textPrimary,
+                    )),
+                    if (p.badge != null) ...[
+                      const SizedBox(width: 7),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: badgeColor,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(p.badge!, style: GoogleFonts.poppins(
+                          fontSize: 8.5, fontWeight: FontWeight.w700,
+                          color: Colors.white, letterSpacing: 0.3,
+                        )),
+                      ),
+                    ],
+                  ]),
+                  if (ahorro != null) ...[
+                    const SizedBox(height: 2),
+                    Text(ahorro, style: GoogleFonts.poppins(
+                      fontSize: 11, color: AppColors.success,
+                      fontWeight: FontWeight.w600,
+                    )),
+                  ],
+                ],
+              )),
+
+              // Precio
+              Text(precio, style: GoogleFonts.poppins(
+                fontSize: 15, fontWeight: FontWeight.w800,
+                color: sel ? colorT : AppColors.textPrimary,
+              )),
+            ]),
+          ),
+        );
+      }),
     );
   }
 }
