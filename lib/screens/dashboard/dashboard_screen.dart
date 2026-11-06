@@ -522,6 +522,7 @@ Future<void> _cargarVersion() async {
                   width: double.infinity, height: 48,
                   child: OutlinedButton.icon(
                     onPressed: () async {
+                      await LocalDatabase.limpiarDatosLocales();
                       await Supabase.instance.client.auth.signOut();
                       if (context.mounted) {
                         Navigator.of(context).pushAndRemoveUntil(
