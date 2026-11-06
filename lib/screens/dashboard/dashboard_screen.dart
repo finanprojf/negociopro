@@ -93,7 +93,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
 Future<void> _cargarVersion() async {
     final info = await PackageInfo.fromPlatform();
-    if (mounted) setState(() => _appVersion = 'v\${info.version}');
+    if (mounted) setState(() => _appVersion = 'v${info.version}');
   }
 
   Future<void> _verificarActualizacion() async {
