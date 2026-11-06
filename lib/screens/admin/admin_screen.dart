@@ -40,7 +40,7 @@ class _AdminScreenState extends State<AdminScreen> {
     try {
       final res = await SupabaseService.client
           .from('empresas')
-          .select('id, nombre, telefono, whatsapp, plan_activo, suscripcion_vence, created_at, usuarios(id, correo)')
+          .select('id, nombre, telefono, whatsapp, plan_activo, suscripcion_vence, created_at, usuarios(id, nombre, correo), productos(count)')
           .order('created_at', ascending: false);
       if (mounted) setState(() { _empresas = List<Map<String, dynamic>>.from(res); _loading = false; });
     } catch (_) { if (mounted) setState(() => _loading = false); }
@@ -444,9 +444,20 @@ class _EmpresaCardState extends State<_EmpresaCard> {
                 Icon(_expandido ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 20),
               ]),
               const SizedBox(height: 6),
-              if (e['usuarios'] != null && (e['usuarios'] as List).isNotEmpty)
+              // Nombre del usuario propietario
+              if (e['usuarios'] != null && (e['usuarios'] as List).isNotEmpty) ...[
+                _InfoRow(Icons.person_outline_rounded, (e['usuarios'] as List).first['nombre'] ?? 'Sin nombre'),
                 _InfoRow(Icons.email_outlined, (e['usuarios'] as List).first['correo'] ?? ''),
+              ],
               if (telefono.isNotEmpty) _InfoRow(Icons.phone_outlined, telefono),
+              // Conteo de productos en inventario
+              Builder(builder: (_) {
+                final prods = e['productos'];
+                if (prods == null) return const SizedBox.shrink();
+                final count = prods is List ? prods.length : (prods is Map ? (prods['count'] ?? 0) : 0);
+                return _InfoRow(Icons.inventory_2_outlined, '$count producto${count == 1 ? '' : 's'} en inventario',
+                    color: count == 0 ? AppColors.textMuted : null);
+              }),
               _InfoRow(Icons.calendar_today_rounded,
                 vence != null
                     ? 'Vence: ${AppFormatters.fecha(vence)}${dias != null && dias >= 0 ? ' ($dias días)' : ' (vencida)'}'
