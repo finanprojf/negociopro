@@ -5,6 +5,7 @@ import 'package:in_app_update/in_app_update.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../utils/formatters.dart';
+import '../../utils/responsive.dart';
 import '../ventas/pos_screen.dart';
 import '../inventario/inventario_screen.dart';
 import '../clientes/clientes_screen.dart';
