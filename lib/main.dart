@@ -24,9 +24,12 @@ Future<void> main() async {
   // Inicializar locale para fechas en español
   await initializeDateFormatting('es_DO', null);
 
+  // Permitir todas las orientaciones — el layout se adapta según dispositivo
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
   ]);
 
   // Hacer la barra de navegación de Android transparente

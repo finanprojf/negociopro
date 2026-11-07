@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/inventario_service.dart';
 import 'ajuste_stock_screen.dart';
 import 'dart:io';
+import '../../utils/responsive.dart';
 import '../../widgets/guia_modulo_banner.dart';
 class InventarioScreen extends StatefulWidget {
   const InventarioScreen({super.key});
@@ -198,6 +199,23 @@ class _InventarioScreenState extends State<InventarioScreen> {
   }
 
   Widget _buildLista() {
+    if (R.isTablet(context)) {
+      return GridView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 3.2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 8,
+        ),
+        itemCount: _filtrados.length,
+        itemBuilder: (_, i) => _ProductoTile(
+          producto: _filtrados[i],
+          onTap: () => _irAFormulario(producto: _filtrados[i]),
+          onAjusteStock: () => _irAjusteStock(_filtrados[i]),
+        ),
+      );
+    }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
       itemCount: _filtrados.length,

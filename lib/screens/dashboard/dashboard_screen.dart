@@ -545,26 +545,58 @@ Future<void> _cargarVersion() async {
       );
     }
 
+    final esTablet = R.isTablet(context);
+    final fab = FloatingActionButton(
+      onPressed: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => const PosScreen())),
+      backgroundColor: pal.primary,
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Icon(Icons.point_of_sale_rounded, color: Colors.white, size: 20),
+        Text('Venta', style: GoogleFonts.poppins(
+            color: Colors.white, fontWeight: FontWeight.w700, fontSize: 9)),
+      ]),
+    );
+
+    if (esTablet) {
+      return Scaffold(
+        body: Row(children: [
+          NavigationRail(
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+            labelType: NavigationRailLabelType.all,
+            minWidth: 72,
+            destinations: const [
+              NavigationRailDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: Text('Inicio'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.shopping_bag_outlined),
+                selectedIcon: Icon(Icons.shopping_bag_rounded),
+                label: Text('Encargos'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.lock_clock_outlined),
+                selectedIcon: Icon(Icons.lock_clock_rounded),
+                label: Text('Cuadre'),
+              ),
+            ],
+          ),
+          const VerticalDivider(thickness: 1, width: 1),
+          Expanded(child: _selectedIndex == 0
+              ? _buildDashboard()
+              : _buildOtrasPantallas()),
+        ]),
+        floatingActionButton: _selectedIndex == 0 ? fab : null,
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      );
+    }
+
     return Scaffold(
       body: _selectedIndex == 0 ? _buildDashboard() : _buildOtrasPantallas(),
       bottomNavigationBar: _buildBottomNav(),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const PosScreen())),
-              backgroundColor: pal.primary,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.point_of_sale_rounded,
-                      color: Colors.white, size: 20),
-                  Text('Venta', style: GoogleFonts.poppins(
-                      color: Colors.white, fontWeight: FontWeight.w700,
-                      fontSize: 9)),
-                ],
-              ),
-            )
-          : null,
+      floatingActionButton: _selectedIndex == 0 ? fab : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
@@ -1132,7 +1164,7 @@ Widget _buildVitrinaWidget() {
           fontSize: 16, fontWeight: FontWeight.w700, color: pal.textPrimary)),
       const SizedBox(height: 8),
       GridView.count(
-        crossAxisCount: 3, shrinkWrap: true,
+        crossAxisCount: R.cols(context, phone: 3, tablet: 6), shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.05,
         children: modules.map((m) => GestureDetector(

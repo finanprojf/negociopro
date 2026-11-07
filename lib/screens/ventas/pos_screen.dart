@@ -13,6 +13,7 @@ import '../../services/printer_service.dart';
 import '../../services/cliente_service.dart';
 import '../../models/cliente_model.dart';
 import 'historial_ventas_screen.dart';
+import '../../utils/responsive.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:typed_data';
@@ -392,41 +393,125 @@ Future<void> _cargarClientes() async {
   }
   @override
   Widget build(BuildContext context) {
+    final esTablet = R.isTablet(context);
+    final appBar = AppBar(
+      title: const Text('Nueva venta'),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.qr_code_scanner_rounded),
+          tooltip: 'Escanear producto',
+          onPressed: _escanearProducto,
+        ),
+        IconButton(
+          icon: const Icon(Icons.history_rounded),
+          onPressed: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const HistorialVentasScreen())),
+        ),
+        if (_carrito.isNotEmpty)
+          TextButton(
+            onPressed: () => setState(() { _carrito.clear(); _carritoMap.clear(); }),
+            child: Text('Limpiar', style: GoogleFonts.poppins(
+                color: AppColors.danger, fontWeight: FontWeight.w600)),
+          ),
+        if (_carrito.isNotEmpty && !esTablet)
+          TextButton.icon(
+            onPressed: _verCarrito,
+            icon: const Icon(Icons.shopping_cart_rounded, size: 18),
+            label: Text('$_totalItems', style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700)),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+          ),
+      ],
+    );
+
+    if (esTablet) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: appBar,
+        body: Row(children: [
+          // Left: product grid (60%)
+          Expanded(
+            flex: 6,
+            child: Column(children: [
+              const GuiaModuloBanner(modulo: 'pos'),
+              _buildBuscador(),
+              Expanded(child: _buildGridProductos()),
+            ]),
+          ),
+          const VerticalDivider(thickness: 1, width: 1),
+          // Right: always-visible cart (40%)
+          SizedBox(
+            width: 320,
+            child: _buildCarritoPanel(),
+          ),
+        ]),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Nueva venta'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.qr_code_scanner_rounded),
-            tooltip: 'Escanear producto',
-            onPressed: _escanearProducto,
-          ),
-          IconButton(
-            icon: const Icon(Icons.history_rounded),
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const HistorialVentasScreen())),
-          ),
-          if (_carrito.isNotEmpty)
-            TextButton(
-              onPressed: () => setState(() { _carrito.clear(); _carritoMap.clear(); }),
-              child: Text('Limpiar', style: GoogleFonts.poppins(
-                  color: AppColors.danger, fontWeight: FontWeight.w600)),
-            ),
-          if (_carrito.isNotEmpty)
-            TextButton.icon(
-              onPressed: _verCarrito,
-              icon: const Icon(Icons.shopping_cart_rounded, size: 18),
-              label: Text('$_totalItems', style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700)),
-              style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-            ),
-        ],
-      ),
+      appBar: appBar,
       body: Column(children: [
-            const GuiaModuloBanner(modulo: 'pos'),
+        const GuiaModuloBanner(modulo: 'pos'),
         _buildBuscador(),
         Expanded(child: _buildGridProductos()),
+        if (_carrito.isNotEmpty) _buildFooter(),
+      ]),
+    );
+  }
+
+  // Tablet: always-visible cart panel on the right
+  Widget _buildCarritoPanel() {
+    return Container(
+      color: AppColors.surface,
+      child: Column(children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppColors.cardBorder)),
+          ),
+          child: Row(children: [
+            const Icon(Icons.shopping_cart_rounded, color: AppColors.primary, size: 20),
+            const SizedBox(width: 8),
+            Text('Carrito', style: GoogleFonts.poppins(
+                fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            const Spacer(),
+            if (_carrito.isNotEmpty)
+              Text('$_totalItems items', style: GoogleFonts.poppins(
+                  fontSize: 12, color: AppColors.textSecondary)),
+          ]),
+        ),
+        // Cart items
+        Expanded(
+          child: _carrito.isEmpty
+            ? Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.shopping_cart_outlined, size: 48, color: AppColors.textMuted),
+                  const SizedBox(height: 12),
+                  Text('Carrito vacío', style: GoogleFonts.poppins(
+                      fontSize: 14, color: AppColors.textMuted)),
+                ]),
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.all(12),
+                itemCount: _carrito.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                itemBuilder: (_, i) => _CarritoItem(
+                  item: _carrito[i],
+                  onCambiar: (n) {
+                    final stock = _carrito[i].producto.stockActual;
+                    if (n > stock) { _mostrarSinStock(_carrito[i].producto); return; }
+                    setState(() {
+                      if (n <= 0) _carrito.removeAt(i);
+                      else _carrito[i].cantidad = n;
+                    });
+                  },
+                  onEliminar: () => setState(() => _carrito.removeAt(i)),
+                ),
+              ),
+        ),
+        // Footer with payment type + total + cobrar
         if (_carrito.isNotEmpty) _buildFooter(),
       ]),
     );
@@ -547,10 +632,11 @@ Future<void> _cargarClientes() async {
     if (_loading) return const Center(
         child: CircularProgressIndicator(color: AppColors.primary));
     if (_filtrados.isEmpty) return _buildEmptyInventario();
+    final cols = R.cols(context, phone: 2, tablet: 4);
     return GridView.builder(
       padding: const EdgeInsets.all(8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: cols,
         childAspectRatio: 1.3,
         crossAxisSpacing: 8,
         mainAxisSpacing: 8,
@@ -578,7 +664,7 @@ Future<void> _cargarClientes() async {
 
 
   Widget _buildEmptyInventario() {
-    final buscando = _query.isNotEmpty;
+    final buscando = _searchCtrl.text.trim().isNotEmpty;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -604,7 +690,7 @@ Future<void> _cargarClientes() async {
           const SizedBox(height: 8),
           Text(
             buscando
-                ? 'No encontramos productos que coincidan con "$_query".'
+                ? 'No encontramos productos que coincidan con "${_searchCtrl.text.trim()}".'
                 : 'Agrega productos en el inventario para comenzar a vender.',
             style: const TextStyle(
                 fontFamily: 'Poppins', fontSize: 13,
