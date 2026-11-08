@@ -763,11 +763,21 @@
       if (disp === 'fecha')  return '<p class="text-xs text-pink-600 font-medium text-center">Disponible pronto</p>';
       return '<p class="text-xs text-red-400 font-medium text-center">No disponible</p>';
     }
-    if (enCarrito === 0) return `<button onclick="agregarAlCarrito('${p.id}')" class="theme-btn-add">+ Agregar</button>`;
-    return `<div class="theme-qty-box">
-      <button class="qty-btn theme-qty-btn" onclick="cambiarCantidad('${p.id}', -1)">−</button>
-      <span class="theme-qty-num">${enCarrito}</span>
-      <button class="qty-btn theme-qty-btn" onclick="cambiarCantidad('${p.id}', 1)">+</button>
+    const stockMax = p.disponibilidad && p.disponibilidad !== 'stock' ? 999 : (p.stock_actual ?? 0);
+    const sinStock = stockMax > 0 && enCarrito >= stockMax;
+    if (enCarrito === 0) {
+      if (sinStock) return '<p class="text-xs text-red-400 font-medium text-center">Sin stock</p>';
+      return `<button onclick="agregarAlCarrito('${p.id}')" class="theme-btn-add">+ Agregar</button>`;
+    }
+    const plusDisabled = sinStock ? 'opacity-30 cursor-not-allowed pointer-events-none' : '';
+    const stockLabel = sinStock ? '<span class="text-[10px] text-red-400 font-medium">Límite alcanzado</span>' : '';
+    return `<div class="flex flex-col items-center gap-0.5">
+      <div class="theme-qty-box">
+        <button class="qty-btn theme-qty-btn" onclick="cambiarCantidad('${p.id}', -1)">−</button>
+        <span class="theme-qty-num">${enCarrito}</span>
+        <button class="qty-btn theme-qty-btn ${plusDisabled}" onclick="cambiarCantidad('${p.id}', 1)">+</button>
+      </div>
+      ${stockLabel}
     </div>`;
   }
 
@@ -1331,13 +1341,22 @@
 
     let ctrlEl = '';
     if (disponible) {
+      const stockMax = p.stock_actual ?? 0;
+      const sinStock = stockMax > 0 && enCarrito >= stockMax;
       if (enCarrito === 0) {
-        ctrlEl = `<button class="carta-btn-add" onclick="cartaAgregar('${p.id}')">+ Agregar</button>`;
+        ctrlEl = sinStock
+          ? '<p class="text-xs text-red-400 font-medium text-center">Sin stock</p>'
+          : `<button class="carta-btn-add" onclick="cartaAgregar('${p.id}')">+ Agregar</button>`;
       } else {
-        ctrlEl = `<div class="carta-qty-box">
-          <button class="carta-qty-btn" onclick="cartaCambiar('${p.id}',-1)">−</button>
-          <span class="carta-qty-num">${enCarrito}</span>
-          <button class="carta-qty-btn" onclick="cartaCambiar('${p.id}',1)">+</button>
+        const plusCls = sinStock ? 'carta-qty-btn opacity-30 cursor-not-allowed pointer-events-none' : 'carta-qty-btn';
+        const lbl = sinStock ? '<span class="text-[10px] text-red-400 font-medium">Límite alcanzado</span>' : '';
+        ctrlEl = `<div class="flex flex-col items-center gap-0.5">
+          <div class="carta-qty-box">
+            <button class="carta-qty-btn" onclick="cartaCambiar('${p.id}',-1)">−</button>
+            <span class="carta-qty-num">${enCarrito}</span>
+            <button class="${plusCls}" onclick="cartaCambiar('${p.id}',1)">+</button>
+          </div>
+          ${lbl}
         </div>`;
       }
     }
