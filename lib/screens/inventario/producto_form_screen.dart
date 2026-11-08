@@ -43,6 +43,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
   List<CategoriaModel> _categorias = [];
   bool   _esElaborado = false;
   bool   _enCarta = false;
+  bool   _masOpciones = false;
 
   File?   _imagenSeleccionada;
   String? _rutaImagenGuardada;
@@ -377,77 +378,212 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
           _buildFoto(),
           const SizedBox(height: 20),
 
-          // ── Toggle elaborado ──────────────────────────────
-          _buildToggleElaborado(),
-          const SizedBox(height: 20),
-
-          // ── Info básica ───────────────────────────────────
-          _buildSeccion('Información básica'),
-          const SizedBox(height: 12),
+          // ── Campos obligatorios ───────────────────────────
           _buildCampoTexto(_nombreCtrl, 'Nombre del producto *',
               Icons.label_outline, 'Ej: Jugo de chinola'),
-          const SizedBox(height: 12),
-          _buildCampoTexto(_descripcionCtrl, 'Descripción (opcional)',
-              Icons.notes_rounded, 'Detalles del producto', requerido: false),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: _buildCampoTexto(_codigoCtrl, 'Código de barras (opcional)',
-                Icons.qr_code_rounded, 'Escanear o ingresar', requerido: false)),
-            const SizedBox(width: 8),
-            IconButton(
-              style: IconButton.styleFrom(
-                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              icon: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary),
-              onPressed: () async {
-                final codigo = await Navigator.push<String>(context,
-                    MaterialPageRoute(builder: (_) => const ScannerScreen(titulo: 'Código de barras')));
-                if (codigo != null && mounted) {
-                  _codigoCtrl.text = codigo;
-                }
-              },
-            ),
-          ]),
-          const SizedBox(height: 20),
-
-          // ── Costos ────────────────────────────────────────
-          _esElaborado
-              ? _buildSeccionElaborado()
-              : _buildSeccionRevendido(),
-          const SizedBox(height: 20),
-
-          // ── Precio de venta + indicador ───────────────────
-          _buildSeccion('Precio de venta'),
           const SizedBox(height: 12),
           _buildCampoNumerico(_precioVentaCtrl,
               'Precio de venta *', 'RD\$', requerido: true),
           if (_precioVenta > 0 && _costoBase > 0) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             _buildIndicadorGanancia(),
           ],
           const SizedBox(height: 20),
 
-          // ── Stock ─────────────────────────────────────────
-          _buildSeccion('Stock'),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: _buildCampoNumerico(_stockActualCtrl,
-                'Stock actual', '', esDecimal: true)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildCampoNumerico(_stockMinimoCtrl,
-                'Stock mínimo', '', esDecimal: true)),
-          ]),
-          const SizedBox(height: 12),
-          _buildSelectorUnidad(),
-          const SizedBox(height: 12),
-          _buildSelectorCategoria(),
+          // ── Stock (simplificado, siempre visible) ─────────
+          _buildStockSimple(),
+          const SizedBox(height: 20),
+
+          // ── Más opciones ──────────────────────────────────
+          _buildMasOpciones(),
           const SizedBox(height: 32),
 
           _buildBotonGuardar(),
         ]),
       ),
     ),
+  );
+
+  // ── Stock simplificado ──────────────────────────────────────
+  Widget _buildStockSimple() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // Stock actual
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.inventory_2_outlined,
+                color: AppColors.primary, size: 20),
+            const SizedBox(width: 8),
+            const Text('¿Cuántos tienes disponibles?',
+                style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 13, fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary)),
+          ]),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _stockActualCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'  ))],
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+            textAlign: TextAlign.center,
+            decoration: InputDecoration(
+              hintText: '0',
+              hintStyle: TextStyle(color: AppColors.textMuted.withValues(alpha: 0.5)),
+              filled: true,
+              fillColor: AppColors.background,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              suffix: const Text('unidades',
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontSize: 12, color: AppColors.textMuted)),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 10),
+      // Stock mínimo
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.notifications_active_outlined,
+                color: AppColors.warning, size: 20),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Avisarme cuando queden menos de:',
+                style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 13, fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary))),
+          ]),
+          const SizedBox(height: 6),
+          const Text('El sistema te alertará para que compres más a tiempo.',
+              style: TextStyle(fontFamily: 'Poppins',
+                  fontSize: 11, color: AppColors.textMuted)),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _stockMinimoCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+            textAlign: TextAlign.center,
+            decoration: InputDecoration(
+              hintText: '5',
+              hintStyle: TextStyle(color: AppColors.textMuted.withValues(alpha: 0.5)),
+              filled: true,
+              fillColor: AppColors.background,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              suffix: const Text('unidades',
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontSize: 12, color: AppColors.textMuted)),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ]),
+      ),
+    ],
+  );
+
+  // ── Más opciones (colapsable) ─────────────────────────────────
+  Widget _buildMasOpciones() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // Botón para expandir
+      GestureDetector(
+        onTap: () => setState(() => _masOpciones = !_masOpciones),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: _masOpciones
+                ? AppColors.primary.withValues(alpha: 0.08)
+                : AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _masOpciones
+                  ? AppColors.primary.withValues(alpha: 0.3)
+                  : AppColors.cardBorder),
+          ),
+          child: Row(children: [
+            Icon(
+              _masOpciones
+                  ? Icons.keyboard_arrow_up_rounded
+                  : Icons.keyboard_arrow_down_rounded,
+              color: AppColors.primary, size: 22,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              _masOpciones ? 'Ocultar opciones' : '+ Más opciones',
+              style: const TextStyle(fontFamily: 'Poppins',
+                  fontSize: 14, fontWeight: FontWeight.w600,
+                  color: AppColors.primary),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '(código, categoría, tipo de producto…)',
+              style: const TextStyle(fontFamily: 'Poppins',
+                  fontSize: 11, color: AppColors.textMuted),
+            ),
+          ]),
+        ),
+      ),
+
+      // Contenido colapsable
+      if (_masOpciones) ...[
+        const SizedBox(height: 16),
+        _buildToggleElaborado(),
+        const SizedBox(height: 16),
+        _esElaborado
+            ? _buildSeccionElaborado()
+            : _buildSeccionRevendido(),
+        const SizedBox(height: 16),
+        _buildCampoTexto(_descripcionCtrl, 'Descripción (opcional)',
+            Icons.notes_rounded, 'Detalles del producto', requerido: false),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: _buildCampoTexto(_codigoCtrl, 'Código de barras',
+              Icons.qr_code_rounded, 'Escanear o ingresar', requerido: false)),
+          const SizedBox(width: 8),
+          IconButton(
+            style: IconButton.styleFrom(
+              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary),
+            onPressed: () async {
+              final codigo = await Navigator.push<String>(context,
+                  MaterialPageRoute(builder: (_) => const ScannerScreen(titulo: 'Código de barras')));
+              if (codigo != null && mounted) {
+                _codigoCtrl.text = codigo;
+              }
+            },
+          ),
+        ]),
+        const SizedBox(height: 12),
+        _buildSelectorUnidad(),
+        const SizedBox(height: 12),
+        _buildSelectorCategoria(),
+      ],
+    ],
   );
 
   // ── Toggle elaborado ─────────────────────────────────────────
