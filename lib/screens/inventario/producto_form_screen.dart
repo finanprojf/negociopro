@@ -531,17 +531,24 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
               color: AppColors.primary, size: 22,
             ),
             const SizedBox(width: 10),
-            Text(
-              _masOpciones ? 'Ocultar opciones' : '+ Más opciones',
-              style: const TextStyle(fontFamily: 'Poppins',
-                  fontSize: 14, fontWeight: FontWeight.w600,
-                  color: AppColors.primary),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '(código, categoría, tipo de producto…)',
-              style: const TextStyle(fontFamily: 'Poppins',
-                  fontSize: 11, color: AppColors.textMuted),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _masOpciones ? 'Ocultar opciones' : '+ Más opciones',
+                    style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 14, fontWeight: FontWeight.w600,
+                        color: AppColors.primary),
+                  ),
+                  if (!_masOpciones)
+                    const Text(
+                      'código, categoría, tipo de producto…',
+                      style: TextStyle(fontFamily: 'Poppins',
+                          fontSize: 11, color: AppColors.textMuted),
+                    ),
+                ],
+              ),
             ),
           ]),
         ),
