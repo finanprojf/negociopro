@@ -378,19 +378,33 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
           _buildFoto(),
           const SizedBox(height: 20),
 
-          // ── Campos obligatorios ───────────────────────────
+          // ── Nombre ────────────────────────────────────────
           _buildCampoTexto(_nombreCtrl, 'Nombre del producto *',
               Icons.label_outline, 'Ej: Jugo de chinola'),
           const SizedBox(height: 12),
+
+          // ── Precio de venta ───────────────────────────────
           _buildCampoNumerico(_precioVentaCtrl,
               'Precio de venta *', 'RD\$', requerido: true),
+          const SizedBox(height: 12),
+
+          // ── Precio de compra (opcional visible) ───────────
+          _buildPrecioCompraOpcional(),
           if (_precioVenta > 0 && _costoBase > 0) ...[
             const SizedBox(height: 10),
             _buildIndicadorGanancia(),
           ],
           const SizedBox(height: 20),
 
-          // ── Stock (simplificado, siempre visible) ─────────
+          // ── Toggle elaborado (siempre visible) ────────────
+          _buildToggleElaborado(),
+          if (_esElaborado) ...[
+            const SizedBox(height: 16),
+            _buildSeccionElaborado(),
+          ],
+          const SizedBox(height: 20),
+
+          // ── Stock ─────────────────────────────────────────
           _buildStockSimple(),
           const SizedBox(height: 20),
 
@@ -402,6 +416,34 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
         ]),
       ),
     ),
+  );
+
+  // ── Precio de compra opcional (visible en main) ─────────────
+  Widget _buildPrecioCompraOpcional() => Stack(
+    clipBehavior: Clip.none,
+    children: [
+      _buildCampoNumerico(
+        _esElaborado ? _costoTotalCtrl : _precioCompraCtrl,
+        _esElaborado ? 'Total gastado en producción' : 'Precio de compra',
+        'RD\$',
+        requerido: false,
+      ),
+      Positioned(
+        top: -8, right: 8,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: const Text('Opcional',
+              style: TextStyle(fontFamily: 'Poppins',
+                  fontSize: 10, fontWeight: FontWeight.w500,
+                  color: AppColors.textMuted)),
+        ),
+      ),
+    ],
   );
 
   // ── Stock simplificado ──────────────────────────────────────
@@ -570,12 +612,6 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
 
       // Contenido colapsable
       if (_masOpciones) ...[
-        const SizedBox(height: 16),
-        _buildToggleElaborado(),
-        const SizedBox(height: 16),
-        _esElaborado
-            ? _buildSeccionElaborado()
-            : _buildSeccionRevendido(),
         const SizedBox(height: 16),
         _buildCampoTexto(_descripcionCtrl, 'Descripción (opcional)',
             Icons.notes_rounded, 'Detalles del producto', requerido: false),
