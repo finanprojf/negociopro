@@ -928,7 +928,7 @@ Widget _buildVitrinaWidget() {
             child: CircleAvatar(
               radius: 18,
               backgroundColor: pal.primarySurface,
-              child: Icon(Icons.person_outline, color: pal.primary, size: 20),
+              child: Icon(Icons.tune_rounded, color: pal.primary, size: 20),
             ),
           ),
         ),
