@@ -902,14 +902,7 @@ Widget _buildVitrinaWidget() {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const VitrinaConfigScreen()));
                   },
                 ),
-                ListTile(
-                  leading: Icon(Icons.workspace_premium_rounded, color: pal.colorVentas),
-                  title: Text('Suscripción', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const SuscripcionScreen()));
-                  },
-                ),
+
                 ListTile(
                   leading: Icon(Icons.lock_rounded, color: pal.textSecondary),
                   title: Text('Seguridad y PIN', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
