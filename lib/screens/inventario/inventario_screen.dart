@@ -229,31 +229,88 @@ class _InventarioScreenState extends State<InventarioScreen> {
   }
 
   Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.inventory_2_outlined, size: 64, color: AppColors.textMuted),
-          const SizedBox(height: 16),
-          const Text(
-            'Sin productos',
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
-                fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+    return Stack(
+      children: [
+        // Contenido central
+        Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Ícono con fondo suave
+              Container(
+                width: 100, height: 100,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.inventory_2_outlined,
+                    size: 48, color: AppColors.primary),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Tu inventario está vacío',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
+                    fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Empieza agregando los productos\nque vendes en tu negocio',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 13, color: AppColors.textMuted, height: 1.5),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Agrega tu primer producto\npara comenzar',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textMuted),
+        ),
+
+        // Flecha + texto apuntando al FAB (esquina inferior derecha)
+        Positioned(
+          bottom: 90,
+          right: 24,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Texto con fondo tipo globo
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(14),
+                    topRight: Radius.circular(14),
+                    bottomLeft: Radius.circular(14),
+                    bottomRight: Radius.circular(4),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                      blurRadius: 12, offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Text(
+                  'Agrega tu primer\nproducto aquí 👆',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontSize: 13, fontWeight: FontWeight.w600,
+                      color: Colors.white, height: 1.4),
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Flechita curva hacia abajo-derecha
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Transform.rotate(
+                  angle: 0.5,
+                  child: const Icon(Icons.arrow_downward_rounded,
+                      color: AppColors.primary, size: 28),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _irAFormulario,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Agregar producto'),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
