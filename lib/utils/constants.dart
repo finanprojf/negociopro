@@ -31,3 +31,4 @@ static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJp
   static const String dbName = 'negociopro.db';
   static const int dbVersion = 17;
 }
+

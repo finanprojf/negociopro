@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
 import '../../services/supabase_service.dart';
+import '../../features/soporte/soporte_admin_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -99,7 +100,7 @@ class _AdminScreenState extends State<AdminScreen> {
     backgroundColor: AppColors.background,
     appBar: AppBar(
       title: const Text('Panel Admin'),
-      actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _cargar)],
+      actions: [IconButton(icon: const Icon(Icons.support_agent_rounded), tooltip: 'Soporte', onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SoporteAdminScreen()))), IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _cargar)],
     ),
     body: _loading
         ? const Center(child: CircularProgressIndicator(color: AppColors.primary))

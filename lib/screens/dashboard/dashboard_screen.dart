@@ -31,6 +31,8 @@ import '../encargos/encargos_screen.dart';
 import '../reportes/cierre_dia_screen.dart';
 import '../auth/login_screen.dart';
 import '../recordatorios/recordatorios_screen.dart';
+import '../../features/soporte/soporte_screen.dart';
+import '../../services/soporte_service.dart';
 import '../../services/plan_service.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -58,6 +60,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   bool _vitrinaActiva = false;
   String _vitrinaUrl = '';
   List<Map<String, dynamic>> _recordatoriosHoy = [];
+  int _soporteNoLeidos = 0;
   Timer? _timer;
 
   @override
@@ -71,6 +74,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _verificarActualizacion();
     _cargarRecordatoriosHoy();
     _cargarVitrina();
+    _cargarSoporteNoLeidos();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) {
         _cargarResumen();
@@ -85,6 +89,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (state == AppLifecycleState.resumed && mounted) {
       _cargarResumen();
       _cargarRecordatoriosHoy();
+      _cargarSoporteNoLeidos();
       setState(() {});
     }
   }
@@ -494,6 +499,14 @@ Future<void> _cargarVersion() async {
     } catch (_) {}
   }
 
+  Future<void> _cargarSoporteNoLeidos() async {
+    if (_empresaId == null || _empresaId!.isEmpty) return;
+    try {
+      final n = await SoporteService.contarNoLeidos(_empresaId);
+      if (mounted) setState(() => _soporteNoLeidos = n);
+    } catch (_) {}
+  }
+
  @override
   Widget build(BuildContext context) {
     final pal = AppPalette.of(context);
@@ -879,6 +892,48 @@ Widget _buildVitrinaWidget() {
                   ),
                 ),
               ),
+              ],
+            ),
+          ),
+        ),
+      GestureDetector(
+          onTap: () async {
+            await Navigator.push(context, MaterialPageRoute(builder: (_) => const SoporteScreen()));
+            _cargarSoporteNoLeidos();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.headset_mic_outlined, color: pal.textSecondary, size: 24),
+                    Text('Soporte',
+                      style: TextStyle(
+                        fontSize: 7.5,
+                        color: pal.textSecondary,
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w500,
+                        height: 1.1,
+                      )),
+                  ],
+                ),
+                if (_soporteNoLeidos > 0)
+                  Positioned(
+                    top: 6, right: 6,
+                    child: IgnorePointer(
+                      child: Container(
+                        width: 10, height: 10,
+                        decoration: BoxDecoration(
+                          color: pal.danger,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: pal.surface, width: 1.5),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
