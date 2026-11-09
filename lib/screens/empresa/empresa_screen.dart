@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
@@ -27,6 +28,7 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
   final _telefonoCtrl = TextEditingController();
   final _whatsappCtrl = TextEditingController();
   final _direccionCtrl = TextEditingController();
+  bool _empresaConfigurada = false;
   final _lemaCtrl = TextEditingController();
   final _monedaCtrl = TextEditingController();
   bool _loading = false;
@@ -42,6 +44,7 @@ String _userTelefono = '';
 void initState() {
   super.initState();
   _cargarDatos();
+  _cargarFlagConfiguracion();
   _verificarAdmin();
 }
 
@@ -68,6 +71,17 @@ Future<void> _verificarAdmin() async {
     if (mounted) setState(() => _userEmail = authEmail);
   }
 }
+  Future<void> _cargarFlagConfiguracion() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) setState(() => _empresaConfigurada = prefs.getBool('empresa_configurada') ?? false);
+  }
+
+  Future<void> _guardarFlagConfiguracion() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('empresa_configurada', true);
+    if (mounted) setState(() => _empresaConfigurada = true);
+  }
+
   Future<void> _cargarDatos() async {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
@@ -157,6 +171,7 @@ Future<void> _verificarAdmin() async {
       }
       if (mounted) {
         setState(() => _loading = false);
+        _guardarFlagConfiguracion();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Información actualizada'),
           backgroundColor: AppColors.success,
@@ -215,21 +230,22 @@ Future<void> _verificarAdmin() async {
             esDestructivo: true,
           ),
           const SizedBox(height: 24),
-          _seccion('Plan'),
-          const SizedBox(height: 12),
-          _buildPlanCard(),
-          const SizedBox(height: 16),
-SizedBox(
-  width: double.infinity,
-  height: 50,
-  child: OutlinedButton.icon(
-    onPressed: () => Navigator.push(context,
-        MaterialPageRoute(builder: (_) => const SuscripcionScreen())),
-    icon: const Icon(Icons.workspace_premium_rounded),
-    label: Text('Ver planes de suscripción',
-        style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-  ),
-),
+          if (_empresaConfigurada) ...[
+            _seccion('Plan'),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const SuscripcionScreen())),
+                icon: const Icon(Icons.workspace_premium_rounded),
+                label: Text('Ver planes de suscripción',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity, height: 54,
@@ -849,8 +865,8 @@ SizedBox(
       ('__otra__', '✏️  Otra (escribir manualmente)'),
     ];
     final esPersonalizada = !monedas
-        .where((m) => m.\$1 != '__otra__')
-        .any((m) => m.\$1 == _monedaCtrl.text);
+        .where((m) => m.$1 != '__otra__')
+        .any((m) => m.$1 == _monedaCtrl.text);
     final dropValue = esPersonalizada ? '__otra__' : _monedaCtrl.text;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -877,9 +893,9 @@ SizedBox(
           contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
         ),
         style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textPrimary),
-        items: monedas.map((m) => DropdownMenuItem(
-          value: m.\$1,
-          child: Text(m.\$2),
+        items: monedas.map<DropdownMenuItem<String>>((m) => DropdownMenuItem<String>(
+          value: m.$1,
+          child: Text(m.$2),
         )).toList(),
         onChanged: (v) {
           if (v == '__otra__') {

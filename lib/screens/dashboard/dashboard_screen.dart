@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:in_app_update/in_app_update.dart';
@@ -52,6 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   int _apartadosActivos = 0;
   int _diasRestantes = 999;
   bool _suscripcionVencida = false;
+  bool _empresaConfigurada = false;
   bool _vitrinaActiva = false;
   String _vitrinaUrl = '';
   List<Map<String, dynamic>> _recordatoriosHoy = [];
@@ -63,6 +65,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     WidgetsBinding.instance.addObserver(this);
     _cargarNombre();
     _cargarResumen();
+    _cargarFlagEmpresa();
     _cargarVersion();
     _verificarActualizacion();
     _cargarRecordatoriosHoy();
@@ -120,6 +123,11 @@ Future<void> _cargarVersion() async {
       return DateTime.now();
     }
   }
+  Future<void> _cargarFlagEmpresa() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) setState(() => _empresaConfigurada = prefs.getBool('empresa_configurada') ?? false);
+  }
+
   Future<void> _cargarNombre() async {
     try {
       final empresaId = await SupabaseService.getEmpresaId();
@@ -769,8 +777,8 @@ Widget _buildVitrinaWidget() {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
           sliver: SliverList(
             delegate: SliverChildListDelegate([
-             if (_suscripcionVencida) _buildBannerVencida(),
-              if (!_suscripcionVencida && _diasRestantes <= 7)
+             if (_empresaConfigurada && _suscripcionVencida) _buildBannerVencida(),
+              if (_empresaConfigurada && !_suscripcionVencida && _diasRestantes <= 7)
                 _buildBannerAviso(),
               const SizedBox(height: 20),
               _buildGreeting(),
