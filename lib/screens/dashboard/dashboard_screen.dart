@@ -50,6 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   double _gananciasHoy = 0;
   int _productosLowStock = 0;
   int _productosSinStock = 0;
+  int _totalProductos = 0;
   int _apartadosActivos = 0;
   int _diasRestantes = 999;
   bool _suscripcionVencida = false;
@@ -250,6 +251,7 @@ Future<void> _cargarVersion() async {
           setState(() {
             _ventasHoy = totalVentas;
             _gananciasHoy = gananciaReal;
+            _totalProductos = stockBajo.length;
             _productosLowStock = stockBajo.where((p) =>
                 (p['stock_actual'] as num) > 0 &&
                 (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
@@ -435,6 +437,7 @@ Future<void> _cargarVersion() async {
         setState(() {
           _ventasHoy = totalVentas;
           _gananciasHoy = gananciaReal;
+          _totalProductos = (stockBajo as List).length;
           _productosLowStock = (stockBajo as List).where((p) =>
               (p['stock_actual'] as num) > 0 &&
               (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
@@ -1165,34 +1168,76 @@ Widget _buildVitrinaWidget() {
       Text('Módulos', style: GoogleFonts.poppins(
           fontSize: 16, fontWeight: FontWeight.w700, color: pal.textPrimary)),
       const SizedBox(height: 8),
+      SizedBox(height: _totalProductos == 0 ? 36 : 0),
       GridView.count(
         crossAxisCount: R.cols(context, phone: 3, tablet: 6), shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.05,
-        children: modules.map((m) => GestureDetector(
-          onTap: () async {
-            await Navigator.push(context,
-                MaterialPageRoute(builder: (_) => m.screen));
-            if (mounted) { _cargarResumen(); setState(() {}); }
-          },
-          child: Container(
-            decoration: BoxDecoration(color: pal.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: pal.cardBorder)),
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(
-                  color: m.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12)),
-                child: Icon(m.icon, color: m.color, size: 24)),
-              const SizedBox(height: 6),
-              Text(m.name, style: GoogleFonts.poppins(
-                  fontSize: 12, fontWeight: FontWeight.w600,
-                  color: pal.textPrimary), textAlign: TextAlign.center),
-            ]),
-          ),
-        )).toList(),
+        children: modules.map((m) {
+          final card = GestureDetector(
+            onTap: () async {
+              await Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => m.screen));
+              if (mounted) { _cargarResumen(); setState(() {}); }
+            },
+            child: Container(
+              decoration: BoxDecoration(color: pal.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: pal.cardBorder)),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: m.color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12)),
+                  child: Icon(m.icon, color: m.color, size: 24)),
+                const SizedBox(height: 6),
+                Text(m.name, style: GoogleFonts.poppins(
+                    fontSize: 12, fontWeight: FontWeight.w600,
+                    color: pal.textPrimary), textAlign: TextAlign.center),
+              ]),
+            ),
+          );
+          // Hint solo en Inventario cuando no hay productos
+          if (m.name == 'Inventario' && _totalProductos == 0) {
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                card,
+                Positioned(
+                  top: -38,
+                  left: 0,
+                  right: 0,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: pal.primary,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [BoxShadow(
+                              color: pal.primary.withValues(alpha: 0.25),
+                              blurRadius: 8, offset: const Offset(0, 2),
+                            )],
+                          ),
+                          child: Text('¡Empieza aquí! 👇',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(
+                                  fontSize: 10, fontWeight: FontWeight.w700,
+                                  color: Colors.white)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }
+          return card;
+        }).toList(),
       ),
     ]);
   }
