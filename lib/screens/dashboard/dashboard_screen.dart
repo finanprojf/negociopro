@@ -1202,6 +1202,7 @@ Widget _buildVitrinaWidget() {
           if (m.name == 'Inventario' && _totalProductos == 0) {
             return Stack(
               clipBehavior: Clip.none,
+              fit: StackFit.expand,
               children: [
                 card,
                 Positioned(
