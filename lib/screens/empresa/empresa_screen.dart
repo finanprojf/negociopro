@@ -79,7 +79,7 @@ Future<void> _verificarAdmin() async {
   Future<void> _guardarFlagConfiguracion() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('empresa_configurada', true);
-    if (mounted) setState(() => _empresaConfigurada = true);
+    // No actualizamos UI aquí — la opción aparece la próxima vez que entre
   }
 
   Future<void> _cargarDatos() async {

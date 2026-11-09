@@ -231,35 +231,38 @@ class _InventarioScreenState extends State<InventarioScreen> {
   Widget _buildEmpty() {
     return Stack(
       children: [
-        // Contenido central
-        Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Ícono con fondo suave
-              Container(
-                width: 100, height: 100,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
+        // Contenido central — tappable
+        GestureDetector(
+          onTap: _irAFormulario,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Ícono con fondo suave
+                Container(
+                  width: 100, height: 100,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.inventory_2_outlined,
+                      size: 48, color: AppColors.primary),
                 ),
-                child: const Icon(Icons.inventory_2_outlined,
-                    size: 48, color: AppColors.primary),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Tu inventario está vacío',
-                style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
-                    fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Empieza agregando los productos\nque vendes en tu negocio',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontFamily: 'Poppins',
-                    fontSize: 13, color: AppColors.textMuted, height: 1.5),
-              ),
-            ],
+                const SizedBox(height: 20),
+                const Text(
+                  'Tu inventario está vacío',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
+                      fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Toca aquí para agregar tu primer producto',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontSize: 13, color: AppColors.primary, height: 1.5),
+                ),
+              ],
+            ),
           ),
         ),
 
