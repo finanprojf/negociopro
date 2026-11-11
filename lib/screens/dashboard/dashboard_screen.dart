@@ -9,6 +9,7 @@ import '../../utils/formatters.dart';
 import '../../utils/responsive.dart';
 import '../ventas/pos_screen.dart';
 import '../inventario/inventario_screen.dart';
+import '../inventario/producto_form_screen.dart';
 import '../clientes/clientes_screen.dart';
 import '../fiado/fiado_screen.dart';
 import '../apartados/apartados_screen.dart';
@@ -910,14 +911,6 @@ Widget _buildVitrinaWidget() {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.headset_mic_outlined, color: pal.textSecondary, size: 24),
-                    Text('Soporte',
-                      style: TextStyle(
-                        fontSize: 7.5,
-                        color: pal.textSecondary,
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w500,
-                        height: 1.1,
-                      )),
                   ],
                 ),
                 if (_soporteNoLeidos > 0)
@@ -938,60 +931,53 @@ Widget _buildVitrinaWidget() {
             ),
           ),
         ),
-      GestureDetector(
-          onTap: () => showModalBottomSheet(
-            context: context,
-            backgroundColor: Colors.transparent,
-            useSafeArea: true,
-            builder: (ctx) => Container(
-              padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.of(ctx).padding.bottom),
-              decoration: BoxDecoration(
-                color: pal.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                ListTile(
-                  leading: Icon(Icons.store_rounded, color: pal.primary),
-                  title: Text('Mi empresa', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const EmpresaScreen()));
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.storefront_rounded, color: pal.colorApartados),
-                  title: Text('Mi Vitrina Digital', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                  subtitle: Text('Catálogo público para clientes',
-                      style: GoogleFonts.poppins(fontSize: 11, color: pal.textMuted)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const VitrinaConfigScreen()));
-                  },
-                ),
-
-                ListTile(
-                  leading: Icon(Icons.lock_rounded, color: pal.textSecondary),
-                  title: Text('Seguridad y PIN', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                  subtitle: Text('PIN de acceso y acciones rápidas',
-                      style: GoogleFonts.poppins(fontSize: 11, color: pal.textMuted)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PinConfiguracionScreen()));
-                  },
-                ),
-              ]),
-            ),
-          ),
-          child: Container(
-            margin: const EdgeInsets.only(right: 12),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: pal.primarySurface,
-              child: Icon(Icons.tune_rounded, color: pal.primary, size: 20),
-            ),
-          ),
-        ),
       ],
+    );
+  }
+
+  void _mostrarMenuConfig() {
+    final pal = AppPalette.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.of(ctx).padding.bottom),
+        decoration: BoxDecoration(
+          color: pal.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: Icon(Icons.store_rounded, color: pal.primary),
+            title: Text('Mi empresa', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const EmpresaScreen()));
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.storefront_rounded, color: pal.colorApartados),
+            title: Text('Mi Vitrina Digital', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+            subtitle: Text('Catálogo público para clientes',
+                style: GoogleFonts.poppins(fontSize: 11, color: pal.textMuted)),
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const VitrinaConfigScreen()));
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.lock_rounded, color: pal.textSecondary),
+            title: Text('Seguridad y PIN', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+            subtitle: Text('PIN de acceso y acciones rápidas',
+                style: GoogleFonts.poppins(fontSize: 11, color: pal.textMuted)),
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const PinConfiguracionScreen()));
+            },
+          ),
+        ]),
+      ),
     );
   }
 
@@ -1615,17 +1601,105 @@ Widget _buildVitrinaWidget() {
   }
 
  Widget _buildBottomNav() {
-    return BottomNavigationBar(
-      currentIndex: _selectedIndex,
-      onTap: (i) => setState(() => _selectedIndex = i),
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home_rounded), label: 'Inicio'),
-        BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_outlined),
-            activeIcon: Icon(Icons.shopping_bag_rounded), label: 'Encargos'),
-        BottomNavigationBarItem(icon: Icon(Icons.lock_clock_outlined),
-            activeIcon: Icon(Icons.lock_clock_rounded), label: 'Cuadre de Caja'),
-      ],
+    final pal = AppPalette.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: pal.surface,
+        border: Border(top: BorderSide(color: pal.cardBorder, width: 0.5)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 62,
+          child: Row(
+            children: [
+              _navItem(pal, 0, Icons.home_outlined, Icons.home_rounded, 'Inicio'),
+              _navItem(pal, 1, Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Encargos'),
+              // Botón central ➕ Agregar Producto
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    await Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const ProductoFormScreen()));
+                    _cargarResumen();
+                  },
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 50, height: 50,
+                        decoration: BoxDecoration(
+                          color: pal.primary,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: pal.primary.withValues(alpha: 0.35),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              _navItem(pal, 2, Icons.lock_clock_outlined, Icons.lock_clock_rounded, 'Caja'),
+              // Config
+              Expanded(
+                child: GestureDetector(
+                  onTap: _mostrarMenuConfig,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.tune_rounded,
+                          size: 24,
+                          color: pal.textMuted),
+                      const SizedBox(height: 2),
+                      Text('Config',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: pal.textMuted,
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w500,
+                          )),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navItem(dynamic pal, int index, IconData icon, IconData activeIcon, String label) {
+    final selected = _selectedIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedIndex = index),
+        child: Container(
+          color: Colors.transparent,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(selected ? activeIcon : icon,
+                  size: 24,
+                  color: selected ? pal.primary : pal.textMuted),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: selected ? pal.primary : pal.textMuted,
+                    fontFamily: 'Poppins',
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  )),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

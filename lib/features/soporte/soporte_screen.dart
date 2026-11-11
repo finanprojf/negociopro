@@ -169,6 +169,72 @@ class _AvisosTabState extends State<_AvisosTab> {
         ]),
       ),
     ),
+    // Banner valoración Play Store
+    GestureDetector(
+      onTap: () async {
+        final url = Uri.parse('https://play.google.com/store/apps/details?id=com.finanprosolutions.negociopro');
+        try { await launchUrl(url, mode: LaunchMode.externalApplication); } catch (_) {}
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFFB300).withValues(alpha: 0.4)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFB300).withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(children: [
+          Row(children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFB300).withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.star_rounded, color: Color(0xFFFFB300), size: 26),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('¿Te está ayudando NegocioPro?', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary)),
+              Text('Tu opinión nos ayuda a mejorar y llegar a más negocios.', style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textSecondary)),
+            ])),
+          ]),
+          const SizedBox(height: 14),
+          // Estrellas decorativas
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(5, (i) =>
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Icon(Icons.star_rounded, color: const Color(0xFFFFB300), size: 32),
+            ),
+          )),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFFB300), Color(0xFFFF8F00)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.star_rounded, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Text('Dejar mi valoración', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+            ]),
+          ),
+        ]),
+      ),
+    ),
   ]);
 }
 
