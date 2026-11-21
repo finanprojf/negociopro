@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../onboarding/primer_paso_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_service.dart';
@@ -282,14 +283,16 @@ Future<void> _verificarAdmin() async {
             child: OutlinedButton.icon(
               onPressed: () async {
                 await GuiaService.resetearGuiasModulos();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('✅ Las guías de módulos se reiniciaron. Visita cada sección para verlas de nuevo.'),
-                      duration: Duration(seconds: 3),
-                    ),
-                  );
-                }
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('✅ Las guías de módulos se reiniciaron. Visita cada sección para verlas de nuevo.'),
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+                // Mostrar también "¿Qué quieres hacer primero?"
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const PrimerPasoScreen()));
               },
               icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF00B894)),
               label: const Text('Ver guías de nuevo',

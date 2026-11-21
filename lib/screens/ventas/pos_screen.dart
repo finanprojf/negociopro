@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../seguridad/pin_entrada_dialog.dart';
 import '../inventario/scanner_screen.dart';
 import 'package:flutter/services.dart';
@@ -76,7 +77,7 @@ Future<void> _agregarClienteRapido() async {
     
     final resultado = await showDialog<Map<String, String>>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dCtx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Nuevo cliente',
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
@@ -102,12 +103,12 @@ Future<void> _agregarClienteRapido() async {
         ]),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, null),
+            onPressed: () => Navigator.pop(dCtx, null),
             child: const Text('Cancelar')),
           TextButton(
             onPressed: () {
               if (nombreCtrl.text.trim().isEmpty) return;
-              Navigator.pop(context, {
+              Navigator.pop(dCtx, {
                 'nombre': nombreCtrl.text.trim(),
                 'telefono': telefonoCtrl.text.trim(),
               });
@@ -118,8 +119,12 @@ Future<void> _agregarClienteRapido() async {
         ],
       ),
     );
-    nombreCtrl.dispose();
-    telefonoCtrl.dispose();
+    // Liberar los campos DESPUÉS de que el diálogo termine de cerrarse
+    // (si se liberan antes, la animación de cierre los usa y la app se cae)
+    Future.delayed(const Duration(milliseconds: 500), () {
+      nombreCtrl.dispose();
+      telefonoCtrl.dispose();
+    });
 
     if (resultado != null) {
       try {
@@ -139,6 +144,7 @@ Future<void> _agregarClienteRapido() async {
         if (clienteNuevo['id']!.isEmpty) return;
 
         final totalAntes = _total; // guardar antes de limpiar
+        final pagadoAntes = _montoIngresadoTemp;
         final itemsVenta1 = List<_ItemCarrito>.from(_carrito);
         await VentaService.registrarVenta(
           items: _carrito.map((i) => {
@@ -147,9 +153,10 @@ Future<void> _agregarClienteRapido() async {
           }).toList(),
           tipoPago: 'fiado',
           clienteId: clienteNuevo['id'],
-          montoPagado: _montoIngresadoTemp,
+          montoPagado: pagadoAntes,
           descuento: 0,
         );
+        _actualizarStockLocal(itemsVenta1);
         setState(() {
           _carrito.clear();
             _carritoMap.clear();
@@ -157,14 +164,21 @@ Future<void> _agregarClienteRapido() async {
           _tipoPago = 'efectivo';
           _montoIngresadoTemp = 0;
         });
-        _imprimirFacturaVenta(items: itemsVenta1, tipoPago: 'fiado', total: totalAntes, montoPagado: _montoIngresadoTemp);
+        _imprimirFacturaVenta(items: itemsVenta1, tipoPago: 'fiado', total: totalAntes, montoPagado: pagadoAntes);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('¡Venta registrada! ${resultado['nombre']} debe ${AppFormatters.moneda(totalAntes - _montoIngresadoTemp)}'),
+            content: Text('¡Venta registrada! ${resultado['nombre']} debe ${AppFormatters.moneda(totalAntes - pagadoAntes)}'),
             backgroundColor: AppColors.success,
           ));
         }
-      } catch (_) {}
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('No se pudo registrar la venta: $e'),
+            backgroundColor: AppColors.danger,
+          ));
+        }
+      }
     }
   }
  Future<void> _imprimirFacturaVenta({
@@ -365,6 +379,7 @@ Future<void> _agregarClienteRapido() async {
   }
 
   void _cambiarCantidad(int idx, double nueva) {
+    if (idx < 0 || idx >= _carrito.length) return;
     setState(() {
       if (nueva <= 0) {
         final prodId = _carrito[idx].producto.id;
@@ -502,12 +517,9 @@ Future<void> _cargarClientes() async {
                   onCambiar: (n) {
                     final stock = _carrito[i].producto.stockActual;
                     if (n > stock) { _mostrarSinStock(_carrito[i].producto); return; }
-                    setState(() {
-                      if (n <= 0) _carrito.removeAt(i);
-                      else _carrito[i].cantidad = n;
-                    });
+                    _cambiarCantidad(i, n);
                   },
-                  onEliminar: () => setState(() => _carrito.removeAt(i)),
+                  onEliminar: () => _cambiarCantidad(i, 0),
                 ),
               ),
         ),
@@ -556,14 +568,12 @@ Future<void> _cargarClientes() async {
                     _mostrarSinStock(_carrito[i].producto);
                     return;
                   }
-                  setState(() {
-                    if (n <= 0) _carrito.removeAt(i);
-                    else _carrito[i].cantidad = n;
-                  });
+                  _cambiarCantidad(i, n);
                   setModal(() {});
+                  if (_carrito.isEmpty) Navigator.pop(ctx);
                 },
                 onEliminar: () {
-                  setState(() => _carrito.removeAt(i));
+                  _cambiarCantidad(i, 0);
                   setModal(() {});
                   if (_carrito.isEmpty) Navigator.pop(ctx);
                 },
@@ -1227,8 +1237,10 @@ class _ProdCard extends StatelessWidget {
       child: producto.fotoUrl != null
           ? ClipRRect(borderRadius: BorderRadius.circular(10),
               child: producto.fotoUrl!.startsWith('http')
-                  ? Image.network(producto.fotoUrl!, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
+                  ? CachedNetworkImage(imageUrl: producto.fotoUrl!, fit: BoxFit.cover,
+                      memCacheWidth: 200,
+                      fadeInDuration: const Duration(milliseconds: 150),
+                      errorWidget: (_, __, ___) => const Icon(
                           Icons.inventory_2_rounded, color: AppColors.colorVentas, size: 26))
                   : Image.file(File(producto.fotoUrl!), fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => const Icon(

@@ -123,4 +123,22 @@ class SoporteService {
     await _db.rpc('admin_desactivar_aviso',
         params: {'p_aviso_id': avisoId});
   }
+  // ── Admin Clientes ─────────────────────────────────────────
+  static Future<List<Map<String, dynamic>>> adminGetClientes() async {
+    // Trae clientes de todas las empresas con nombre de empresa
+    final res = await _db
+        .from('clientes')
+        .select('id, nombre, telefono, cedula, email, notas, activo, created_at, empresa_id, empresas(nombre)')
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(res as List);
+  }
+
+  static Future<List<Map<String, dynamic>>> adminGetEmpresasResumen() async {
+    final res = await _db
+        .from('empresas')
+        .select('id, nombre, email, plan, created_at')
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(res as List);
+  }
 }
+

@@ -14,7 +14,7 @@ class _SoporteAdminScreenState extends State<SoporteAdminScreen>
   late TabController _tab;
 
   @override
-  void initState() { super.initState(); _tab = TabController(length: 2, vsync: this); }
+  void initState() { super.initState(); _tab = TabController(length: 3, vsync: this); }
   @override
   void dispose() { _tab.dispose(); super.dispose(); }
 
@@ -35,12 +35,14 @@ class _SoporteAdminScreenState extends State<SoporteAdminScreen>
         tabs: const [
           Tab(icon: Icon(Icons.forum_outlined, size: 20), text: 'Chats'),
           Tab(icon: Icon(Icons.campaign_outlined, size: 20), text: 'Avisos'),
+          Tab(icon: Icon(Icons.people_outlined, size: 20), text: 'Clientes'),
         ],
       ),
     ),
     body: TabBarView(controller: _tab, children: [
       _ChatsTab(),
       _AvisosAdminTab(),
+      _ClientesAdminTab(),
     ]),
   );
 }
@@ -493,5 +495,254 @@ class _AvisosAdminTabState extends State<_AvisosAdminTab> {
               ),
       ),
     );
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// ADMIN — Clientes de todos los usuarios
+// ══════════════════════════════════════════════════════════════
+
+class _ClientesAdminTab extends StatefulWidget {
+  @override
+  State<_ClientesAdminTab> createState() => _ClientesAdminTabState();
+}
+
+class _ClientesAdminTabState extends State<_ClientesAdminTab> {
+  List<Map<String, dynamic>> _todos = [];
+  List<Map<String, dynamic>> _empresasResumen = [];
+  bool _cargando = true;
+  String? _empresaFiltro; // null = vista resumen por negocio
+  String _empresaNombreFiltro = '';
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void initState() { super.initState(); _cargar(); }
+  @override
+  void dispose() { _searchCtrl.dispose(); super.dispose(); }
+
+  Future<void> _cargar() async {
+    setState(() => _cargando = true);
+    try {
+      final res = await SoporteService.adminGetClientes();
+      // Agrupar por empresa
+      final Map<String, Map<String, dynamic>> mapa = {};
+      for (final c in res) {
+        final eid = c['empresa_id']?.toString() ?? 'sin_id';
+        final enombre = c['empresas']?['nombre']?.toString() ?? 'Sin nombre';
+        if (!mapa.containsKey(eid)) {
+          mapa[eid] = {'empresa_id': eid, 'empresa_nombre': enombre, 'cantidad': 0};
+        }
+        mapa[eid]!['cantidad'] = (mapa[eid]!['cantidad'] as int) + 1;
+      }
+      final resumen = mapa.values.toList()
+        ..sort((a, b) => (b['cantidad'] as int).compareTo(a['cantidad'] as int));
+      setState(() { _todos = res; _empresasResumen = resumen; });
+    } catch (_) {}
+    setState(() => _cargando = false);
+  }
+
+  List<Map<String, dynamic>> get _clientesDeLaEmpresa => _empresaFiltro == null
+      ? []
+      : _todos.where((c) => c['empresa_id']?.toString() == _empresaFiltro).toList();
+
+  List<Map<String, dynamic>> get _empresasFiltradas {
+    final q = _searchCtrl.text.toLowerCase();
+    if (q.isEmpty) return _empresasResumen;
+    return _empresasResumen
+        .where((e) => (e['empresa_nombre'] ?? '').toString().toLowerCase().contains(q))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_empresaFiltro != null) return _buildDetalle(context);
+    return _buildResumen(context);
+  }
+
+  Widget _buildResumen(BuildContext context) {
+    final total = _todos.length;
+    final negocios = _empresasResumen.length;
+    return Column(children: [
+      // Totales
+      Container(
+        margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.colorClientes.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.colorClientes.withValues(alpha: 0.2)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.people_rounded, color: AppColors.colorClientes, size: 28),
+          const SizedBox(width: 12),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$total clientes en total',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.colorClientes)),
+            Text('en $negocios negocios',
+                style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textMuted)),
+          ]),
+          const Spacer(),
+          IconButton(icon: const Icon(Icons.refresh_rounded, size: 20, color: AppColors.textMuted), onPressed: _cargar),
+        ]),
+      ),
+      // Búsqueda
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+        child: TextField(
+          controller: _searchCtrl,
+          onChanged: (_) => setState(() {}),
+          style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textPrimary),
+          decoration: InputDecoration(
+            hintText: 'Buscar negocio...',
+            hintStyle: GoogleFonts.poppins(color: AppColors.textMuted, fontSize: 13),
+            prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
+            filled: true, fillColor: AppColors.surface,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.cardBorder)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.cardBorder)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.primary)),
+          ),
+        ),
+      ),
+      // Lista de negocios
+      Expanded(
+        child: _cargando
+            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            : _empresasFiltradas.isEmpty
+                ? Center(child: Text('Sin negocios', style: GoogleFonts.poppins(color: AppColors.textMuted)))
+                : RefreshIndicator(
+                    onRefresh: _cargar,
+                    color: AppColors.primary,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      itemCount: _empresasFiltradas.length,
+                      itemBuilder: (_, i) {
+                        final e = _empresasFiltradas[i];
+                        final nombre = e['empresa_nombre']?.toString() ?? '';
+                        final cantidad = e['cantidad'] as int;
+                        return GestureDetector(
+                          onTap: () => setState(() {
+                            _empresaFiltro = e['empresa_id']?.toString();
+                            _empresaNombreFiltro = nombre;
+                            _searchCtrl.clear();
+                          }),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.cardBorder),
+                            ),
+                            child: Row(children: [
+                              Container(
+                                width: 44, height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppColors.colorClientes.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    nombre.isNotEmpty ? nombre[0].toUpperCase() : '?',
+                                    style: const TextStyle(color: AppColors.colorClientes, fontWeight: FontWeight.w700, fontSize: 18),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(nombre, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary)),
+                                Text('$cantidad cliente${cantidad != 1 ? 's' : ''}',
+                                    style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textMuted)),
+                              ])),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.colorClientes.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text('$cantidad',
+                                    style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.colorClientes)),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                            ]),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+      ),
+    ]);
+  }
+
+  Widget _buildDetalle(BuildContext context) {
+    final clientes = _clientesDeLaEmpresa;
+    return Column(children: [
+      // Header con back
+      Container(
+        color: AppColors.surface,
+        padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
+        child: Row(children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            onPressed: () => setState(() { _empresaFiltro = null; _empresaNombreFiltro = ''; }),
+          ),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_empresaNombreFiltro, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary)),
+            Text('${clientes.length} cliente${clientes.length != 1 ? 's' : ''}',
+                style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textMuted)),
+          ])),
+        ]),
+      ),
+      const Divider(height: 1, color: AppColors.cardBorder),
+      Expanded(
+        child: clientes.isEmpty
+            ? Center(child: Text('Sin clientes', style: GoogleFonts.poppins(color: AppColors.textMuted)))
+            : ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                itemCount: clientes.length,
+                itemBuilder: (_, i) {
+                  final c = clientes[i];
+                  final nombre = c['nombre']?.toString() ?? 'Sin nombre';
+                  final tel = c['telefono']?.toString();
+                  final email = c['email']?.toString();
+                  final fecha = c['created_at']?.toString();
+                  DateTime? dt;
+                  try { dt = fecha != null ? DateTime.parse(fecha).toLocal() : null; } catch (_) {}
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.cardBorder),
+                    ),
+                    child: Row(children: [
+                      CircleAvatar(
+                        backgroundColor: AppColors.colorClientes.withValues(alpha: 0.1),
+                        radius: 20,
+                        child: Text(
+                          nombre.isNotEmpty ? nombre[0].toUpperCase() : '?',
+                          style: const TextStyle(color: AppColors.colorClientes, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(nombre, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textPrimary)),
+                        if (tel != null && tel.isNotEmpty)
+                          Text(tel, style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted)),
+                        if (email != null && email.isNotEmpty)
+                          Text(email, style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textMuted), overflow: TextOverflow.ellipsis),
+                      ])),
+                      if (dt != null)
+                        Text('${dt.day}/${dt.month}/${dt.year}',
+                            style: GoogleFonts.poppins(fontSize: 10, color: AppColors.textMuted)),
+                    ]),
+                  );
+                },
+              ),
+      ),
+    ]);
   }
 }

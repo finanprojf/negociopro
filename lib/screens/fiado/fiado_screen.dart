@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/cliente_service.dart';
 import '../../services/fiado_service.dart';
 import '../../widgets/guia_modulo_banner.dart';
+import 'nuevo_fiado_screen.dart';
 
 class _ClienteFiado {
   final ClienteModel cliente;
@@ -63,10 +64,17 @@ class _FiadoScreenState extends State<FiadoScreen> {
     setState(() => _loading = true);
     try {
       final empresaId = await SupabaseService.getEmpresaId();
-      if (empresaId == null) return;
+      if (empresaId == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
 
-      final fiados = await FiadoService.getFiados(
-          estado: _filtro == 'todos' ? null : _filtro);
+      // "Vencidos" = fiados activos cuya fecha límite ya pasó
+      var fiados = await FiadoService.getFiados(
+          estado: _filtro == 'todos' ? null : (_filtro == 'vencido' ? 'activo' : _filtro));
+      if (_filtro == 'vencido') {
+        fiados = fiados.where((f) => f.estaVencido).toList();
+      }
 
       final clientesLocal = await ClienteService.getClientes();
       final clientesMap = {for (final c in clientesLocal) c.id: c};
@@ -80,7 +88,8 @@ class _FiadoScreenState extends State<FiadoScreen> {
         final cliente = clientesMap[clienteId] ?? ClienteModel(
           id: clienteId,
           empresaId: empresaId,
-          nombre: 'Cliente',
+          nombre: f.clienteNombre ?? 'Cliente',
+          telefono: f.clienteTelefono,
         );
 
         if (mapa.containsKey(clienteId)) {
@@ -110,8 +119,13 @@ class _FiadoScreenState extends State<FiadoScreen> {
           _loading = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('No se pudieron cargar los fiados: $e'),
+            backgroundColor: AppColors.danger));
+      }
     }
   }
 
@@ -128,6 +142,19 @@ class _FiadoScreenState extends State<FiadoScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Fiado')),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: FloatingActionButton(
+          onPressed: () async {
+            final result = await Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const NuevoFiadoScreen()));
+            if (result == true) _cargar();
+          },
+          backgroundColor: AppColors.colorFiado,
+          foregroundColor: Colors.white,
+          child: const Icon(Icons.add_rounded, size: 32),
+        ),
+      ),
       body: Column(children: [
             const GuiaModuloBanner(modulo: 'fiado'),
         _buildResumenTotal(),

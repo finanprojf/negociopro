@@ -29,6 +29,6 @@ static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJp
 
   // SQLite
   static const String dbName = 'negociopro.db';
-  static const int dbVersion = 17;
+  static const int dbVersion = 18;
 }
 

@@ -595,12 +595,15 @@ class _ReportesScreenState extends State<ReportesScreen> {
 
   Widget _buildKPIs() {
     final ganancia   = _d.gananciaNeta;
-    final margen     = _d.ventasContado > 0
-        ? (_d.gananciaBruta / _d.ventasContado * 100) : 0.0;
-    final margenColor = margen >= 20 ? AppColors.success
+    // Margen = ganancia bruta / TODO lo vendido (contado + fiado)
+    final hayVentas  = _d.totalVendido > 0;
+    final margen     = hayVentas
+        ? (_d.gananciaBruta / _d.totalVendido * 100) : 0.0;
+    final margenColor = !hayVentas ? AppColors.textMuted
+        : margen >= 20 ? AppColors.success
         : margen >= 10 ? AppColors.warning : AppColors.danger;
 
-    return Row(children: [
+    return IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Expanded(child: _KPICard(
           label: 'Vendido', valor: _corto(_d.totalVendido),
           sub: 'contado + fiado', icon: Icons.shopping_bag_rounded,
@@ -617,10 +620,10 @@ class _ReportesScreenState extends State<ReportesScreen> {
           color: AppColors.colorGastos)),
       const SizedBox(width: 8),
       Expanded(child: _KPICard(
-          label: 'Margen', valor: '${margen.toStringAsFixed(1)}%',
+          label: 'Margen', valor: hayVentas ? '${margen.toStringAsFixed(1)}%' : '—',
           sub: 'rentabilidad', icon: Icons.pie_chart_rounded,
           color: margenColor)),
-    ]);
+    ]));
   }
 
   /// Cuadre de caja: lo que físicamente debe haber de efectivo

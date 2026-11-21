@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import '../onboarding/catalogo_rapido_screen.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'scanner_screen.dart';
 import '../../theme/app_colors.dart';
 import '../../models/producto_model.dart';
 import '../../utils/formatters.dart';
 import 'producto_form_screen.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../services/inventario_service.dart';
 import 'ajuste_stock_screen.dart';
 import 'dart:io';
@@ -48,7 +49,12 @@ class _InventarioScreenState extends State<InventarioScreen> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('No se pudieron cargar los productos: $e'),
+            backgroundColor: AppColors.danger));
+      }
     }
   }
 
@@ -56,7 +62,8 @@ class _InventarioScreenState extends State<InventarioScreen> {
     var lista = List<ProductoModel>.from(_productos);
     final query = _searchCtrl.text.toLowerCase();
     if (query.isNotEmpty) {
-      lista = lista.where((p) => p.nombre.toLowerCase().contains(query)).toList();
+      lista = lista.where((p) => p.nombre.toLowerCase().contains(query) ||
+          (p.codigoBarras ?? '').toLowerCase().contains(query)).toList();
     }
     if (_filtro == 'bajo_stock') {
       lista = lista.where((p) => p.stockBajo && !p.sinStock).toList();
@@ -106,14 +113,8 @@ class _InventarioScreenState extends State<InventarioScreen> {
       floatingActionButton:FloatingActionButton(
         onPressed: () => _irAFormulario(),
         backgroundColor: AppColors.primary,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-            Text('Producto', style: GoogleFonts.poppins(
-                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 9)),
-          ],
-        ),
+        tooltip: 'Agregar producto',
+        child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
       ),
     );
   }
@@ -229,91 +230,73 @@ class _InventarioScreenState extends State<InventarioScreen> {
   }
 
   Widget _buildEmpty() {
-    return Stack(
-      children: [
-        // Contenido central — tappable
-        GestureDetector(
-          onTap: _irAFormulario,
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Ícono con fondo suave
-                Container(
-                  width: 100, height: 100,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.inventory_2_outlined,
-                      size: 48, color: AppColors.primary),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Tu inventario está vacío',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
-                      fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Toca aquí para agregar tu primer producto',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontFamily: 'Poppins',
-                      fontSize: 13, color: AppColors.primary, height: 1.5),
-                ),
-              ],
+    // Desplazable: nunca se desborda aunque la guía de arriba ocupe espacio
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
+      child: Column(
+        children: [
+          Container(
+            width: 88, height: 88,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.inventory_2_outlined,
+                size: 42, color: AppColors.primary),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Tu inventario está vacío',
+            style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
+                fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Empieza en segundos: marca los productos que vendes de nuestra lista, '
+            'o agrégalos uno por uno.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: 'Poppins',
+                fontSize: 13, color: AppColors.textMuted, height: 1.5),
+          ),
+          const SizedBox(height: 20),
+          // Acción principal: carga rápida
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                final ok = await Navigator.push<bool>(context,
+                    MaterialPageRoute(builder: (_) => const CatalogoRapidoScreen()));
+                if (ok == true) _cargarProductos();
+              },
+              icon: const Icon(Icons.bolt_rounded, size: 20),
+              label: const Text('Carga rápida de colmado',
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
             ),
           ),
-        ),
-
-        // Flecha + texto apuntando al FAB (esquina inferior derecha)
-        Positioned(
-          bottom: 90,
-          right: 24,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              // Texto con fondo tipo globo
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(14),
-                    topRight: Radius.circular(14),
-                    bottomLeft: Radius.circular(14),
-                    bottomRight: Radius.circular(4),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.3),
-                      blurRadius: 12, offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Text(
-                  'Agrega tu primer\nproducto aquí 👆',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontFamily: 'Poppins',
-                      fontSize: 13, fontWeight: FontWeight.w600,
-                      color: Colors.white, height: 1.4),
-                ),
+          const SizedBox(height: 10),
+          // Acción secundaria: uno por uno
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: OutlinedButton.icon(
+              onPressed: () => _irAFormulario(),
+              icon: const Icon(Icons.add_rounded, size: 20),
+              label: const Text('Agregar un producto',
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              const SizedBox(width: 6),
-              // Flechita curva hacia abajo-derecha
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Transform.rotate(
-                  angle: 0.5,
-                  child: const Icon(Icons.arrow_downward_rounded,
-                      color: AppColors.primary, size: 28),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -452,9 +435,11 @@ class _ProductoTile extends StatelessWidget {
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: producto.fotoUrl!.startsWith('http')
-                          ? Image.network(producto.fotoUrl!,
+                          ? CachedNetworkImage(imageUrl: producto.fotoUrl!,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(
+                              memCacheWidth: 200,
+                              fadeInDuration: const Duration(milliseconds: 150),
+                              errorWidget: (_, __, ___) => const Icon(
                                   Icons.inventory_2_rounded,
                                   color: AppColors.colorInventario, size: 26))
                           : Image.file(File(producto.fotoUrl!),

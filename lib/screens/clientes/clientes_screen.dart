@@ -5,7 +5,6 @@ import '../../utils/formatters.dart';
 import 'cliente_form_screen.dart';
 import '../../widgets/avatar_cliente.dart';
 import 'cliente_detalle_screen.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../services/cliente_service.dart';
 import '../../widgets/guia_modulo_banner.dart';
 class ClientesScreen extends StatefulWidget {
@@ -44,17 +43,25 @@ class _ClientesScreenState extends State<ClientesScreen> {
         _loading = false;
       });
     } catch (e) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('No se pudieron cargar los clientes: $e'),
+            backgroundColor: AppColors.danger));
+      }
     }
   }
 
   void _aplicarFiltros() {
     var lista = List<ClienteModel>.from(_clientes);
-    final q = _searchCtrl.text.toLowerCase();
+    final q = _searchCtrl.text.toLowerCase().trim();
+    final qDigitos = q.replaceAll(RegExp(r'[^0-9]'), '');
     if (q.isNotEmpty) {
-      lista = lista.where((c) =>
-          c.nombre.toLowerCase().contains(q) ||
-          (c.telefono ?? '').contains(q)).toList();
+      lista = lista.where((c) {
+        final telDigitos = (c.telefono ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+        return c.nombre.toLowerCase().contains(q) ||
+            (qDigitos.isNotEmpty && telDigitos.contains(qDigitos));
+      }).toList();
     }
     if (_filtro == 'con_deuda') lista = lista.where((c) => c.tieneDeuda).toList();
     if (_filtro == 'con_puntos') lista = lista.where((c) => c.tienePuntos).toList();
@@ -84,14 +91,8 @@ class _ClientesScreenState extends State<ClientesScreen> {
           if (ok == true) _cargar();
         },
         backgroundColor: AppColors.primary,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.person_add_rounded, color: Colors.white, size: 20),
-            Text('Cliente', style: GoogleFonts.poppins(
-                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 9)),
-          ],
-        ),
+        tooltip: 'Agregar cliente',
+        child: const Icon(Icons.person_add_rounded, color: Colors.white, size: 28),
       ),
     );
   }

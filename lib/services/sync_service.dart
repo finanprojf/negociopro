@@ -175,6 +175,13 @@ class SyncService {
     }
     // Quitar numero_venta si es null para que Supabase use su DEFAULT (secuencia)
     if (data['numero_venta'] == null) data.remove('numero_venta');
+    // Columnas que solo existen en el SQLite local de fiados
+    if (data.containsKey('saldo_pendiente')) {
+      // fiados y apartados
+      data.remove('detalle');
+      data.remove('cliente_nombre');
+      data.remove('cliente_telefono');
+    }
     return data;
   }
 }

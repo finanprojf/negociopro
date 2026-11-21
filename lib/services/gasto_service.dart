@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/gasto_model.dart';
 import 'supabase_service.dart';
@@ -14,9 +15,15 @@ class GastoService {
     final local = await LocalDatabase.consultar(
         'gastos', empresaId, orderBy: 'created_at DESC');
     final gastosLocal = local.map((m) => GastoModel.fromMap(m)).toList();
+    final idsLocalesSinSubir = local
+        .where((m) => (m['synced'] ?? 0) == 0)
+        .map((m) => m['id'] as String)
+        .toSet();
 
     if (await SupabaseService.isOnlineAsync) {
       try {
+        // Primero borrar en la nube lo que se eliminó sin internet
+        final pendientesBorrar = await _procesarBorradosPendientes();
         List<dynamic> res;
         if (fecha != null) {
           final inicio = DateTime(fecha.year, fecha.month, 1);
@@ -35,6 +42,8 @@ class GastoService {
               .eq('empresa_id', empresaId)
               .order('fecha', ascending: false);
         }
+        // No traer de vuelta gastos que el usuario ya borró
+        res = res.where((m) => !pendientesBorrar.contains(m['id'])).toList();
         // Guardar en local
         for (final m in res) {
           try {
@@ -45,8 +54,9 @@ class GastoService {
         }
        final gastosOnline = res.map((m) => GastoModel.fromMap(m)).toList();
         final idsOnline = gastosOnline.map((g) => g.id).toSet();
+        // Solo los locales que aún no se han subido (los demás ya no existen en la nube)
         final gastosPendientes = gastosLocal
-            .where((g) => !idsOnline.contains(g.id))
+            .where((g) => !idsOnline.contains(g.id) && idsLocalesSinSubir.contains(g.id))
             .toList();
         return [...gastosOnline, ...gastosPendientes]
           ..sort((a, b) => b.fecha.compareTo(a.fecha));
@@ -96,6 +106,46 @@ class GastoService {
     }
     return total;
   }
+  // ── Eliminar gasto (funciona sin internet) ─────────────────
+  static const _keyBorrar = 'gastos_borrar_pendientes';
+
+  static Future<void> eliminarGasto(String id) async {
+    await LocalDatabase.eliminar('gastos', 'id', id);
+    var borrado = false;
+    if (await SupabaseService.isOnlineAsync) {
+      try {
+        await SupabaseService.client.from('gastos').delete().eq('id', id)
+            .timeout(const Duration(seconds: 8));
+        borrado = true;
+      } catch (_) {}
+    }
+    if (!borrado) {
+      final prefs = await SharedPreferences.getInstance();
+      final lista = prefs.getStringList(_keyBorrar) ?? [];
+      if (!lista.contains(id)) lista.add(id);
+      await prefs.setStringList(_keyBorrar, lista);
+    }
+  }
+
+  /// Intenta borrar en la nube los gastos eliminados sin internet.
+  /// Devuelve los IDs que siguen pendientes (para no mostrarlos).
+  static Future<Set<String>> _procesarBorradosPendientes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lista = prefs.getStringList(_keyBorrar) ?? [];
+    if (lista.isEmpty) return {};
+    final quedan = <String>[];
+    for (final id in lista) {
+      try {
+        await SupabaseService.client.from('gastos').delete().eq('id', id)
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {
+        quedan.add(id);
+      }
+    }
+    await prefs.setStringList(_keyBorrar, quedan);
+    return lista.toSet();
+  }
+
   /// Elimina todos los gastos vinculados a un producto (por notas origen)
   static Future<void> eliminarGastosPorProducto(String productoId) async {
     try {

@@ -29,6 +29,15 @@ class EncargoModel {
     this.createdAt,
   });
 
+  /// Copia con otro estado (para marcar sin recargar la pantalla)
+  EncargoModel conEstado(String nuevo) => EncargoModel(
+        id: id, empresaId: empresaId, clienteId: clienteId,
+        descripcion: descripcion, cantidad: cantidad,
+        precioEstimado: precioEstimado, costoPedido: costoPedido,
+        estado: nuevo, esListaPropia: esListaPropia, notas: notas,
+        clienteNombre: clienteNombre, categoria: categoria, createdAt: createdAt,
+      );
+
   bool get estaPendiente => estado == 'pendiente';
   bool get llego => estado == 'llego';
   bool get entregado => estado == 'entregado';

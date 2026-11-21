@@ -19,17 +19,20 @@ import '../../widgets/pro_gate.dart';
 import '../vitrina/vitrina_qr_screen.dart';
 
 class CartaDigitalScreen extends StatelessWidget {
-  const CartaDigitalScreen({super.key});
+  /// true = se muestra dentro de otra pantalla (sin su propia barra de título)
+  final bool embebido;
+  const CartaDigitalScreen({super.key, this.embebido = false});
 
   @override
   Widget build(BuildContext context) => ProGate(
     nombreFuncion: 'Carta Digital',
-    child: const _CartaDigitalBody(),
+    child: _CartaDigitalBody(embebido: embebido),
   );
 }
 
 class _CartaDigitalBody extends StatefulWidget {
-  const _CartaDigitalBody();
+  final bool embebido;
+  const _CartaDigitalBody({this.embebido = false});
 
   @override
   State<_CartaDigitalBody> createState() => _CartaDigitalBodyState();
@@ -143,51 +146,63 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
     }
   }
 
+  /// Guarda un campo de la configuración. Si la fila no existe, la crea.
+  Future<void> _guardarConfig(Map<String, dynamic> campos) async {
+    final config = await SupabaseService.client
+        .from('vitrina_config')
+        .select('id')
+        .eq('empresa_id', _empresaId)
+        .maybeSingle();
+    if (config != null) {
+      await SupabaseService.client
+          .from('vitrina_config')
+          .update(campos)
+          .eq('empresa_id', _empresaId);
+    } else {
+      await SupabaseService.client
+          .from('vitrina_config')
+          .insert({'empresa_id': _empresaId, 'activa': false, ...campos});
+    }
+  }
+
+  void _avisarNoGuardado() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('No se pudo guardar. Revisa tu conexión a internet.'),
+      backgroundColor: AppColors.danger,
+    ));
+  }
+
   Future<void> _toggleCartaActiva(bool val) async {
     setState(() => _cartaActiva = val);
     try {
-      final config = await SupabaseService.client
-          .from('vitrina_config')
-          .select('id')
-          .eq('empresa_id', _empresaId)
-          .maybeSingle();
-
-      if (config != null) {
-        await SupabaseService.client
-            .from('vitrina_config')
-            .update({'carta_activa': val})
-            .eq('empresa_id', _empresaId);
-      } else {
-        await SupabaseService.client
-            .from('vitrina_config')
-            .insert({'empresa_id': _empresaId, 'activa': false, 'carta_activa': val});
-      }
+      await _guardarConfig({'carta_activa': val});
     } catch (e) {
       debugPrint('[Carta] toggle error: $e');
+      if (mounted) setState(() => _cartaActiva = !val);
+      _avisarNoGuardado();
     }
   }
 
   Future<void> _toggleMostrarPrecios(bool val) async {
     setState(() => _mostrarPrecios = val);
     try {
-      await SupabaseService.client
-          .from('vitrina_config')
-          .update({'carta_mostrar_precios': val})
-          .eq('empresa_id', _empresaId);
+      await _guardarConfig({'carta_mostrar_precios': val});
     } catch (e) {
-      debugPrint('[Carta] precios toggle error: \$e');
+      debugPrint('[Carta] precios toggle error: $e');
+      if (mounted) setState(() => _mostrarPrecios = !val);
+      _avisarNoGuardado();
     }
   }
 
   Future<void> _toggleBoolConfig(String field, bool val, Function(bool) setter) async {
     setState(() => setter(val));
     try {
-      await SupabaseService.client
-          .from('vitrina_config')
-          .update({field: val})
-          .eq('empresa_id', _empresaId);
+      await _guardarConfig({field: val});
     } catch (e) {
       debugPrint('[Carta] toggle $field error: $e');
+      if (mounted) setState(() => setter(!val));
+      _avisarNoGuardado();
     }
   }
 
@@ -200,11 +215,14 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
           .eq('id', productId);
     } catch (e) {
       debugPrint('[Carta] disponible error: $e');
+      if (mounted) setState(() => _disponibilidad[productId] = !val);
+      _avisarNoGuardado();
     }
   }
 
   Future<void> _marcarTodos(bool val) async {
     final ids = _productos.map((p) => p['id'] as String).toList();
+    final antes = Map<String, bool>.from(_disponibilidad);
     setState(() {
       for (final id in ids) _disponibilidad[id] = val;
     });
@@ -215,6 +233,8 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
           .inFilter('id', ids);
     } catch (e) {
       debugPrint('[Carta] marcar todos error: $e');
+      if (mounted) setState(() => _disponibilidad = antes);
+      _avisarNoGuardado();
     }
   }
 
@@ -223,7 +243,10 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('Carta Digital',
+        // Dentro de Vitrina no repetir título ni flecha de atrás
+        automaticallyImplyLeading: !widget.embebido,
+        toolbarHeight: widget.embebido ? 0 : null,
+        title: widget.embebido ? null : Text('Carta Digital',
             style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
         bottom: TabBar(
           controller: _tabs,
@@ -739,7 +762,8 @@ class _CartaDigitalBodyState extends State<_CartaDigitalBody>
           .eq('id', pedidoId);
       await _cargarCola();
     } catch (e) {
-      debugPrint('[Cocina] cambiar estado error: \$e');
+      debugPrint('[Cocina] cambiar estado error: $e');
+      _avisarNoGuardado();
     }
   }
 

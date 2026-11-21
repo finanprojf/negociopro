@@ -329,6 +329,9 @@ class LocalDatabase {
       // Agregar synced a recordatorios para habilitar sync multi-dispositivo.
       try { await db.execute('ALTER TABLE recordatorios ADD COLUMN synced INTEGER DEFAULT 0'); } catch (_) {}
     }
+    if (oldV < 18) {
+      try { await db.execute("ALTER TABLE fiados ADD COLUMN detalle TEXT"); } catch (_) {}
+    }
     if (oldV < 17) {
       try { await db.execute('ALTER TABLE encargos ADD COLUMN categoria TEXT'); } catch (_) {}
     }

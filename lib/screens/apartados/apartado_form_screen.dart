@@ -6,6 +6,7 @@ import '../../services/apartado_service.dart';
 import '../../services/recibo_service.dart';
 import '../../services/cliente_service.dart';
 import '../../services/inventario_service.dart';
+import '../../services/modo_service.dart';
 import '../../models/cliente_model.dart';
 
 // ─── Item de línea dentro del apartado ────────────────────────────────────────
@@ -387,6 +388,7 @@ class _ApartadoFormScreenState extends State<ApartadoFormScreen> {
 
             // Botones agregar
             Row(children: [
+              if (!ModoService.sinInventario.value) ...[
               Expanded(
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.inventory_2_outlined, size: 18),
@@ -402,6 +404,7 @@ class _ApartadoFormScreenState extends State<ApartadoFormScreen> {
                 ),
               ),
               const SizedBox(width: 10),
+              ],
               Expanded(
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.add_circle_outline, size: 18),

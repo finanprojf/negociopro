@@ -268,6 +268,44 @@ class ReciboService {
   }
 
   // ── RECIBO ABONO FIADO ────────────────────────────────────
+  // ── NUEVO FIADO CON ITEMS ────────────────────────────────
+  static Future<void> compartirTextoNuevoFiado({
+    required String clienteNombre,
+    required String? clienteTelefono,
+    required List<Map<String, dynamic>> items,
+    required double total,
+    String? notas,
+  }) async {
+    final nombre = await _getNombreNegocio();
+    final sb = StringBuffer();
+    sb.writeln('💳 *NUEVO FIADO*');
+    sb.writeln('📍 ' + nombre);
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('📅 ' + AppFormatters.fechaHora(DateTime.now()));
+    sb.writeln('👤 Cliente: ' + clienteNombre);
+    if (clienteTelefono != null && clienteTelefono.isNotEmpty) sb.writeln('📞 Tel: ' + clienteTelefono);
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('*ARTÍCULOS:*');
+    for (final item in items) {
+      final cant = (item['cantidad'] as num? ?? 1);
+      final precio = (item['precio'] as num? ?? 0).toDouble();
+      final sub = precio * cant;
+      final cantStr = cant % 1 == 0 ? cant.toInt().toString() : cant.toString();
+      sb.writeln('• ' + (item['nombre'] as String? ?? ''));
+      if (precio > 0) {
+        sb.writeln('  ' + cantStr + ' x ' + AppFormatters.moneda(precio) + ' = ' + AppFormatters.moneda(sub));
+      } else {
+        sb.writeln('  Cant: ' + cantStr);
+      }
+    }
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('*TOTAL FIADO: ' + AppFormatters.moneda(total) + '*');
+    if (notas != null && notas.isNotEmpty) sb.writeln('📝 Notas: ' + notas);
+    sb.writeln('━━━━━━━━━━━━━━━━━━━━');
+    sb.writeln('¡Gracias por su preferencia! 🙏');
+    await Share.share(sb.toString(), subject: 'Nuevo fiado - ' + clienteNombre);
+  }
+
   static Future<void> compartirTextoFiado({
     required FiadoModel fiado,
     required double montoAbonado,

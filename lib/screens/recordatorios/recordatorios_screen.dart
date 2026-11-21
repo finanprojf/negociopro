@@ -37,7 +37,10 @@ class _RecordatoriosScreenState extends State<RecordatoriosScreen>
     setState(() => _cargando = true);
     try {
       final empresaId = await SupabaseService.getEmpresaId();
-      if (empresaId == null) return;
+      if (empresaId == null) {
+        if (mounted) setState(() => _cargando = false);
+        return;
+      }
       final db = await LocalDatabase.database;
       final rows = await db.query(
         'recordatorios',
@@ -52,8 +55,13 @@ class _RecordatoriosScreenState extends State<RecordatoriosScreen>
           _cargando = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _cargando = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _cargando = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('No se pudieron cargar los recordatorios: $e'),
+            backgroundColor: AppColors.danger));
+      }
     }
   }
 
@@ -206,15 +214,28 @@ class _RecordatoriosScreenState extends State<RecordatoriosScreen>
   Future<void> _toggleCompletado(Map<String, dynamic> r) async {
     final db = await LocalDatabase.database;
     final nuevoEstado = r['completado'] == 0 ? 1 : 0;
-    await db.update('recordatorios', {'completado': nuevoEstado},
+    await db.update('recordatorios', {'completado': nuevoEstado, 'synced': 0},
         where: 'id = ?', whereArgs: [r['id']]);
-    // Si se marca completado, cancelar notificación pendiente
-    if (nuevoEstado == 1) {
-      try {
-        final notifId = (r['id'] as String).hashCode.abs() % 100000 + 1000;
+    final notifId = (r['id'] as String).hashCode.abs() % 100000 + 1000;
+    try {
+      if (nuevoEstado == 1) {
+        // Completado → cancelar la notificación pendiente
         await CuadreAutomaticoService.cancelarRecordatorio(notifId);
-      } catch (_) {}
-    }
+      } else {
+        // Vuelve a pendiente → volver a programar el aviso (si aún no pasó)
+        final hora = r['hora'] as String?;
+        final fecha = DateTime.tryParse(r['fecha'] as String? ?? '');
+        if (hora != null && hora.contains(':') && fecha != null) {
+          final p = hora.split(':');
+          await CuadreAutomaticoService.programarRecordatorio(
+            notifId: notifId,
+            titulo: r['titulo'] as String? ?? 'Recordatorio',
+            fechaHora: DateTime(fecha.year, fecha.month, fecha.day,
+                int.parse(p[0]), int.parse(p[1])),
+          );
+        }
+      }
+    } catch (_) {}
     _cargar();
   }
 
@@ -710,8 +731,11 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
         ),
       ),
     );
-    hourCtrl.dispose();
-    minCtrl.dispose();
+    // Liberar después de que termine la animación de cierre
+    Future.delayed(const Duration(milliseconds: 500), () {
+      hourCtrl.dispose();
+      minCtrl.dispose();
+    });
     if (picked != null) setState(() => _hora = picked);
   }
 
@@ -801,6 +825,7 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
             'hora': horaStr,
             'cliente_id': _clienteId,
             'cliente_nombre': _clienteNombre,
+            'synced': 0, // para que la edición también se suba
           },
           where: 'id = ?',
           whereArgs: [recordatorioId],
@@ -819,8 +844,9 @@ class _FormularioRecordatorioState extends State<_FormularioRecordatorio> {
         });
       }
 
-      // Programar notificación si tiene hora
-      if (horaStr != null) {
+      // Programar notificación si tiene hora (y no está completado)
+      final yaCompletado = widget.recordatorio?['completado'] == 1;
+      if (horaStr != null && !yaCompletado) {
         try {
           final parts = horaStr.split(':');
           final fechaHoraLocal = DateTime(

@@ -181,9 +181,39 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> with SingleTi
   Future<void> _guardar() async {
     setState(() => _saving = true);
     try {
-      final slug = _slugCtrl.text.trim().toLowerCase()
-          .replaceAll(' ', '-')
-          .replaceAll(RegExp(r'[^a-z0-9\-]'), '');
+      // Quitar acentos y ñ antes de limpiar (José → jose, Peña → pena)
+      var base = _slugCtrl.text.trim().toLowerCase();
+      const conAcento = 'áéíóúüñàèìòù';
+      const sinAcento = 'aeiouunaeiou';
+      for (var i = 0; i < conAcento.length; i++) {
+        base = base.replaceAll(conAcento[i], sinAcento[i]);
+      }
+      final slug = base
+          .replaceAll(RegExp(r'\s+'), '-')
+          .replaceAll(RegExp(r'[^a-z0-9\-]'), '')
+          .replaceAll(RegExp(r'-+'), '-')
+          .replaceAll(RegExp(r'^-|-$'), '');
+
+      // El link debe ser único: no puede usarlo otro negocio
+      if (slug.isNotEmpty) {
+        final usado = await SupabaseService.client
+            .from('vitrina_config')
+            .select('empresa_id')
+            .eq('slug', slug)
+            .neq('empresa_id', _empresaId)
+            .limit(1);
+        if ((usado as List).isNotEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('El link "$slug" ya lo usa otro negocio. Prueba con otro nombre.'),
+              backgroundColor: AppColors.warning,
+            ));
+            setState(() => _saving = false);
+          }
+          return;
+        }
+      }
+      _slugCtrl.text = slug;
 
       final data = {
         'empresa_id': _empresaId,
@@ -195,7 +225,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> with SingleTi
         'horario': _horarioCtrl.text.trim(),
         'mensaje_bienvenida': _mensajeCtrl.text.trim(),
         'color_tema': _colorTema,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 
       if (_configId != null) {
@@ -213,10 +243,11 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> with SingleTi
       }
 
       // Guardar estado de productos en vitrina
-      for (final p in _productos) {
+      // Un solo envío para todos los productos (antes era uno por producto)
+      if (_productos.isNotEmpty) {
         await SupabaseService.client
             .from('vitrina_productos')
-            .upsert({
+            .upsert(_productos.map((p) => {
               'empresa_id':           _empresaId,
               'producto_id':          p['id'],
               'visible':              p['en_vitrina'],
@@ -225,18 +256,18 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> with SingleTi
               'disponibilidad':       p['disponibilidad'] ?? 'stock',
               'fecha_disponibilidad': p['fecha_disponibilidad'],
               'permitir_resenas':     p['permitir_resenas'] ?? false,
-            }, onConflict: 'empresa_id,producto_id');
+            }).toList(), onConflict: 'empresa_id,producto_id');
       }
 
-      // Guardar carta_disponible en tabla productos
-      for (final p in _productos) {
+      // Guardar carta_disponible en tabla productos (en paralelo)
+      await Future.wait(_productos.map((p) async {
         try {
           await SupabaseService.client
               .from('productos')
               .update({'carta_disponible': p['carta_disponible'] ?? false})
               .eq('id', p['id'] as String);
         } catch (_) {}
-      }
+      }));
 
       setState(() => _slug = slug);
 
@@ -494,7 +525,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> with SingleTi
                     controller: _slugCtrl,
                     style: GoogleFonts.poppins(fontSize: 14),
                     decoration: InputDecoration(
-                      prefixText: 'negociopro.vercel.app/t/',
+                      prefixText: 'vitrina-web-beta.vercel.app/t/',
                       prefixStyle: GoogleFonts.poppins(
                           fontSize: 12, color: AppColors.textMuted),
                       hintText: 'mi-colmado',
@@ -733,7 +764,7 @@ class _VitrinaConfigScreenState extends State<VitrinaConfigScreen> with SingleTi
               ],
             ),
           // ── Tab 2: Carta / Cocina ──────────────────────────────
-          const CartaDigitalScreen(),
+          const CartaDigitalScreen(embebido: true),
         ],
       ),
     ));

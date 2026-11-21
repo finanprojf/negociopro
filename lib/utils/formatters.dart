@@ -44,7 +44,21 @@ class AppFormatters {
     final n = cantidad == cantidad.roundToDouble()
         ? cantidad.toInt().toString()
         : cantidad.toStringAsFixed(2);
-    return '$n $unidad';
+    var u = unidad;
+    final esUno = cantidad == 1;
+    if (!esUno) {
+      final l = u.toLowerCase();
+      if (l == 'unidad') u = 'unidades';
+      else if (l == 'libra') u = 'libras';
+      else if (l == 'caja') u = 'cajas';
+      else if (l == 'paquete') u = 'paquetes';
+      else if (l == 'botella') u = 'botellas';
+      else if (l == 'galón' || l == 'galon') u = 'galones';
+      else if (l == 'litro') u = 'litros';
+      else if (l == 'kilo') u = 'kilos';
+      else if (l == 'onza') u = 'onzas';
+    }
+    return '$n $u';
   }
 
   /// Tiempo relativo: "hace 5 min", "hace 2 horas"

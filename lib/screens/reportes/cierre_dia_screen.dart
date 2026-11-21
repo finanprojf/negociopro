@@ -240,7 +240,7 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
         labelColor: Colors.white,
         unselectedLabelColor: Colors.white60,
         tabs: const [
-          Tab(icon: Icon(Icons.lock_clock), text: 'Nuevo Cuadre'),
+          Tab(icon: Icon(Icons.lock_clock), text: 'Nuevo'),
           Tab(icon: Icon(Icons.history),    text: 'Historial'),
           Tab(icon: Icon(Icons.alarm),      text: 'Automático'),
         ],
@@ -311,7 +311,7 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
           const SizedBox(height: 16),
 
           // ── VENTAS ──
-          _titulo('Ventas del Día', Icons.shopping_cart_rounded, AppColors.colorVentas),
+          _titulo('Ventas $_periodo', Icons.shopping_cart_rounded, AppColors.colorVentas),
           _card([
             _fila('Total ventas', _d('total_ventas'),
                 bold: true, color: AppColors.colorVentas),
@@ -373,7 +373,7 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
           ],
 
           // ── GASTOS ──
-          _titulo('Gastos del Día', Icons.receipt_long_rounded, AppColors.colorGastos),
+          _titulo('Gastos $_periodo', Icons.receipt_long_rounded, AppColors.colorGastos),
           _card([
             _fila('Total gastos', _d('total_gastos'),
                 bold: true,
@@ -388,7 +388,7 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
           const SizedBox(height: 14),
 
           // ── RESULTADO ──
-          _titulo('Resultado del Día', Icons.trending_up_rounded, AppColors.success),
+          _titulo('Resultado $_periodo', Icons.trending_up_rounded, AppColors.success),
           _card([
             _fila(
               _d('ganancia_real') >= 0 ? '✅ Ganancia real' : '❌ Pérdida real',
@@ -832,6 +832,18 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
   }
 
   // ─── Helpers UI ──────────────────────────────────────────────
+  /// El cuadre cuenta desde el último cuadre, no solo hoy.
+  String get _periodo {
+    if (_historial.isEmpty) return 'desde el inicio';
+    final u = _historial.first.fecha;
+    final h = DateTime.now();
+    final esHoy = u.year == h.year && u.month == h.month && u.day == h.day;
+    final ayer = h.subtract(const Duration(days: 1));
+    final esAyer = u.year == ayer.year && u.month == ayer.month && u.day == ayer.day;
+    if (esHoy || esAyer) return 'del Día';
+    return 'desde el último cuadre';
+  }
+
   Widget _chipUltimoCuadre() {
     if (_historial.isEmpty) {
       return Container(
@@ -898,9 +910,9 @@ class _CierreDiaScreenState extends State<CierreDiaScreen>
     child: Row(children: [
       Icon(ic, color: c, size: 18),
       const SizedBox(width: 6),
-      Text(t, style: GoogleFonts.poppins(
+      Expanded(child: Text(t, style: GoogleFonts.poppins(
           fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary, fontSize: 14)),
+          color: AppColors.textPrimary, fontSize: 14))),
     ]),
   );
 

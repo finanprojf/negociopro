@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/venta_service.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_colors.dart';
@@ -8,7 +9,6 @@ import '../../widgets/avatar_cliente.dart';
 import '../../utils/formatters.dart';
 import '../../services/encargo_service.dart';
 import '../../services/cliente_service.dart';
-import '../../services/fiado_service.dart';
 import '../../services/recibo_service.dart';
 import '../ventas/pos_screen.dart';
 import '../../widgets/guia_modulo_banner.dart';
@@ -47,8 +47,9 @@ class _EncargosScreenState extends State<EncargosScreen>
     super.dispose();
   }
 
-  Future<void> _cargar() async {
-    setState(() => _loading = true);
+  /// [silencioso] = recarga sin mostrar el círculo de carga (no "pestañea")
+  Future<void> _cargar({bool silencioso = false}) async {
+    if (!silencioso) setState(() => _loading = true);
     try {
       final encargos = await EncargoService.getEncargos(esListaPropia: false);
       final lista = await EncargoService.getEncargos(esListaPropia: true);
@@ -60,7 +61,34 @@ class _EncargosScreenState extends State<EncargosScreen>
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('No se pudieron cargar los encargos: $e'),
+            backgroundColor: AppColors.danger));
+      }
+    }
+  }
+
+  /// Marca/desmarca al instante en pantalla y guarda en segundo plano
+  Future<void> _cambiarEstadoRapido(EncargoModel encargo, String nuevoEstado,
+      {required bool esLista}) async {
+    final lista = esLista ? _lista : _encargos;
+    final idx = lista.indexWhere((e) => e.id == encargo.id);
+    if (idx < 0) return;
+    final anterior = lista[idx];
+    setState(() => lista[idx] = anterior.conEstado(nuevoEstado));
+    try {
+      final ok = await EncargoService.actualizarEstado(encargo.id, nuevoEstado);
+      if (ok == false) throw Exception('no guardado');
+    } catch (_) {
+      // Si falló, volver como estaba y avisar
+      if (!mounted) return;
+      final i2 = lista.indexWhere((e) => e.id == encargo.id);
+      if (i2 >= 0) setState(() => lista[i2] = anterior);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudo guardar el cambio'),
+          backgroundColor: AppColors.danger));
     }
   }
 
@@ -510,7 +538,7 @@ class _EncargosScreenState extends State<EncargosScreen>
                         ),
                         esNuevo: !esEdicion,
                       );
-                      _cargar();
+                      _cargar(silencioso: true);
                     },
                     child: Text(
                       esEdicion
@@ -580,11 +608,28 @@ class _EncargosScreenState extends State<EncargosScreen>
           ElevatedButton.icon(
             onPressed: () async {
               Navigator.pop(context);
-              final ventaRealizada = await Navigator.push<bool>(
+              await Navigator.push(
                   context, MaterialPageRoute(builder: (_) => const PosScreen()));
+              if (!mounted) return;
+              final ventaRealizada = await showDialog<bool>(
+                context: context,
+                builder: (dCtx) => AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: Text('¿Se vendió el encargo?',
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+                  content: Text('¿Marcar "${encargo.descripcion}" como entregado?',
+                      style: GoogleFonts.poppins(fontSize: 14)),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(dCtx, false),
+                        child: Text('Todavía no', style: GoogleFonts.poppins(color: AppColors.textMuted))),
+                    ElevatedButton(onPressed: () => Navigator.pop(dCtx, true),
+                        child: Text('Sí, entregado', style: GoogleFonts.poppins(fontWeight: FontWeight.w600))),
+                  ],
+                ),
+              );
               if (ventaRealizada == true) {
                 await EncargoService.actualizarEstado(encargo.id, 'entregado');
-                _cargar();
+                _cargar(silencioso: true);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                     content: Text('¡Encargo entregado!'),
@@ -610,10 +655,9 @@ class _EncargosScreenState extends State<EncargosScreen>
     String tipoPago = 'contado'; // 'contado' | 'fiado' | 'mixto'
     String? clienteId = encargo.clienteId;
     String? clienteNombre = encargo.clienteNombre;
-    final adelantoCtrl = TextEditingController(
-        text: encargo.precioEstimado > 0
-            ? encargo.precioEstimado.toStringAsFixed(2)
-            : '');
+    final adelantoCtrl = TextEditingController();
+    final sinPrecio = encargo.precioEstimado <= 0;
+    final precioCtrl = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -622,7 +666,9 @@ class _EncargosScreenState extends State<EncargosScreen>
       useSafeArea: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModal) {
-          final precio = encargo.precioEstimado;
+          final precio = sinPrecio
+              ? (double.tryParse(precioCtrl.text) ?? 0)
+              : encargo.precioEstimado;
           final adelanto = double.tryParse(adelantoCtrl.text) ?? 0;
           final saldoFiado =
               tipoPago == 'mixto' ? (precio - adelanto).clamp(0.0, double.infinity) : precio;
@@ -656,6 +702,21 @@ class _EncargosScreenState extends State<EncargosScreen>
                             fontWeight: FontWeight.w700,
                             color: AppColors.primary)),
                   ],
+                  if (sinPrecio) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: precioCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
+                      style: GoogleFonts.poppins(fontSize: 14),
+                      onChanged: (_) => setModal(() {}),
+                      decoration: const InputDecoration(
+                        labelText: '¿Cuánto cuesta el encargo?',
+                        prefixText: 'RD\$ ',
+                        prefixIcon: Icon(Icons.sell_outlined),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 20),
 
                   // ── Selector de tipo de pago ──
@@ -678,7 +739,7 @@ class _EncargosScreenState extends State<EncargosScreen>
                     ),
                     const SizedBox(width: 8),
                     _tipoPagoChip(
-                      label: '🤝 Mixto',
+                      label: '🤝 Abono',
                       seleccionado: tipoPago == 'mixto',
                       onTap: () => setModal(() => tipoPago = 'mixto'),
                     ),
@@ -709,7 +770,7 @@ class _EncargosScreenState extends State<EncargosScreen>
                       style: GoogleFonts.poppins(fontSize: 14),
                       onChanged: (_) => setModal(() {}),
                       decoration: const InputDecoration(
-                        labelText: 'Adelanto del cliente',
+                        labelText: '¿Cuánto abona al recibir?',
                         prefixText: 'RD\$ ',
                         prefixIcon: Icon(Icons.payments_outlined),
                       ),
@@ -768,7 +829,23 @@ class _EncargosScreenState extends State<EncargosScreen>
                     height: 50,
                     child: ElevatedButton(
                       onPressed: () async {
-                        // Fiado/Mixto requieren cliente
+                        if (precio <= 0) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                            content: Text('Escribe el precio del encargo',
+                                style: GoogleFonts.poppins()),
+                            backgroundColor: AppColors.danger,
+                          ));
+                          return;
+                        }
+                        if (tipoPago == 'mixto' && adelanto <= 0) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                            content: Text('Escribe cuánto abona el cliente',
+                                style: GoogleFonts.poppins()),
+                            backgroundColor: AppColors.danger,
+                          ));
+                          return;
+                        }
+                        // Fiado/Abono requieren cliente
                         if (tipoPago != 'contado' && clienteId == null) {
                           ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
                             content: Text('Selecciona un cliente para el fiado',
@@ -778,8 +855,13 @@ class _EncargosScreenState extends State<EncargosScreen>
                           return;
                         }
                         // Mixto: el adelanto no puede superar el precio
-                        if (tipoPago == 'mixto' && precio > 0 && adelanto >= precio) {
+                        // Si abona todo, es contado
+                        if (tipoPago == 'mixto' && adelanto >= precio) {
                           setModal(() => tipoPago = 'contado');
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                            content: Text('Paga completo: se cambió a Contado. Toca confirmar.',
+                                style: GoogleFonts.poppins()),
+                          ));
                           return;
                         }
                         Navigator.pop(ctx);
@@ -789,6 +871,7 @@ class _EncargosScreenState extends State<EncargosScreen>
                           clienteId: clienteId,
                           clienteNombre: clienteNombre,
                           adelanto: adelanto,
+                          precio: precio,
                         );
                       },
                       child: Text(
@@ -847,44 +930,53 @@ class _EncargosScreenState extends State<EncargosScreen>
     String? clienteId,
     String? clienteNombre,
     double adelanto = 0,
+    required double precio,
   }) async {
-    // 1. Marcar encargo como entregado
-    await EncargoService.actualizarEstado(encargo.id, 'entregado');
-
-    // 2. Si es fiado o mixto, crear el registro de fiado
-    if (tipoPago != 'contado' && clienteId != null) {
-      final double montoFiado = encargo.precioEstimado > 0 ? encargo.precioEstimado : 0.0;
-      if (montoFiado > 0) {
-        await FiadoService.crearFiado(
-          clienteId: clienteId,
-          clienteNombre: clienteNombre,
-          montoOriginal: montoFiado,
-          montoPagado: tipoPago == 'mixto' ? adelanto : 0,
-          notas: 'Encargo: ${encargo.descripcion}',
-        );
+    try {
+      // 1. Registrar como VENTA (entra en Reportes, Caja, Inicio y Actividad)
+      final ok = await VentaService.registrarVentaEncargo(
+        descripcion: encargo.descripcion,
+        cantidad: encargo.cantidad,
+        precioTotal: precio,
+        costoTotal: encargo.costoPedido,
+        tipoPago: tipoPago,
+        clienteId: clienteId,
+        clienteNombre: clienteNombre,
+        abono: tipoPago == 'mixto' ? adelanto : 0,
+      );
+      if (!ok) throw Exception('no se pudo registrar la venta');
+      // 2. Marcar encargo como entregado
+      await EncargoService.actualizarEstado(encargo.id, 'entregado');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('No se pudo entregar el encargo: $e', style: GoogleFonts.poppins()),
+          backgroundColor: AppColors.danger,
+        ));
       }
+      return;
     }
 
-    _cargar();
+    _cargar(silencioso: true);
 
     if (mounted) {
       final msg = tipoPago == 'contado'
           ? '¡Encargo entregado!'
           : tipoPago == 'fiado'
               ? '¡Encargo entregado y fiado creado!'
-              : '¡Encargo entregado! Fiado registrado.';
+              : '¡Encargo entregado! Abono de ${AppFormatters.moneda(adelanto)} registrado.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(msg, style: GoogleFonts.poppins()),
         backgroundColor: AppColors.success,
       ));
       // Ofrecer recibo
       final saldoFiadoFinal = tipoPago == 'contado' ? 0.0
-          : tipoPago == 'fiado' ? (encargo.precioEstimado)
-          : (encargo.precioEstimado - adelanto).clamp(0.0, double.infinity);
+          : tipoPago == 'fiado' ? precio
+          : (precio - adelanto).clamp(0.0, double.infinity);
       _ofrecerReciboEncargo(
         encargo: encargo,
         tipoPago: tipoPago,
-        montoCobrado: tipoPago == 'mixto' ? adelanto : (tipoPago == 'contado' ? encargo.precioEstimado : 0),
+        montoCobrado: tipoPago == 'mixto' ? adelanto : (tipoPago == 'contado' ? precio : 0),
         saldoFiado: saldoFiadoFinal,
         clienteNombre: clienteNombre,
       );
@@ -1026,14 +1118,8 @@ class _EncargosScreenState extends State<EncargosScreen>
       floatingActionButton: FloatingActionButton(
         onPressed: () => _mostrarFormulario(),
         backgroundColor: AppColors.primary,
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-          Text('Nuevo',
-              style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 9)),
-        ]),
+        tooltip: 'Nuevo',
+        child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
       ),
     ));
   }
@@ -1055,7 +1141,7 @@ class _EncargosScreenState extends State<EncargosScreen>
     }
 
     return RefreshIndicator(
-      onRefresh: _cargar,
+      onRefresh: () => _cargar(silencioso: true),
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         itemCount: _encargos.length,
@@ -1063,10 +1149,8 @@ class _EncargosScreenState extends State<EncargosScreen>
         itemBuilder: (_, i) => _EncargoCard(
           encargo: _encargos[i],
           onEditar: () => _mostrarFormulario(editar: _encargos[i]),
-          onEstado: (estado) async {
-            await EncargoService.actualizarEstado(_encargos[i].id, estado);
-            _cargar();
-          },
+          onEstado: (estado) =>
+              _cambiarEstadoRapido(_encargos[i], estado, esLista: false),
           onEliminar: () async {
             final ok = await showDialog<bool>(
               context: context,
@@ -1092,7 +1176,7 @@ class _EncargosScreenState extends State<EncargosScreen>
             );
             if (ok == true) {
               await EncargoService.eliminarEncargo(_encargos[i].id);
-              _cargar();
+              _cargar(silencioso: true);
             }
           },
           onEntregar: () => _mostrarCobroEncargo(_encargos[i]),
@@ -1134,7 +1218,7 @@ class _EncargosScreenState extends State<EncargosScreen>
     }
 
     return RefreshIndicator(
-      onRefresh: _cargar,
+      onRefresh: () => _cargar(silencioso: true),
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         itemCount: items.length,
@@ -1148,10 +1232,9 @@ class _EncargosScreenState extends State<EncargosScreen>
             padding: const EdgeInsets.only(bottom: 8),
             child: _ListaCard(
               encargo: encargo,
-              onComprado: () async {
+              onComprado: () {
                 final nuevoEstado = encargo.estado == 'comprado' ? 'pendiente' : 'comprado';
-                await EncargoService.actualizarEstado(encargo.id, nuevoEstado);
-                _cargar();
+                _cambiarEstadoRapido(encargo, nuevoEstado, esLista: true);
               },
               onEliminar: () async {
                 final ok = await showDialog<bool>(
@@ -1178,7 +1261,7 @@ class _EncargosScreenState extends State<EncargosScreen>
                 );
                 if (ok == true) {
                   await EncargoService.eliminarEncargo(encargo.id);
-                  _cargar();
+                  _cargar(silencioso: true);
                 }
               },
             ),

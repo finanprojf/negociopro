@@ -4,6 +4,7 @@ import '../models/venta_model.dart';
 import '../models/producto_model.dart';
 import 'supabase_service.dart';
 import 'local_database.dart';
+import 'fiado_service.dart';
 class VentaService {
   static const _uuid = Uuid();
 
@@ -222,7 +223,7 @@ static Future<void> sincronizarPendientes() async {
               where: 'venta_id = ? AND synced = 0', whereArgs: [v['id']]);
           for (final f in fiados) {
             try {
-              final fiadoData = Map<String, dynamic>.from(f)..remove('synced');
+              final fiadoData = Map<String, dynamic>.from(f)..remove('synced')..remove('cliente_nombre')..remove('cliente_telefono')..remove('detalle');
               await SupabaseService.client.from('fiados').upsert(fiadoData);
               await LocalDatabase.marcarSynced('fiados', f['id'] as String);
             } catch (_) {}
@@ -324,6 +325,92 @@ static Future<void> sincronizarPendientes() async {
     // ya reducen el total de la venta directamente en el campo descuento.
     return true;
   }
+  /// Registra la entrega de un ENCARGO como una venta normal para que
+  /// entre en Reportes, Cuadre de Caja, Inicio y Actividad reciente.
+  /// [tipoPago]: 'contado' | 'fiado' | 'mixto'
+  /// [abono]: lo que el cliente paga al recibir (solo en 'mixto').
+  /// El abono se registra como abono del fiado → cuenta como efectivo en caja.
+  static Future<bool> registrarVentaEncargo({
+    required String descripcion,
+    required double cantidad,
+    required double precioTotal,
+    double costoTotal = 0,
+    required String tipoPago,
+    String? clienteId,
+    String? clienteNombre,
+    double abono = 0,
+  }) async {
+    final empresaId = await SupabaseService.getEmpresaId();
+    if (empresaId == null || precioTotal <= 0) return false;
+
+    final ventaId = _uuid.v4();
+    final ahora = DateTime.now().toUtc().toIso8601String();
+    final esCredito = tipoPago != 'contado';
+    final cant = cantidad > 0 ? cantidad : 1.0;
+
+    final ventaMap = {
+      'id': ventaId,
+      'empresa_id': empresaId,
+      'cliente_id': clienteId,
+      'usuario_id': SupabaseService.userId,
+      'tipo_pago': esCredito ? 'fiado' : 'efectivo',
+      'subtotal': precioTotal,
+      'descuento': 0.0,
+      'total': precioTotal,
+      // El abono NO va aquí: se registra como abono del fiado (así la caja lo cuenta una sola vez)
+      'monto_pagado': esCredito ? 0.0 : precioTotal,
+      'cambio': 0.0,
+      'estado': 'completada',
+      'synced': 0,
+      'created_at': ahora,
+    };
+    await LocalDatabase.insertar('ventas', ventaMap);
+
+    await LocalDatabase.insertar('detalle_ventas', {
+      'id': _uuid.v4(),
+      'venta_id': ventaId,
+      'producto_id': null,
+      'nombre_producto': 'Encargo: $descripcion',
+      'cantidad': cant,
+      'precio_unitario': precioTotal / cant,
+      'precio_compra': costoTotal > 0 ? costoTotal / cant : 0.0,
+      'descuento': 0,
+      'subtotal': precioTotal,
+      'created_at': ahora,
+    });
+
+    String? fiadoId;
+    if (esCredito && clienteId != null) {
+      fiadoId = _uuid.v4();
+      await LocalDatabase.insertar('fiados', {
+        'id': fiadoId,
+        'empresa_id': empresaId,
+        'cliente_id': clienteId,
+        'cliente_nombre': clienteNombre,
+        'venta_id': ventaId,
+        'monto_original': precioTotal,
+        'saldo_pendiente': precioTotal,
+        'estado': 'activo',
+        'notas': 'Encargo: $descripcion',
+        'synced': 0,
+        'created_at': ahora,
+        'updated_at': ahora,
+      });
+    }
+
+    // Subir la venta y el fiado primero (el abono depende del fiado)
+    if (await SupabaseService.isOnlineAsync) {
+      try { await _syncVenta(ventaId, ventaMap, const [], ahora); } catch (_) {}
+    }
+
+    // Abono al recibir: reduce el saldo y entra como efectivo en caja
+    if (fiadoId != null && clienteId != null && abono > 0) {
+      final monto = abono >= precioTotal ? precioTotal : abono;
+      await FiadoService.registrarAbono(fiadoId, clienteId, monto, 'efectivo');
+    }
+    return true;
+  }
+
   // Sync inmediato después de registrar una venta cuando hay internet
   static Future<void> _syncVenta(
     String ventaId,
@@ -384,7 +471,7 @@ static Future<void> sincronizarPendientes() async {
           where: 'venta_id = ? AND synced = 0', whereArgs: [ventaId]);
       for (final f in fiadosLocal) {
         try {
-          final fiadoData = Map<String, dynamic>.from(f)..remove('synced');
+          final fiadoData = Map<String, dynamic>.from(f)..remove('synced')..remove('cliente_nombre')..remove('cliente_telefono')..remove('detalle');
           await SupabaseService.client.from('fiados').upsert(fiadoData);
           await LocalDatabase.marcarSynced('fiados', f['id'] as String);
         } catch (_) {}

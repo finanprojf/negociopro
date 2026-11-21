@@ -10,6 +10,7 @@ import '../../services/supabase_service.dart';
 import '../../services/local_database.dart';
 import '../../services/recibo_service.dart';
 import '../../models/fiado_model.dart';
+import 'nuevo_fiado_screen.dart';
 class FiadoClienteScreen extends StatefulWidget {
   final ClienteModel cliente;
   const FiadoClienteScreen({super.key, required this.cliente});
@@ -176,7 +177,7 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('Fiado — ${widget.cliente.nombre}'),
+        title: Text('Fiado — \${widget.cliente.nombre}'),
         actions: [
           IconButton(
             icon: const Icon(Icons.history_rounded),
@@ -184,6 +185,20 @@ class _FiadoClienteScreenState extends State<FiadoClienteScreen> {
             onPressed: () => _mostrarHistorial(),
           ),
         ],
+      ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: FloatingActionButton(
+          onPressed: () async {
+            final result = await Navigator.push(context,
+                MaterialPageRoute(builder: (_) => NuevoFiadoScreen(clienteInicial: widget.cliente)));
+            if (result == true) _cargar();
+          },
+          backgroundColor: AppColors.colorFiado,
+          foregroundColor: Colors.white,
+          tooltip: 'Nuevo fiado',
+          child: const Icon(Icons.add_rounded, size: 32),
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))

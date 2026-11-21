@@ -4,6 +4,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 import '../../services/plan_service.dart';
 import '../../services/billing_service.dart';
+import '../../services/supabase_service.dart';
+import '../../services/soporte_service.dart';
 
 // ─── Períodos ────────────────────────────────────────────────────────────────
 class _Periodo {
@@ -65,6 +67,7 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
   int  _planIdx    = 0; // 0=Básico, 1=Pro
   bool _cargando   = false;
   final _billing   = BillingService.instance;
+  bool _pagoPorPlay = false; // solo si compró en Google Play se puede cancelar allí
 
   NivelPlan get _plan     => PlanService.nivel;
   int?      get _diasLeft => PlanService.diasEnPlan;
@@ -76,10 +79,35 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
   void initState() {
     super.initState();
     _initBilling();
+    _verificarOrigenPlan();
+  }
+
+  /// ¿El plan se pagó por Google Play o lo activó el administrador?
+  Future<void> _verificarOrigenPlan() async {
+    try {
+      final empresaId = await SupabaseService.getEmpresaId();
+      if (empresaId == null) return;
+      final res = await SupabaseService.client
+          .from('compras_play')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .limit(1);
+      if (mounted) setState(() => _pagoPorPlay = (res as List).isNotEmpty);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    // Evitar que el servicio llame setState en una pantalla cerrada
+    _billing.onCargando = null;
+    _billing.onCargaCompleta = null;
+    _billing.onError = null;
+    _billing.onCompraExitosa = null;
+    super.dispose();
   }
 
   Future<void> _initBilling() async {
-    _billing.onCargando      = () => setState(() => _cargando = true);
+    _billing.onCargando      = () { if (mounted) setState(() => _cargando = true); };
     _billing.onCargaCompleta = () { if (mounted) setState(() => _cargando = false); };
     _billing.onError         = (msg) {
       if (!mounted) return;
@@ -167,6 +195,16 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
       ),
     );
     if (confirmar == true) {
+      // Enviar el motivo al chat de soporte para que el admin lo vea
+      try {
+        final empresaId = await SupabaseService.getEmpresaId();
+        if (empresaId != null && razon != null) {
+          await SoporteService.enviarMensaje(
+            empresaId: empresaId,
+            mensaje: '🚪 Motivo de cancelación: $razon',
+          );
+        }
+      } catch (_) {}
       await launchUrl(
         Uri.parse('https://play.google.com/store/account/subscriptions'),
         mode: LaunchMode.externalApplication,
@@ -197,7 +235,7 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
                     _PlanActivoBanner(
                       plan: _plan,
                       diasLeft: _diasLeft,
-                      onCancelar: _mostrarEncuestaCancelacion,
+                      onCancelar: _pagoPorPlay ? _mostrarEncuestaCancelacion : null,
                     ),
                     const SizedBox(height: 16),
                     _BeneficiosActivos(esPro: true),
@@ -212,7 +250,7 @@ class _SuscripcionScreenState extends State<SuscripcionScreen> {
                     _PlanActivoBanner(
                       plan: _plan,
                       diasLeft: _diasLeft,
-                      onCancelar: _mostrarEncuestaCancelacion,
+                      onCancelar: _pagoPorPlay ? _mostrarEncuestaCancelacion : null,
                     ),
                     const SizedBox(height: 16),
                     _BeneficiosActivos(esPro: false),
@@ -782,7 +820,7 @@ class _SelectorPeriodo extends StatelessWidget {
 class _PlanActivoBanner extends StatelessWidget {
   final NivelPlan plan;
   final int? diasLeft;
-  final VoidCallback onCancelar;
+  final VoidCallback? onCancelar; // null = plan activado por el admin (no hay nada que cancelar en Play)
   const _PlanActivoBanner({required this.plan, required this.diasLeft, required this.onCancelar});
 
   @override
@@ -845,6 +883,14 @@ class _PlanActivoBanner extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 12),
+        if (onCancelar == null)
+          Row(children: [
+            const Icon(Icons.verified_user_outlined, size: 15, color: AppColors.textMuted),
+            const SizedBox(width: 6),
+            Expanded(child: Text('Plan activado por FinanPro Solutions',
+                style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textMuted))),
+          ])
+        else
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(

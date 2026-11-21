@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'services/modo_service.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -21,16 +22,6 @@ import 'screens/seguridad/pin_lock_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializar locale para fechas en español
-  await initializeDateFormatting('es_DO', null);
-
-  // Permitir todas las orientaciones — el layout se adapta según dispositivo
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
 
   // Hacer la barra de navegación de Android transparente
   // para que el contenido no quede tapado en teléfonos con botones
@@ -42,17 +33,29 @@ Future<void> main() async {
     systemNavigationBarIconBrightness: Brightness.dark,
   ));
 
-  await Supabase.initialize(
-    url: AppConstants.supabaseUrl,
-    anonKey: AppConstants.supabaseAnonKey,
-  );
+  // Arranque RÁPIDO: todo lo que no depende entre sí se carga a la vez
+  await Future.wait([
+    initializeDateFormatting('es_DO', null),
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]),
+    Supabase.initialize(
+      url: AppConstants.supabaseUrl,
+      anonKey: AppConstants.supabaseAnonKey,
+    ),
+    CuadreAutomaticoService.init(),
+    PrinterService.init(),
+    ThemeService.init(),
+    ModoService.init(),
+  ]);
 
-  await CuadreAutomaticoService.init();
-  await CuadreAutomaticoService.reprogramarSiIntervalo();
-  await PrinterService.init();
-
-  await ThemeService.init();
   runApp(const NegocioProApp());
+
+  // Reprogramar recordatorio de cuadre sin bloquear la apertura de la app
+  CuadreAutomaticoService.reprogramarSiIntervalo().catchError((_) {});
 }
 
 class NegocioProApp extends StatefulWidget {

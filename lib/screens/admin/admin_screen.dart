@@ -41,10 +41,15 @@ class _AdminScreenState extends State<AdminScreen> {
     try {
       final res = await SupabaseService.client
           .from('empresas')
-          .select('id, nombre, telefono, whatsapp, pais, plan_activo, suscripcion_vence, created_at, usuarios(id, nombre, correo), productos(count)')
+          .select('id, nombre, telefono, whatsapp, pais, plan_activo, suscripcion_vence, created_at, usuarios(id, nombre, correo), productos(count), clientes(count)')
           .order('created_at', ascending: false);
       if (mounted) setState(() { _empresas = List<Map<String, dynamic>>.from(res); _loading = false; });
-    } catch (_) { if (mounted) setState(() => _loading = false); }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error cargando empresas: $e'), backgroundColor: AppColors.danger));
+      }
+    }
   }
 
   List<Map<String, dynamic>> get _filtradas {
@@ -241,7 +246,9 @@ class _AdminScreenState extends State<AdminScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('¡Plan activado! Vence: $nuevaFechaStr'), backgroundColor: AppColors.success));
         if (telefono.isNotEmpty) _ofrecerEnviarRecibo(empresa, dias, tipoPlan, precio, nuevaFechaStr, telefono);
       }
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo activar el plan: $e'), backgroundColor: AppColors.danger));
+    }
   }
 
   void _ofrecerEnviarRecibo(Map<String, dynamic> empresa, int dias, String tipoPlan, double precio, String fechaVence, String telefono) {
@@ -466,6 +473,19 @@ class _EmpresaCardState extends State<_EmpresaCard> {
                   count = ((prods['count'] ?? 0) as num).toInt();
                 }
                 return _InfoRow(Icons.inventory_2_outlined, '$count producto${count == 1 ? '' : 's'} en inventario',
+                    color: count == 0 ? AppColors.textMuted : null);
+              }),
+              // Conteo de clientes registrados
+              Builder(builder: (_) {
+                final cls = e['clientes'];
+                int count = 0;
+                if (cls is List && cls.isNotEmpty) {
+                  final first = cls.first;
+                  count = first is Map ? ((first['count'] ?? 0) as num).toInt() : cls.length;
+                } else if (cls is Map) {
+                  count = ((cls['count'] ?? 0) as num).toInt();
+                }
+                return _InfoRow(Icons.people_outline_rounded, '$count cliente${count == 1 ? '' : 's'} registrados',
                     color: count == 0 ? AppColors.textMuted : null);
               }),
               _InfoRow(Icons.calendar_today_rounded,

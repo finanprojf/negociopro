@@ -4,9 +4,6 @@ import '../../theme/app_colors.dart';
 import '../../models/gasto_model.dart';
 import '../../utils/formatters.dart';
 import '../../services/gasto_service.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../services/supabase_service.dart';
-import '../../services/local_database.dart';
 import '../../widgets/guia_modulo_banner.dart';
 class GastosScreen extends StatefulWidget {
   const GastosScreen({super.key});
@@ -44,8 +41,13 @@ class _GastosScreenState extends State<GastosScreen> {
         _gastos = gastos;
         _loading = false;
       });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('No se pudieron cargar los gastos: $e'),
+            backgroundColor: AppColors.danger));
+      }
     }
   }
 
@@ -66,14 +68,8 @@ class _GastosScreenState extends State<GastosScreen> {
      floatingActionButton: FloatingActionButton(
         onPressed: () => _mostrarFormGasto(context),
         backgroundColor: AppColors.primary,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-            Text('Gasto', style: GoogleFonts.poppins(
-                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 9)),
-          ],
-        ),
+        tooltip: 'Agregar gasto',
+        child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
       ),
     );
   }
@@ -125,15 +121,7 @@ class _GastosScreenState extends State<GastosScreen> {
             ),
           );
           if (confirm == true) {
-            await LocalDatabase.eliminar('gastos', 'id', _gastos[i].id);
-            if (await SupabaseService.isOnlineAsync) {
-              try {
-                await SupabaseService.client
-                    .from('gastos')
-                    .delete()
-                    .eq('id', _gastos[i].id);
-              } catch (_) {}
-            }
+            await GastoService.eliminarGasto(_gastos[i].id);
             _cargar();
           }
         },
@@ -297,7 +285,8 @@ class _GastoTile extends StatelessWidget {
         ),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(gasto.descripcion, style: const TextStyle(fontFamily: 'Poppins',
+          Text(gasto.descripcion, maxLines: 2, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontFamily: 'Poppins',
               fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
           const SizedBox(height: 3),
           Row(children: [

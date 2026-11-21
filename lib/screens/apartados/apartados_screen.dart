@@ -8,7 +8,6 @@ import '../../services/apartado_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/local_database.dart';
 import '../seguridad/pin_entrada_dialog.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 import 'entregar_articulos_sheet.dart';
 import '../../services/recibo_service.dart';
@@ -46,18 +45,24 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
       // Un apartado está "entregado" si tiene al menos 1 línea y TODAS tienen entregado=1
       final db = await LocalDatabase.database;
       final entregadosMap = <String, bool>{};
+      // Una sola consulta para todas las líneas (antes era una por apartado)
+      final lineasPorApartado = <String, List<Map<String, dynamic>>>{};
+      try {
+        final todas = await db.query('apartado_productos',
+            columns: ['apartado_id', 'entregado']);
+        for (final l in todas) {
+          final aid = l['apartado_id'] as String?;
+          if (aid == null) continue;
+          (lineasPorApartado[aid] ??= []).add(l);
+        }
+      } catch (_) {}
       for (final ap in apartados) {
-        try {
-          final lineas = await db.query('apartado_productos',
-              where: 'apartado_id = ?', whereArgs: [ap.id]);
-          if (lineas.isNotEmpty) {
-            entregadosMap[ap.id] =
-                lineas.every((l) => (l['entregado'] as int? ?? 0) == 1);
-          } else {
-            // Sin líneas: completado = entregado (comportamiento anterior)
-            entregadosMap[ap.id] = ap.estaCompletado;
-          }
-        } catch (_) {
+        final lineas = lineasPorApartado[ap.id] ?? const [];
+        if (lineas.isNotEmpty) {
+          entregadosMap[ap.id] =
+              lineas.every((l) => (l['entregado'] as int? ?? 0) == 1);
+        } else {
+          // Sin líneas: completado = entregado (comportamiento anterior)
           entregadosMap[ap.id] = ap.estaCompletado;
         }
       }
@@ -68,8 +73,13 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
         _aplicarFiltros();
         _loading = false;
       });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('No se pudieron cargar los apartados: $e'),
+            backgroundColor: AppColors.danger));
+      }
     }
   }
 
@@ -102,14 +112,8 @@ class _ApartadosScreenState extends State<ApartadosScreen> {
           if (ok == true) _cargar();
         },
         backgroundColor: AppColors.primary,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.bookmark_add_rounded, color: Colors.white, size: 20),
-            Text('Apartar', style: GoogleFonts.poppins(
-                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 9)),
-          ],
-        ),
+        tooltip: 'Nuevo apartado',
+        child: const Icon(Icons.bookmark_add_rounded, color: Colors.white, size: 28),
       ),
     ));
   }

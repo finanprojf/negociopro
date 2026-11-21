@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '../models/fiado_model.dart';
 import 'supabase_service.dart';
@@ -14,6 +15,8 @@ class FiadoService {
     double montoPagado = 0,
     String? notas,
     String? clienteNombre,
+    List<Map<String, dynamic>>? items,
+    DateTime? fechaLimite,
   }) async {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return false;
@@ -31,6 +34,8 @@ class FiadoService {
       'saldo_pendiente': saldo,
       'estado': saldo <= 0 ? 'pagado' : 'activo',
       'notas': notas,
+      'detalle': items != null ? jsonEncode(items) : null,
+      'fecha_limite': fechaLimite?.toIso8601String(),
       'synced': 0,
       'created_at': ahora,
       'updated_at': ahora,
@@ -42,7 +47,8 @@ class FiadoService {
       try {
         final onlineMap = Map<String, dynamic>.from(map)
           ..remove('synced')
-          ..remove('cliente_nombre');
+          ..remove('cliente_nombre')
+          ..remove('detalle');
         await SupabaseService.client.from('fiados').insert(onlineMap);
         await LocalDatabase.marcarSynced('fiados', id);
       } catch (_) {}
@@ -72,7 +78,7 @@ class FiadoService {
         where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId]);
     for (final f in fiadosPend) {
       try {
-        final fMap = Map<String, dynamic>.from(f)..remove('synced')..remove('cliente_nombre')..remove('cliente_telefono');
+        final fMap = Map<String, dynamic>.from(f)..remove('synced')..remove('cliente_nombre')..remove('cliente_telefono')..remove('detalle');
         await SupabaseService.client.from('fiados').upsert(fMap);
         await LocalDatabase.marcarSynced('fiados', f['id'] as String);
       } catch (_) {}

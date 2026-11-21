@@ -10,6 +10,9 @@ import '../../utils/responsive.dart';
 import '../ventas/pos_screen.dart';
 import '../inventario/inventario_screen.dart';
 import '../inventario/producto_form_screen.dart';
+import '../fiado/nuevo_fiado_screen.dart';
+import '../onboarding/primer_paso_screen.dart';
+import '../../services/modo_service.dart';
 import '../clientes/clientes_screen.dart';
 import '../fiado/fiado_screen.dart';
 import '../apartados/apartados_screen.dart';
@@ -51,6 +54,89 @@ class _DashboardScreenState extends State<DashboardScreen>
   String _appVersion = '';
   double _ventasHoy = 0;
   double _gananciasHoy = 0;
+  String? _desdeCierreIso; // fecha del último cuadre (las cifras cuentan desde ahí)
+  // Rendimiento solo de HOY (desde medianoche)
+  double _ventasSoloHoy = 0;
+  double _gananciasSoloHoy = 0;
+  bool _verSoloHoy = true; // selector Hoy / En caja
+
+  /// La primera vez (y solo si el negocio está vacío) preguntar
+  /// "¿Qué quieres hacer primero?" para que vea el valor enseguida.
+  Future<void> _mostrarPrimerPasoSiHaceFalta() async {
+    try {
+      // Esperar a que la empresa esté lista (cuentas recién creadas tardan un poco)
+      String? empresaId;
+      for (var i = 0; i < 10 && empresaId == null; i++) {
+        await Future.delayed(const Duration(milliseconds: 600));
+        empresaId = await SupabaseService.getEmpresaId();
+      }
+      if (empresaId == null || !mounted) return;
+      if (!await PrimerPasoScreen.debeMostrarse()) return;
+      final db = await LocalDatabase.database;
+      final prods = await db.query('productos', columns: ['id'],
+          where: 'empresa_id = ?', whereArgs: [empresaId], limit: 1);
+      final fiados = await db.query('fiados', columns: ['id'],
+          where: 'empresa_id = ?', whereArgs: [empresaId], limit: 1);
+      if (prods.isNotEmpty || fiados.isNotEmpty) {
+        // Ya usa la app: no molestar nunca más
+        await PrimerPasoScreen.marcarVista();
+        return;
+      }
+      if (!mounted) return;
+      await Navigator.push(context,
+          MaterialPageRoute(builder: (_) => const PrimerPasoScreen()));
+      _cargarResumen();
+    } catch (_) {}
+  }
+
+  Future<void> _calcularHoy() async {
+    final eid = _empresaId;
+    if (eid == null || eid.isEmpty) return;
+    try {
+      final db = await LocalDatabase.database;
+      final ahora = DateTime.now();
+      final inicioHoy = DateTime(ahora.year, ahora.month, ahora.day).toUtc().toIso8601String();
+      final ventas = await db.query('ventas',
+          where: 'empresa_id = ? AND created_at >= ? AND estado = ? AND tipo_pago != ?',
+          whereArgs: [eid, inicioHoy, 'completada', 'fiado']);
+      double total = 0, ganancia = 0;
+      for (final v in ventas) { total += (v['total'] as num).toDouble(); }
+      if (ventas.isNotEmpty) {
+        final ids = ventas.map((v) => "'${v['id']}'").join(',');
+        final det = await db.rawQuery(
+            'SELECT dv.cantidad, dv.precio_unitario, '
+            '  CASE WHEN dv.precio_compra > 0 THEN dv.precio_compra '
+            '       ELSE COALESCE(p.precio_compra, 0) END AS precio_compra '
+            'FROM detalle_ventas dv '
+            'LEFT JOIN productos p ON p.id = dv.producto_id '
+            'WHERE dv.venta_id IN ($ids)');
+        for (final d in det) {
+          final pc = (d['precio_compra'] as num? ?? 0).toDouble();
+          if (pc > 0) {
+            ganancia += ((d['precio_unitario'] as num).toDouble() - pc) *
+                (d['cantidad'] as num).toDouble();
+          }
+        }
+      }
+      if (mounted) setState(() { _ventasSoloHoy = total; _gananciasSoloHoy = ganancia; });
+    } catch (_) {}
+  }
+
+  bool get _cuadreEsHoy {
+    if (_desdeCierreIso == null) return false;
+    final d = DateTime.tryParse(_desdeCierreIso!)?.toLocal();
+    if (d == null) return false;
+    final h = DateTime.now();
+    return d.year == h.year && d.month == h.month && d.day == h.day;
+  }
+
+  /// Etiqueta honesta del período que muestran las tarjetas
+  String get _etiquetaPeriodo {
+    if (_desdeCierreIso == null) return 'Sin cuadre';
+    if (_cuadreEsHoy) return 'Hoy';
+    final d = DateTime.tryParse(_desdeCierreIso!)?.toLocal();
+    return d == null ? 'Sin cuadre' : 'Desde ${d.day}/${d.month}';
+  }
   int _productosLowStock = 0;
   int _productosSinStock = 0;
   int _totalProductos = 0;
@@ -76,6 +162,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _cargarRecordatoriosHoy();
     _cargarVitrina();
     _cargarSoporteNoLeidos();
+    _mostrarPrimerPasoSiHaceFalta();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) {
         _cargarResumen();
@@ -214,6 +301,7 @@ Future<void> _cargarVersion() async {
           desdeCierre = cierresOff.first['created_at'] as String?;
         }
         final desdeStr = desdeCierre ?? '2000-01-01T00:00:00.000Z';
+        _desdeCierreIso = desdeCierre;
 
         final ventasHoy = await db.query('ventas',
             where: 'empresa_id = ? AND created_at >= ? AND estado = ? AND tipo_pago != ?',
@@ -257,6 +345,7 @@ Future<void> _cargarVersion() async {
           setState(() {
             _ventasHoy = totalVentas;
             _gananciasHoy = gananciaReal;
+            Future.microtask(_calcularHoy);
             _totalProductos = stockBajo.length;
             _productosLowStock = stockBajo.where((p) =>
                 (p['stock_actual'] as num) > 0 &&
@@ -301,6 +390,7 @@ Future<void> _cargarVersion() async {
         desdeCierre = cierresOn.first['created_at'] as String?;
       }
       final desdeStr = desdeCierre ?? '2000-01-01T00:00:00.000Z';
+      _desdeCierreIso = desdeCierre;
 
       var qVentas = SupabaseService.client
           .from('ventas')
@@ -427,11 +517,11 @@ Future<void> _cargarVersion() async {
         }
       }
 
-      final stockBajo = await SupabaseService.client
-          .from('productos')
-          .select('id, stock_actual, stock_minimo')
-          .eq('empresa_id', empresaId)
-          .eq('activo', true);
+      // Stock siempre desde SQLite local — funciona sin internet
+      final dbLocal = await LocalDatabase.database;
+      final stockBajoLocal = await dbLocal.query('productos',
+          where: 'empresa_id = ? AND activo = ?',
+          whereArgs: [empresaId, 1]);
 
       final apartados = await SupabaseService.client
           .from('apartados')
@@ -443,16 +533,41 @@ Future<void> _cargarVersion() async {
         setState(() {
           _ventasHoy = totalVentas;
           _gananciasHoy = gananciaReal;
-          _totalProductos = (stockBajo as List).length;
-          _productosLowStock = (stockBajo as List).where((p) =>
+          Future.microtask(_calcularHoy);
+          _totalProductos = stockBajoLocal.length;
+          _productosLowStock = stockBajoLocal.where((p) =>
               (p['stock_actual'] as num) > 0 &&
               (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
-          _productosSinStock = (stockBajo as List).where((p) =>
+          _productosSinStock = stockBajoLocal.where((p) =>
               (p['stock_actual'] as num) <= 0).length;
           _apartadosActivos = (apartados as List).length;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      // Fallback total a SQLite si Supabase falla
+      try {
+        final eid = _empresaId;
+        if (eid == null || eid.isEmpty) return;
+        final dbFallback = await LocalDatabase.database;
+        final stockFallback = await dbFallback.query('productos',
+            where: 'empresa_id = ? AND activo = ?',
+            whereArgs: [eid, 1]);
+        final apartadosFallback = await dbFallback.query('apartados',
+            where: 'empresa_id = ? AND estado = ?',
+            whereArgs: [eid, 'activo']);
+        if (mounted) {
+          setState(() {
+            _totalProductos = stockFallback.length;
+            _productosLowStock = stockFallback.where((p) =>
+                (p['stock_actual'] as num) > 0 &&
+                (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
+            _productosSinStock = stockFallback.where((p) =>
+                (p['stock_actual'] as num) <= 0).length;
+            _apartadosActivos = apartadosFallback.length;
+          });
+        }
+      } catch (_) {}
+    }
   }
 
   Future<void> _cargarVitrina() async {
@@ -573,14 +688,14 @@ Future<void> _cargarVersion() async {
 
     final esTablet = R.isTablet(context);
     final fab = FloatingActionButton(
-      onPressed: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => const PosScreen())),
+      onPressed: () async {
+        await Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const PosScreen()));
+        _cargarResumen(); // refrescar ventas y actividad al volver
+      },
       backgroundColor: pal.primary,
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.point_of_sale_rounded, color: Colors.white, size: 20),
-        Text('Venta', style: GoogleFonts.poppins(
-            color: Colors.white, fontWeight: FontWeight.w700, fontSize: 9)),
-      ]),
+      tooltip: 'Nueva venta',
+      child: const Icon(Icons.point_of_sale_rounded, color: Colors.white, size: 28),
     );
 
     if (esTablet) {
@@ -948,6 +1063,23 @@ Widget _buildVitrinaWidget() {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ValueListenableBuilder<bool>(
+            valueListenable: ModoService.sinInventario,
+            builder: (_, sinInv, __) => SwitchListTile(
+              secondary: Icon(Icons.inventory_2_outlined, color: pal.colorInventario),
+              title: Text('Usar sin inventario', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              subtitle: Text(sinInv
+                  ? 'Activado: fiados y apartados con artículos escritos a mano'
+                  : 'Desactivado: la app usa tu inventario de productos',
+                  style: GoogleFonts.poppins(fontSize: 11, color: pal.textMuted)),
+              value: sinInv,
+              activeColor: pal.primary,
+              onChanged: (v) async {
+                await ModoService.setSinInventario(v);
+                if (mounted) setState(() {});
+              },
+            ),
+          ),
           ListTile(
             leading: Icon(Icons.store_rounded, color: pal.primary),
             title: Text('Mi empresa', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
@@ -1139,29 +1271,97 @@ Widget _buildVitrinaWidget() {
 
   Widget _buildStatCards() {
     final pal = AppPalette.of(context);
-    return Row(children: [
-      Expanded(child: _StatCard(
-        label: 'Ventas hoy', value: AppFormatters.moneda(_ventasHoy),
-        icon: Icons.trending_up_rounded, color: pal.colorVentas,
-        trend: 'Hoy', trendPositive: true,
-      )),
-      const SizedBox(width: 12),
-      Expanded(child: _StatCard(
-        label: 'Ganancias hoy', value: AppFormatters.moneda(_gananciasHoy),
-        icon: Icons.account_balance_wallet_rounded, color: pal.primary,
-        trend: 'Hoy', trendPositive: true,
-      )),
+    // Si el cuadre fue hoy, "Hoy" y "En caja" son lo mismo: no mostrar selector
+    final mostrarSelector = !_cuadreEsHoy;
+    final verHoy = _verSoloHoy || !mostrarSelector;
+    final ventas = verHoy && mostrarSelector ? _ventasSoloHoy : _ventasHoy;
+    final ganancias = verHoy && mostrarSelector ? _gananciasSoloHoy : _gananciasHoy;
+    final etiqueta = verHoy ? 'Hoy' : _etiquetaPeriodo;
+
+    Widget seg(String texto, bool activo, VoidCallback onTap) => Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            style: GoogleFonts.poppins(fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: activo ? pal.primary : pal.textMuted),
+            child: Text(texto, textAlign: TextAlign.center,
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ),
+    );
+
+    return Column(children: [
+      if (mostrarSelector) ...[
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: pal.surfaceAlt,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Stack(children: [
+            // Píldora blanca que se DESLIZA (no parpadea)
+            Positioned.fill(
+              child: AnimatedAlign(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                alignment: _verSoloHoy ? Alignment.centerLeft : Alignment.centerRight,
+                child: FractionallySizedBox(
+                  widthFactor: 0.5,
+                  heightFactor: 1,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: pal.surface,
+                      borderRadius: BorderRadius.circular(9),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 4, offset: const Offset(0, 1))],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Row(children: [
+            seg('Hoy', _verSoloHoy, () => setState(() => _verSoloHoy = true)),
+            seg('En caja · ${_etiquetaPeriodo.replaceFirst('Desde ', 'desde ')}', !_verSoloHoy,
+                () => setState(() => _verSoloHoy = false)),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 10),
+      ],
+      Row(children: [
+        Expanded(child: _StatCard(
+          label: verHoy ? 'Ventas hoy' : 'Ventas en caja', value: AppFormatters.moneda(ventas),
+          icon: Icons.trending_up_rounded, color: pal.colorVentas,
+          trend: etiqueta, trendPositive: true,
+        )),
+        const SizedBox(width: 12),
+        Expanded(child: _StatCard(
+          label: verHoy ? 'Ganancias hoy' : 'Ganancias en caja', value: AppFormatters.moneda(ganancias),
+          icon: Icons.account_balance_wallet_rounded, color: pal.primary,
+          trend: etiqueta, trendPositive: true,
+        )),
+      ]),
     ]);
   }
 
   Widget _buildAlertSection() {
     final pal = AppPalette.of(context);
     final alerts = <Map<String, dynamic>>[];
+    if (ModoService.sinInventario.value) return const SizedBox.shrink();
     if (_productosLowStock > 0) {
       alerts.add({
         'icon': Icons.inventory_2_outlined,
         'color': pal.warning, 'bg': pal.warningSurface,
-        'text': '$_productosLowStock productos con stock bajo',
+        'text': _productosLowStock == 1
+            ? '1 producto con stock bajo'
+            : '$_productosLowStock productos con stock bajo',
         'screen': const InventarioScreen(),
       });
     }
@@ -1169,7 +1369,9 @@ Widget _buildVitrinaWidget() {
       alerts.add({
         'icon': Icons.remove_shopping_cart_rounded,
         'color': pal.danger, 'bg': pal.dangerSurface,
-        'text': '$_productosSinStock productos sin stock',
+        'text': _productosSinStock == 1
+            ? '1 producto sin stock'
+            : '$_productosSinStock productos sin stock',
         'screen': const InventarioScreen(),
       });
     }
@@ -1191,7 +1393,9 @@ Widget _buildVitrinaWidget() {
 
   Widget _buildModulesGrid() {
     final pal = AppPalette.of(context);
+    final sinInv = ModoService.sinInventario.value;
     final modules = [
+      if (!sinInv)
       _ModuleItem('Inventario', Icons.inventory_2_rounded,
           pal.colorInventario, const InventarioScreen()),
       _ModuleItem('Clientes', Icons.people_rounded,
@@ -1445,7 +1649,7 @@ Widget _buildVitrinaWidget() {
           actividad.add({
             'tipo': 'venta',
             'titulo': saldoFiado > 0
-                ? 'Venta #$numVenta (+${AppFormatters.moneda(saldoFiado)} fiado)'
+                ? 'Venta #$numVenta · fiado ${AppFormatters.moneda(saldoFiado)}'
                 : 'Venta #$numVenta',
             'monto': montoMostrar, 'fecha': _toLocal(v['created_at'] as String), 'positivo': true,
           });
@@ -1620,7 +1824,9 @@ Widget _buildVitrinaWidget() {
                 child: GestureDetector(
                   onTap: () async {
                     await Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const ProductoFormScreen()));
+                        MaterialPageRoute(builder: (_) => ModoService.sinInventario.value
+                            ? const NuevoFiadoScreen()
+                            : const ProductoFormScreen()));
                     _cargarResumen();
                   },
                   child: Column(
