@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../onboarding/catalogo_rapido_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -18,7 +19,9 @@ class InventarioScreen extends StatefulWidget {
   State<InventarioScreen> createState() => _InventarioScreenState();
 }
 
-class _InventarioScreenState extends State<InventarioScreen> {
+class _InventarioScreenState extends State<InventarioScreen>
+    with WidgetsBindingObserver {
+  Timer? _autoRefresh;
   final _searchCtrl = TextEditingController();
   String _filtro = 'todos'; // todos | bajo_stock | sin_stock
   List<ProductoModel> _productos = [];
@@ -28,17 +31,33 @@ class _InventarioScreenState extends State<InventarioScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _cargarProductos();
+    // Se actualiza solo cada 30 seg (ventas hechas en otro teléfono)
+    _autoRefresh = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _cargarProductos(silencioso: true);
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Al volver a la app, traer el stock más reciente
+    if (state == AppLifecycleState.resumed && mounted) {
+      _cargarProductos(silencioso: true);
+    }
   }
 
   @override
   void dispose() {
+    _autoRefresh?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _searchCtrl.dispose();
     super.dispose();
   }
 
- Future<void> _cargarProductos() async {
-    setState(() => _loading = true);
+ /// [silencioso] = actualiza sin mostrar el círculo de carga
+ Future<void> _cargarProductos({bool silencioso = false}) async {
+    if (!silencioso) setState(() => _loading = true);
     try {
       final productos = await InventarioService.getProductos();
       if (mounted) {
@@ -51,6 +70,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
+        if (silencioso) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('No se pudieron cargar los productos: $e'),
             backgroundColor: AppColors.danger));
@@ -69,6 +89,8 @@ class _InventarioScreenState extends State<InventarioScreen> {
       lista = lista.where((p) => p.stockBajo && !p.sinStock).toList();
     } else if (_filtro == 'sin_stock') {
       lista = lista.where((p) => p.sinStock).toList();
+    } else if (_filtro == 'por_completar') {
+      lista = lista.where((p) => p.porCompletar).toList();
     }
     _filtrados = lista;
   }
@@ -106,7 +128,10 @@ class _InventarioScreenState extends State<InventarioScreen> {
                 ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
                 : _filtrados.isEmpty
                     ? _buildEmpty()
-                    : _buildLista(),
+                    : RefreshIndicator(
+                        onRefresh: () => _cargarProductos(silencioso: true),
+                        child: _buildLista(),
+                      ),
           ),
         ],
       ),
@@ -160,6 +185,10 @@ class _InventarioScreenState extends State<InventarioScreen> {
                 _FiltroChip(label: '✕ Sin stock', value: 'sin_stock', selected: _filtro,
                     onTap: (v) => setState(() { _filtro = v; _aplicarFiltros(); }),
                     color: AppColors.danger),
+                const SizedBox(width: 8),
+                _FiltroChip(label: '✨ Por completar', value: 'por_completar', selected: _filtro,
+                    onTap: (v) => setState(() { _filtro = v; _aplicarFiltros(); }),
+                    color: AppColors.colorApartados),
               ],
             ),
           ),
@@ -398,7 +427,12 @@ class _ProductoTile extends StatelessWidget {
     String estadoLabel;
     Color estadoBg;
 
-    if (producto.sinStock) {
+    if (!producto.controlaStock) {
+      // Creado solo desde una venta/fiado/apartado: sin conteo de cantidad
+      estadoColor = AppColors.colorApartados;
+      estadoBg = AppColors.colorApartados.withValues(alpha: 0.12);
+      estadoLabel = producto.porCompletar ? '✨ Completar' : 'Sin conteo';
+    } else if (producto.sinStock) {
       estadoColor = AppColors.danger;
       estadoBg = AppColors.dangerSurface;
       estadoLabel = 'Sin stock';
@@ -465,7 +499,9 @@ class _ProductoTile extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          AppFormatters.stock(producto.stockActual, producto.unidad),
+                          producto.controlaStock
+                              ? AppFormatters.stock(producto.stockActual, producto.unidad)
+                              : 'Sin contar cantidad',
                           style: const TextStyle(fontFamily: 'Poppins',
                               fontSize: 12, color: AppColors.textMuted),
                           overflow: TextOverflow.ellipsis,

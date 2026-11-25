@@ -179,6 +179,9 @@ class _ApartadoFormScreenState extends State<ApartadoFormScreen> {
                   precio: precio,
                   costoUnitario: costo,
                 )));
+                // Inventario que se arma solo: queda guardado para la próxima
+                InventarioService.obtenerOCrear(
+                    nombre: nombre, precio: precio, costo: costo ?? 0);
               },
               child: const Text('Agregar',
                   style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),

@@ -37,6 +37,7 @@ import '../auth/login_screen.dart';
 import '../recordatorios/recordatorios_screen.dart';
 import '../../features/soporte/soporte_screen.dart';
 import '../../services/soporte_service.dart';
+import '../../services/cuadre_automatico_service.dart';
 import '../../services/plan_service.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -163,9 +164,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     _cargarVitrina();
     _cargarSoporteNoLeidos();
     _mostrarPrimerPasoSiHaceFalta();
+    CuadreAutomaticoService.pedirPermiso();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) {
         _cargarResumen();
+        _cargarSoporteNoLeidos(); // revisa mensajes y avisos nuevos
         setState(() {});
       }
     });
@@ -349,9 +352,9 @@ Future<void> _cargarVersion() async {
             _totalProductos = stockBajo.length;
             _productosLowStock = stockBajo.where((p) =>
                 (p['stock_actual'] as num) > 0 &&
-                (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
+                (p['stock_minimo'] as num) >= 0 && (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
             _productosSinStock = stockBajo.where((p) =>
-                (p['stock_actual'] as num) <= 0).length;
+                (p['stock_minimo'] as num) >= 0 && (p['stock_actual'] as num) <= 0).length;
             _apartadosActivos = apartadosOffline.length;
           });
         }
@@ -537,9 +540,9 @@ Future<void> _cargarVersion() async {
           _totalProductos = stockBajoLocal.length;
           _productosLowStock = stockBajoLocal.where((p) =>
               (p['stock_actual'] as num) > 0 &&
-              (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
+              (p['stock_minimo'] as num) >= 0 && (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
           _productosSinStock = stockBajoLocal.where((p) =>
-              (p['stock_actual'] as num) <= 0).length;
+              (p['stock_minimo'] as num) >= 0 && (p['stock_actual'] as num) <= 0).length;
           _apartadosActivos = (apartados as List).length;
         });
       }
@@ -560,9 +563,9 @@ Future<void> _cargarVersion() async {
             _totalProductos = stockFallback.length;
             _productosLowStock = stockFallback.where((p) =>
                 (p['stock_actual'] as num) > 0 &&
-                (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
+                (p['stock_minimo'] as num) >= 0 && (p['stock_actual'] as num) <= (p['stock_minimo'] as num)).length;
             _productosSinStock = stockFallback.where((p) =>
-                (p['stock_actual'] as num) <= 0).length;
+                (p['stock_minimo'] as num) >= 0 && (p['stock_actual'] as num) <= 0).length;
             _apartadosActivos = apartadosFallback.length;
           });
         }
@@ -615,11 +618,62 @@ Future<void> _cargarVersion() async {
     } catch (_) {}
   }
 
+  bool _avisoNuevo = false;
+
   Future<void> _cargarSoporteNoLeidos() async {
     if (_empresaId == null || _empresaId!.isEmpty) return;
     try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // ── Mensajes de soporte sin leer ──
       final n = await SoporteService.contarNoLeidos(_empresaId);
-      if (mounted) setState(() => _soporteNoLeidos = n);
+      final yaAvisados = prefs.getInt('soporte_notificados') ?? 0;
+      if (n > yaAvisados) {
+        await CuadreAutomaticoService.mostrarAhora(
+          id: 7001,
+          titulo: '💬 Te respondimos en Soporte',
+          cuerpo: n == 1
+              ? 'Tienes 1 mensaje nuevo. Toca el ícono de soporte para verlo.'
+              : 'Tienes $n mensajes nuevos. Toca el ícono de soporte para verlos.',
+        );
+      }
+      await prefs.setInt('soporte_notificados', n);
+
+      // ── Avisos nuevos ──
+      bool avisoNuevo = false;
+      final avisos = await SoporteService.getAvisos();
+      if (avisos.isNotEmpty) {
+        final ultimo = avisos.first;
+        final idUltimo = ultimo['id']?.toString() ?? '';
+        final visto = prefs.getString('ultimo_aviso_visto');
+        final notificado = prefs.getString('ultimo_aviso_notificado');
+        avisoNuevo = idUltimo.isNotEmpty && idUltimo != visto;
+        if (avisoNuevo && idUltimo != notificado) {
+          await CuadreAutomaticoService.mostrarAhora(
+            id: 7002,
+            titulo: '📢 ${ultimo['titulo'] ?? 'Nuevo aviso'}',
+            cuerpo: (ultimo['mensaje'] ?? '').toString(),
+          );
+          await prefs.setString('ultimo_aviso_notificado', idUltimo);
+        }
+      }
+
+      if (mounted) setState(() {
+        _soporteNoLeidos = n;
+        _avisoNuevo = avisoNuevo;
+      });
+    } catch (_) {}
+  }
+
+  /// Al abrir Soporte, el aviso más reciente queda como visto
+  Future<void> _marcarAvisosVistos() async {
+    try {
+      final avisos = await SoporteService.getAvisos();
+      if (avisos.isEmpty) return;
+      final prefs = await SharedPreferences.getInstance();
+      final id = avisos.first['id']?.toString() ?? '';
+      await prefs.setString('ultimo_aviso_visto', id);
+      await prefs.setString('ultimo_aviso_notificado', id);
     } catch (_) {}
   }
 
@@ -1014,6 +1068,7 @@ Widget _buildVitrinaWidget() {
         ),
       GestureDetector(
           onTap: () async {
+            _marcarAvisosVistos();
             await Navigator.push(context, MaterialPageRoute(builder: (_) => const SoporteScreen()));
             _cargarSoporteNoLeidos();
           },
@@ -1028,7 +1083,7 @@ Widget _buildVitrinaWidget() {
                     Icon(Icons.headset_mic_outlined, color: pal.textSecondary, size: 24),
                   ],
                 ),
-                if (_soporteNoLeidos > 0)
+                if (_soporteNoLeidos > 0 || _avisoNuevo)
                   Positioned(
                     top: 6, right: 6,
                     child: IgnorePointer(
@@ -1819,16 +1874,10 @@ Widget _buildVitrinaWidget() {
             children: [
               _navItem(pal, 0, Icons.home_outlined, Icons.home_rounded, 'Inicio'),
               _navItem(pal, 1, Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Encargos'),
-              // Botón central ➕ Agregar Producto
+              // Botón central ➕ Acciones rápidas
               Expanded(
                 child: GestureDetector(
-                  onTap: () async {
-                    await Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => ModoService.sinInventario.value
-                            ? const NuevoFiadoScreen()
-                            : const ProductoFormScreen()));
-                    _cargarResumen();
-                  },
+                  onTap: _mostrarAccionesRapidas,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -1876,6 +1925,93 @@ Widget _buildVitrinaWidget() {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// ➕ del centro: todo lo que se puede anotar, a un toque.
+  /// Lo que se escribe a mano se guarda solo en el inventario.
+  void _mostrarAccionesRapidas() {
+    final pal = AppPalette.of(context);
+    final sinInv = ModoService.sinInventario.value;
+
+    Future<void> ir(Widget destino) async {
+      Navigator.pop(context); // cerrar el menú
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => destino));
+      _cargarResumen();
+    }
+
+    final acciones = <({IconData icono, String titulo, String sub, Color color, VoidCallback onTap})>[
+      (icono: Icons.account_balance_wallet_rounded, titulo: 'Anotar fiado',
+          sub: 'Lo que se lleva el cliente y queda debiendo',
+          color: pal.colorFiado, onTap: () => ir(const NuevoFiadoScreen())),
+      if (!sinInv)
+        (icono: Icons.inventory_2_rounded, titulo: 'Agregar producto',
+            sub: 'Con foto, costo y cantidad',
+            color: pal.colorInventario, onTap: () => ir(const ProductoFormScreen())),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (sCtx) => Container(
+        padding: EdgeInsets.fromLTRB(20, 10, 20, 20 + MediaQuery.of(sCtx).padding.bottom),
+        decoration: BoxDecoration(
+          color: pal.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(child: Container(width: 40, height: 4,
+                decoration: BoxDecoration(color: pal.cardBorder, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            Text('¿Qué quieres anotar?', style: GoogleFonts.poppins(
+                fontSize: 18, fontWeight: FontWeight.w700, color: pal.textPrimary)),
+            const SizedBox(height: 14),
+            for (final a in acciones) ...[
+              Material(
+                color: pal.surfaceAlt,
+                borderRadius: BorderRadius.circular(18),
+                child: InkWell(
+                  onTap: a.onTap,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                    child: Row(children: [
+                      Container(
+                        width: 48, height: 48,
+                        decoration: BoxDecoration(
+                          color: a.color,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [BoxShadow(color: a.color.withValues(alpha: 0.3),
+                              blurRadius: 10, offset: const Offset(0, 4))],
+                        ),
+                        child: Icon(a.icono, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(a.titulo, style: GoogleFonts.poppins(fontSize: 15,
+                            fontWeight: FontWeight.w700, color: pal.textPrimary)),
+                        Text(a.sub, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.poppins(fontSize: 12, color: pal.textMuted)),
+                      ])),
+                      Icon(Icons.chevron_right_rounded, color: pal.textMuted),
+                    ]),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            const SizedBox(height: 2),
+            Center(
+              child: Text('✨ Lo que escribas a mano se guarda solo en tu inventario',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(fontSize: 11.5, color: pal.textMuted)),
+            ),
+          ]),
         ),
       ),
     );

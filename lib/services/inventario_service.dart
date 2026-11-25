@@ -6,6 +6,7 @@ import '../utils/constants.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
 import 'local_database.dart';
+import 'venta_service.dart';
 
 class InventarioService {
   static const _uuid = Uuid();
@@ -74,6 +75,14 @@ class InventarioService {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null) return [];
 
+    final online = await SupabaseService.isOnlineAsync;
+    if (online) {
+      // Primero subir lo pendiente de ESTE teléfono, así la nube queda al día
+      // y los dos teléfonos ven el mismo stock.
+      try { await VentaService.sincronizarPendientes(); } catch (_) {}
+      try { await _subirProductosPendientes(empresaId); } catch (_) {}
+    }
+
     final local = await LocalDatabase.consultar('productos', empresaId,
         orderBy: 'nombre ASC');
     final productosLocal = local
@@ -81,7 +90,7 @@ class InventarioService {
         .map((m) => ProductoModel.fromMap(m))
         .toList();
 
-    if (await SupabaseService.isOnlineAsync) {
+    if (online) {
       try {
         var query = SupabaseService.client
             .from('productos')
@@ -190,6 +199,7 @@ class InventarioService {
           'empresa_id': empresaId,
           'activo': producto.activo,              // bool para Supabase
           'es_elaborado': producto.esElaborado,   // bool para Supabase
+          'carta_disponible': producto.cartaDisponible, // bool para Supabase
         };
         if (esNuevo) {
           await SupabaseService.client.from('productos').insert(dataOnline);
@@ -202,6 +212,105 @@ class InventarioService {
     }
 
     return true;
+  }
+
+  /// Sube a Supabase los productos que se quedaron sin subir (synced = 0).
+  /// Antes nadie los subía y ese teléfono se quedaba con su stock para siempre.
+  static Future<void> _subirProductosPendientes(String empresaId) async {
+    final db = await LocalDatabase.database;
+    final pendientes = await db.query('productos',
+        where: 'empresa_id = ? AND synced = 0', whereArgs: [empresaId]);
+    for (final row in pendientes) {
+      try {
+        final p = ProductoModel.fromMap(row);
+        await SupabaseService.client.from('productos').upsert({
+          ...p.toMap(),
+          'id': p.id,
+          'empresa_id': empresaId,
+          'activo': p.activo,
+          'es_elaborado': p.esElaborado,
+          'carta_disponible': p.cartaDisponible,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        });
+        await LocalDatabase.marcarSynced('productos', p.id);
+      } catch (e) {
+        // Se reintenta la próxima vez
+      }
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // INVENTARIO QUE SE ARMA SOLO
+  // Cada artículo que se vende, fía, aparta o entrega a mano queda
+  // guardado como producto. La próxima vez ya aparece como sugerencia.
+  // ══════════════════════════════════════════════════════════
+
+  static String _normalizar(String s) =>
+      s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  /// Sugerencias mientras el usuario escribe (solo del teléfono, al instante)
+  static Future<List<ProductoModel>> sugerencias(String texto, {int limite = 6}) async {
+    final q = _normalizar(texto);
+    if (q.isEmpty) return [];
+    final empresaId = await SupabaseService.getEmpresaId();
+    if (empresaId == null) return [];
+    final db = await LocalDatabase.database;
+    final rows = await db.query('productos',
+        where: 'empresa_id = ? AND activo = 1', whereArgs: [empresaId]);
+    final lista = rows.map((m) => ProductoModel.fromMap(m))
+        .where((p) => _normalizar(p.nombre).contains(q)).toList()
+      ..sort((a, b) {
+        // Primero los que EMPIEZAN con lo escrito
+        final aEmp = _normalizar(a.nombre).startsWith(q) ? 0 : 1;
+        final bEmp = _normalizar(b.nombre).startsWith(q) ? 0 : 1;
+        return aEmp != bEmp ? aEmp - bEmp : a.nombre.compareTo(b.nombre);
+      });
+    return lista.take(limite).toList();
+  }
+
+  static Future<ProductoModel?> buscarPorNombre(String nombre) async {
+    final q = _normalizar(nombre);
+    if (q.isEmpty) return null;
+    final empresaId = await SupabaseService.getEmpresaId();
+    if (empresaId == null) return null;
+    final db = await LocalDatabase.database;
+    final rows = await db.query('productos',
+        where: 'empresa_id = ?', whereArgs: [empresaId]);
+    for (final m in rows) {
+      if (_normalizar(m['nombre'] as String? ?? '') == q) {
+        return ProductoModel.fromMap(m);
+      }
+    }
+    return null;
+  }
+
+  /// Devuelve el producto con ese nombre; si no existe, lo crea solo
+  /// (sin control de cantidad, para no estorbar). Nunca lanza error.
+  static Future<ProductoModel?> obtenerOCrear({
+    required String nombre,
+    required double precio,
+    double costo = 0,
+  }) async {
+    try {
+      final limpio = nombre.trim();
+      if (limpio.isEmpty) return null;
+      final existente = await buscarPorNombre(limpio);
+      if (existente != null) return existente;
+
+      final bonito = limpio[0].toUpperCase() + limpio.substring(1);
+      await guardarProducto(ProductoModel(
+        id: '',
+        empresaId: '',
+        nombre: bonito,
+        precioVenta: precio > 0 ? precio : 0,
+        precioCompra: costo > 0 ? costo : 0,
+        stockActual: 0,
+        stockMinimo: -1, // sin control de cantidad
+      ));
+      return await buscarPorNombre(limpio);
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<bool> actualizarStock(String productoId, double cantidad,

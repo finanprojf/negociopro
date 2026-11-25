@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/campo_articulo.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../seguridad/pin_entrada_dialog.dart';
 import '../inventario/scanner_screen.dart';
@@ -337,7 +338,7 @@ Future<void> _agregarClienteRapido() async {
   void _agregar(ProductoModel p) {
     final idx = _carritoMap[p.id];
     final cantActual = idx != null ? _carrito[idx].cantidad : 0;
-    if (cantActual >= p.stockActual) {
+    if (p.controlaStock && cantActual >= p.stockActual) {
       _mostrarSinStock(p);
       return;
     }
@@ -516,7 +517,7 @@ Future<void> _cargarClientes() async {
                   item: _carrito[i],
                   onCambiar: (n) {
                     final stock = _carrito[i].producto.stockActual;
-                    if (n > stock) { _mostrarSinStock(_carrito[i].producto); return; }
+                    if (_carrito[i].producto.controlaStock && n > stock) { _mostrarSinStock(_carrito[i].producto); return; }
                     _cambiarCantidad(i, n);
                   },
                   onEliminar: () => _cambiarCantidad(i, 0),
@@ -564,7 +565,7 @@ Future<void> _cargarClientes() async {
                 item: _carrito[i],
                 onCambiar: (n) {
                   final stock = _carrito[i].producto.stockActual;
-                  if (n > stock) {
+                  if (_carrito[i].producto.controlaStock && n > stock) {
                     _mostrarSinStock(_carrito[i].producto);
                     return;
                   }
@@ -622,20 +623,154 @@ Future<void> _cargarClientes() async {
     return Container(
       color: AppColors.surface,
       padding: const EdgeInsets.all(10),
-      child: TextField(
-        controller: _searchCtrl,
-        onChanged: _buscar,
-        style: GoogleFonts.poppins(fontSize: 14),
-        decoration: InputDecoration(
-          hintText: 'Buscar...',
-          hintStyle: GoogleFonts.poppins(fontSize: 13),
-          prefixIcon: const Icon(Icons.search_rounded,
-              color: AppColors.textMuted, size: 20),
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12, vertical: 10),
+      child: Row(children: [
+        Expanded(
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: _buscar,
+            style: GoogleFonts.poppins(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'Buscar...',
+              hintStyle: GoogleFonts.poppins(fontSize: 13),
+              prefixIcon: const Icon(Icons.search_rounded,
+                  color: AppColors.textMuted, size: 20),
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
+            ),
+          ),
         ),
-      ),
+        const SizedBox(width: 8),
+        // Vender algo que no está en el inventario (se guarda solo)
+        Material(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: _ventaRapida,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 4),
+                Text('Artículo', style: GoogleFonts.poppins(
+                    color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
+        ),
+      ]),
     );
+  }
+
+  /// Vender un artículo escrito a mano. Si no existe en el inventario,
+  /// se crea solo; la próxima vez aparece como sugerencia con su precio.
+  Future<void> _ventaRapida() async {
+    final nombreCtrl = TextEditingController(text: _searchCtrl.text.trim());
+    final precioCtrl = TextEditingController();
+    ProductoModel? elegido;
+
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (sCtx) => StatefulBuilder(builder: (sCtx, setS) {
+        final precio = double.tryParse(precioCtrl.text.replaceAll(',', '.')) ?? 0;
+        return Container(
+          padding: EdgeInsets.fromLTRB(20, 16, 20,
+              20 + MediaQuery.of(sCtx).viewInsets.bottom + MediaQuery.of(sCtx).padding.bottom),
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(child: Container(width: 40, height: 4,
+                decoration: BoxDecoration(color: AppColors.cardBorder, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            Text('Vender un artículo', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            Text('Si no está en tu inventario, se guarda solo para la próxima vez.',
+                style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textMuted)),
+            const SizedBox(height: 16),
+            CampoArticulo(
+              controller: nombreCtrl,
+              autofocus: true,
+              style: GoogleFonts.poppins(fontSize: 15),
+              decoration: const InputDecoration(
+                labelText: '¿Qué vendiste?',
+                hintText: 'Ej: Nevera, Arroz, Corte de pelo…',
+                prefixIcon: Icon(Icons.sell_outlined),
+              ),
+              onChanged: (_) => setS(() => elegido = null),
+              onSeleccionado: (p) => setS(() {
+                elegido = p;
+                if (p.precioVenta > 0) precioCtrl.text = p.precioEfectivo.toStringAsFixed(2);
+              }),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: precioCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+              style: GoogleFonts.poppins(fontSize: 15),
+              onChanged: (_) => setS(() {}),
+              decoration: const InputDecoration(
+                labelText: 'Precio',
+                prefixText: 'RD\$ ',
+                prefixIcon: Icon(Icons.payments_outlined),
+              ),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity, height: 50,
+              child: ElevatedButton.icon(
+                onPressed: (nombreCtrl.text.trim().isEmpty || precio <= 0)
+                    ? null : () => Navigator.pop(sCtx, true),
+                icon: const Icon(Icons.add_shopping_cart_rounded),
+                label: Text('Agregar a la venta',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 15)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ]),
+        );
+      }),
+    );
+
+    final nombre = nombreCtrl.text.trim();
+    final precio = double.tryParse(precioCtrl.text.replaceAll(',', '.')) ?? 0;
+    // Liberar después de la animación de cierre
+    Future.delayed(const Duration(milliseconds: 500), () {
+      nombreCtrl.dispose();
+      precioCtrl.dispose();
+    });
+    if (ok != true || nombre.isEmpty || precio <= 0) return;
+
+    var prod = elegido ?? await InventarioService.obtenerOCrear(nombre: nombre, precio: precio);
+    if (prod == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('No se pudo agregar el artículo'), backgroundColor: AppColors.danger));
+      }
+      return;
+    }
+    // Si cambió el precio para esta venta, usar el que escribió
+    if ((prod.precioEfectivo - precio).abs() > 0.009) {
+      prod = prod.copyWith(precioVenta: precio);
+    }
+    if (!mounted) return;
+    setState(() {
+      if (!_productos.any((p) => p.id == prod!.id)) {
+        _productos.insert(0, prod!);
+      }
+      _searchCtrl.clear();
+      _filtrados = List.from(_productos);
+    });
+    _agregar(prod);
   }
 
   Widget _buildGridProductos() {
@@ -710,13 +845,26 @@ Future<void> _cargarClientes() async {
           if (!buscando) ...[
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.add_box_outlined),
-              label: const Text('Ir al inventario',
+              onPressed: _ventaRapida,
+              icon: const Icon(Icons.sell_outlined),
+              label: const Text('Vender un artículo',
                   style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.add_box_outlined),
+              label: const Text('Ir al inventario',
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -1226,7 +1374,8 @@ class _ProdCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final agotado = producto.sinStock || cantidadEnCarrito >= producto.stockActual;
+    final agotado = producto.controlaStock &&
+        (producto.sinStock || cantidadEnCarrito >= producto.stockActual);
 
     // ── Foto / ícono (con badge de oferta encima si aplica) ──────
     Widget fotoBase = Container(
@@ -1291,7 +1440,7 @@ class _ProdCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4)),
                 child: Text('Agotado', style: GoogleFonts.poppins(
                     fontSize: 8, color: AppColors.danger, fontWeight: FontWeight.w600)))
-            else
+            else if (producto.controlaStock)
               // Stock siempre visible — el badge de oferta va sobre la foto
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
@@ -1429,7 +1578,7 @@ class _CarritoItem extends StatelessWidget {
                   style: GoogleFonts.poppins(fontSize: 14,
                       fontWeight: FontWeight.w700))),
             _Btn(Icons.add_rounded,
-              item.cantidad >= item.producto.stockActual
+              item.producto.controlaStock && item.cantidad >= item.producto.stockActual
                   ? null
                   : () => onCambiar(item.cantidad + 1)),
           ]),

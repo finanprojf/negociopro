@@ -32,6 +32,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
   final _precioCompraCtrl  = TextEditingController();
   final _precioVentaCtrl   = TextEditingController();
   final _stockActualCtrl   = TextEditingController();
+  bool _controlarStock = true; // false = no contar cantidad (productos que se agregan solos)
   final _stockMinimoCtrl   = TextEditingController();
   // Elaborado
   final _costoTotalCtrl    = TextEditingController();
@@ -71,8 +72,9 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
       _descripcionCtrl.text  = p.descripcion ?? '';
       _codigoCtrl.text       = p.codigoBarras ?? '';
       _precioVentaCtrl.text  = p.precioVenta.toString();
-      _stockActualCtrl.text  = p.stockActual.toString();
-      _stockMinimoCtrl.text  = p.stockMinimo.toString();
+      _controlarStock        = p.controlaStock;
+      _stockActualCtrl.text  = p.controlaStock ? p.stockActual.toString() : '';
+      _stockMinimoCtrl.text  = p.controlaStock ? p.stockMinimo.toString() : '5';
       _unidad                = p.unidad;
       _esElaborado           = p.esElaborado;
       _enCarta               = p.cartaDisponible;
@@ -211,7 +213,7 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
       }
     } else {
       // Producto normal: ofrecer registrar compra de inventario
-      final stock = double.tryParse(_stockActualCtrl.text) ?? 0;
+      final stock = _controlarStock ? (double.tryParse(_stockActualCtrl.text) ?? 0) : 0;
       if (stock <= 0 || _precioCompra <= 0) return;
       final monto = stock * _precioCompra;
       final descripcion = 'Compra de $nombre';
@@ -319,8 +321,8 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
                                  ? null : _descripcionCtrl.text.trim(),
           precioCompra:      _esElaborado ? _costoUnitario : _precioCompra,
           precioVenta:       _precioVenta,
-          stockActual:       double.tryParse(_stockActualCtrl.text) ?? 0,
-          stockMinimo:       double.tryParse(_stockMinimoCtrl.text) ?? 5,
+          stockActual:       _controlarStock ? (double.tryParse(_stockActualCtrl.text) ?? 0) : 0,
+          stockMinimo:       _controlarStock ? (double.tryParse(_stockMinimoCtrl.text) ?? 5) : -1,
           unidad:            _unidad,
           esElaborado:       _esElaborado,
           cartaDisponible:   _enCarta,
@@ -448,6 +450,43 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
 
   // ── Stock simplificado ──────────────────────────────────────
   Widget _buildStockSimple() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Container(
+        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Row(children: [
+          const Icon(Icons.inventory_outlined, color: AppColors.primary, size: 20),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Llevar control de cantidad',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                    fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            Text(_controlarStock
+                    ? 'Se descuenta al vender y te avisa cuando queda poco'
+                    : 'Se vende sin contar cuántos quedan',
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                    color: AppColors.textMuted)),
+          ])),
+          Switch(
+            value: _controlarStock,
+            activeColor: AppColors.primary,
+            onChanged: (v) => setState(() => _controlarStock = v),
+          ),
+        ]),
+      ),
+      if (_controlarStock) ...[
+        const SizedBox(height: 10),
+        _buildStockCampos(),
+      ],
+    ],
+  );
+
+  Widget _buildStockCampos() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       // Stock actual
@@ -1236,44 +1275,87 @@ class _ProductoFormScreenState extends State<ProductoFormScreen> {
     ),
   );
 
-  void _confirmarEliminar() {
-    showDialog(
+  Future<void> _confirmarEliminar() async {
+    final pid = widget.producto!.id;
+    // ¿Este producto tiene gastos de compra registrados?
+    final gastos = await GastoService.gastosDeProducto(pid);
+    final totalGastos = gastos.fold<double>(
+        0, (s, g) => s + ((g['monto'] as num?) ?? 0).toDouble());
+    bool borrarGastos = false; // por defecto se CONSERVAN (el dinero sí se gastó)
+    if (!mounted) return;
+
+    final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dCtx) => StatefulBuilder(builder: (dCtx, setD) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Eliminar producto',
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-        content: Text('¿Seguro que quieres eliminar "${widget.producto!.nombre}"?',
-            style: const TextStyle(fontFamily: 'Poppins')),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('¿Seguro que quieres eliminar "${widget.producto!.nombre}"?',
+              style: const TextStyle(fontFamily: 'Poppins')),
+          if (gastos.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.warningSurface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Este producto tiene ${AppFormatters.moneda(totalGastos)} en gastos de compra.',
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                        fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                const SizedBox(height: 4),
+                const Text('Si de verdad lo compraste, déjalo: ese dinero sí salió de tu caja. '
+                    'Bórralo solo si lo anotaste por error.',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11.5,
+                        color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: () => setD(() => borrarGastos = !borrarGastos),
+                  child: Row(children: [
+                    Checkbox(
+                      value: borrarGastos,
+                      activeColor: AppColors.danger,
+                      onChanged: (v) => setD(() => borrarGastos = v ?? false),
+                    ),
+                    const Expanded(child: Text('También borrar ese gasto',
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                            fontWeight: FontWeight.w600))),
+                  ]),
+                ),
+              ]),
+            ),
+          ],
+        ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context),
+          TextButton(onPressed: () => Navigator.pop(dCtx, false),
               child: const Text('Cancelar')),
           TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              try {
-                final pid = widget.producto!.id;
-                await LocalDatabase.actualizar('productos',
-                    {'activo': 0, 'synced': 0,
-                     'updated_at': DateTime.now().toIso8601String()},
-                    'id', pid);
-                if (await SupabaseService.isOnlineAsync) {
-                  await SupabaseService.client.from('productos')
-                      .update({'activo': false}).eq('id', pid);
-                  await LocalDatabase.marcarSynced('productos', pid);
-                }
-                // Revertir gastos vinculados a este producto
-                await GastoService.eliminarGastosPorProducto(pid);
-                if (context.mounted) Navigator.pop(context, true);
-              } catch (_) {
-                if (context.mounted) Navigator.pop(context, true);
-              }
-            },
+            onPressed: () => Navigator.pop(dCtx, true),
             child: const Text('Eliminar',
                 style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700)),
           ),
         ],
-      ),
+      )),
     );
+    if (ok != true) return;
+
+    try {
+      await LocalDatabase.actualizar('productos',
+          {'activo': 0, 'synced': 0,
+           'updated_at': DateTime.now().toUtc().toIso8601String()},
+          'id', pid);
+      if (await SupabaseService.isOnlineAsync) {
+        await SupabaseService.client.from('productos')
+            .update({'activo': false}).eq('id', pid);
+        await LocalDatabase.marcarSynced('productos', pid);
+      }
+      if (borrarGastos) {
+        await GastoService.eliminarGastosPorProducto(pid);
+      }
+    } catch (_) {}
+    if (mounted) Navigator.pop(context, true);
   }
+
 }

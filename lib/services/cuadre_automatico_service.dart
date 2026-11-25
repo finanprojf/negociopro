@@ -43,6 +43,17 @@ class CuadreAutomaticoService {
     _iniciado = true;
   }
 
+  /// Pide permiso para mostrar notificaciones (obligatorio en Android 13+).
+  /// Sin esto, ni los recordatorios ni los mensajes de soporte avisan.
+  static Future<void> pedirPermiso() async {
+    try {
+      await init();
+      await _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+    } catch (_) {}
+  }
+
   // ── Getters de preferencias ───────────────────────────────
   static Future<bool>   isActivo()    async => (await SharedPreferences.getInstance()).getBool(_kActivo)    ?? false;
   static Future<int>    getHora()     async => (await SharedPreferences.getInstance()).getInt(_kHora)       ?? 22;
@@ -99,7 +110,7 @@ class CuadreAutomaticoService {
           icon: '@mipmap/ic_launcher',
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: intervalo == 0
@@ -157,9 +168,43 @@ class CuadreAutomaticoService {
           icon: '@mipmap/ic_launcher',
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  // ── Notificación inmediata (soporte / avisos) ─────────────
+  static const _channelAvisos = AndroidNotificationChannel(
+    'avisos_soporte',
+    'Mensajes y avisos',
+    description: 'Respuestas de soporte y novedades de NegocioPro',
+    importance: Importance.high,
+  );
+
+  static Future<void> mostrarAhora({
+    required int id,
+    required String titulo,
+    required String cuerpo,
+  }) async {
+    await init();
+    await _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_channelAvisos);
+    await _plugin.show(
+      id,
+      titulo,
+      cuerpo,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelAvisos.id,
+          _channelAvisos.name,
+          channelDescription: _channelAvisos.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+      ),
     );
   }
 

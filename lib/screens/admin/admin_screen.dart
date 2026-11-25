@@ -236,10 +236,16 @@ class _AdminScreenState extends State<AdminScreen> {
       final nuevaFecha = base.add(Duration(days: dias));
       final nuevaFechaStr = AppFormatters.fecha(nuevaFecha);
 
-      await SupabaseService.client.from('empresas').update({
-        'suscripcion_vence': nuevaFecha.toUtc().toIso8601String(),
-        'plan_activo': tipoPlan,
-      }).eq('id', empresa['id']);
+      // Función segura del servidor (la regla de seguridad no deja que el admin
+      // cambie empresas ajenas con un update normal: no cambiaba nada en silencio)
+      final filas = await SupabaseService.client.rpc('admin_activar_plan', params: {
+        'p_empresa_id': empresa['id'],
+        'p_plan': tipoPlan,
+        'p_vence': nuevaFecha.toUtc().toIso8601String(),
+      });
+      if ((filas as num? ?? 0) < 1) {
+        throw Exception('El plan no se guardó en el servidor');
+      }
 
       _cargar();
       if (mounted) {

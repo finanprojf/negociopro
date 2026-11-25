@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/venta_service.dart';
+import '../../services/inventario_service.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_colors.dart';
@@ -933,8 +934,16 @@ class _EncargosScreenState extends State<EncargosScreen>
     required double precio,
   }) async {
     try {
+      // 0. Inventario que se arma solo: el artículo queda guardado como producto
+      final cant = encargo.cantidad > 0 ? encargo.cantidad : 1.0;
+      final prod = await InventarioService.obtenerOCrear(
+        nombre: encargo.descripcion,
+        precio: precio / cant,
+        costo: encargo.costoPedido > 0 ? encargo.costoPedido / cant : 0,
+      );
       // 1. Registrar como VENTA (entra en Reportes, Caja, Inicio y Actividad)
       final ok = await VentaService.registrarVentaEncargo(
+        productoId: prod?.id,
         descripcion: encargo.descripcion,
         cantidad: encargo.cantidad,
         precioTotal: precio,

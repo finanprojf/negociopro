@@ -10,6 +10,7 @@ import '../../services/inventario_service.dart';
 import '../../services/recibo_service.dart';
 import '../../utils/formatters.dart';
 import '../../services/modo_service.dart';
+import '../../widgets/campo_articulo.dart';
 
 class NuevoFiadoScreen extends StatefulWidget {
   final ClienteModel? clienteInicial;
@@ -147,6 +148,11 @@ class _NuevoFiadoScreenState extends State<NuevoFiadoScreen> {
       return;
     }
 
+    // Inventario que se arma solo: los artículos escritos a mano quedan guardados
+    for (final it in itemsValidos.where((i) => i.productoId == null)) {
+      await InventarioService.obtenerOCrear(nombre: it.nombreCtrl.text, precio: it.precio);
+    }
+
     if (!mounted) return;
     _mostrarOpciones(itemsMaps);
   }
@@ -227,6 +233,93 @@ class _NuevoFiadoScreenState extends State<NuevoFiadoScreen> {
     });
   }
 
+  /// Cliente rápido: con solo el nombre basta (el teléfono es opcional).
+  /// Después se puede completar desde Clientes.
+  Future<void> _crearClienteRapido({String? nombreInicial}) async {
+    final nombreCtrl = TextEditingController(text: nombreInicial ?? '');
+    final telCtrl = TextEditingController();
+    final pal = AppPalette.of(context);
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (sCtx) => StatefulBuilder(builder: (sCtx, setS) => Container(
+        padding: EdgeInsets.fromLTRB(20, 16, 20,
+            20 + MediaQuery.of(sCtx).viewInsets.bottom + MediaQuery.of(sCtx).padding.bottom),
+        decoration: BoxDecoration(
+          color: pal.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 40, height: 4,
+              decoration: BoxDecoration(color: pal.cardBorder, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 16),
+          Text('Nuevo cliente', style: GoogleFonts.poppins(fontSize: 18,
+              fontWeight: FontWeight.w700, color: pal.textPrimary)),
+          Text('Solo el nombre es necesario. Lo demás lo completas luego en Clientes.',
+              style: GoogleFonts.poppins(fontSize: 12, color: pal.textMuted)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: nombreCtrl,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            onChanged: (_) => setS(() {}),
+            style: GoogleFonts.poppins(fontSize: 15),
+            decoration: const InputDecoration(
+              labelText: 'Nombre *',
+              prefixIcon: Icon(Icons.person_outline_rounded),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: telCtrl,
+            keyboardType: TextInputType.phone,
+            style: GoogleFonts.poppins(fontSize: 15),
+            decoration: const InputDecoration(
+              labelText: 'Teléfono (opcional)',
+              prefixIcon: Icon(Icons.phone_outlined),
+            ),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: ElevatedButton.icon(
+              onPressed: nombreCtrl.text.trim().isEmpty ? null : () => Navigator.pop(sCtx, true),
+              icon: const Icon(Icons.check_rounded),
+              label: Text('Guardar cliente', style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ]),
+      )),
+    );
+    final nombre = nombreCtrl.text.trim();
+    final tel = telCtrl.text.trim();
+    Future.delayed(const Duration(milliseconds: 500), () {
+      nombreCtrl.dispose();
+      telCtrl.dispose();
+    });
+    if (ok != true || nombre.isEmpty) return;
+
+    final guardado = await ClienteService.guardarCliente(ClienteModel(
+      id: '', empresaId: '', nombre: nombre, telefono: tel.isEmpty ? null : tel,
+    ));
+    if (!guardado) { _snack('No se pudo guardar el cliente'); return; }
+
+    final clientes = await ClienteService.getClientes();
+    final nuevo = clientes.lastWhere(
+        (c) => c.nombre.trim().toLowerCase() == nombre.toLowerCase(),
+        orElse: () => clientes.isNotEmpty ? clientes.last : ClienteModel(id: '', empresaId: '', nombre: nombre));
+    if (!mounted || nuevo.id.isEmpty) return;
+    setState(() {
+      _clientes = clientes;
+      _clienteSeleccionado = nuevo;
+      _clienteBusqCtrl.text = nuevo.nombre;
+      _clientesFiltrados = [];
+      _mostrarBuscadorCliente = false;
+    });
+  }
+
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: AppColors.colorFiado));
@@ -259,10 +352,22 @@ class _NuevoFiadoScreenState extends State<NuevoFiadoScreen> {
         Expanded(
           child: ListView(padding: const EdgeInsets.all(16), children: [
             // ── CLIENTE ─────────────────────────────────────────
-            _seccion(pal, 'Cliente', Icons.person_rounded),
+            Row(children: [
+              Expanded(child: _seccion(pal, 'Cliente', Icons.person_rounded)),
+              TextButton.icon(
+                onPressed: () => _crearClienteRapido(),
+                icon: Icon(Icons.person_add_alt_1_rounded, size: 16, color: pal.primary),
+                label: Text('Nuevo cliente', style: GoogleFonts.poppins(
+                    fontSize: 12, color: pal.primary, fontWeight: FontWeight.w600)),
+              ),
+            ]),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: () => setState(() => _mostrarBuscadorCliente = !_mostrarBuscadorCliente),
+              onTap: () {
+                // Cuenta nueva sin clientes: ir directo a crear uno
+                if (_clientes.isEmpty) { _crearClienteRapido(); return; }
+                setState(() => _mostrarBuscadorCliente = !_mostrarBuscadorCliente);
+              },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
@@ -277,7 +382,8 @@ class _NuevoFiadoScreenState extends State<NuevoFiadoScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      _clienteSeleccionado?.nombre ?? 'Seleccionar cliente...',
+                      _clienteSeleccionado?.nombre ??
+                          (_clientes.isEmpty ? 'Toca para agregar el cliente' : 'Seleccionar cliente...'),
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         color: _clienteSeleccionado != null ? pal.textPrimary : pal.textMuted,
@@ -330,6 +436,33 @@ class _NuevoFiadoScreenState extends State<NuevoFiadoScreen> {
                         _mostrarBuscadorCliente = false;
                       }),
                     )).toList(),
+                  ),
+                ),
+              // Lo escrito no existe: ofrecer crearlo con ese nombre
+              if (_clienteBusqCtrl.text.trim().isNotEmpty &&
+                  !_clientes.any((c) => c.nombre.toLowerCase().trim() ==
+                      _clienteBusqCtrl.text.toLowerCase().trim()))
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: InkWell(
+                    onTap: () => _crearClienteRapido(nombreInicial: _clienteBusqCtrl.text.trim()),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: pal.primary.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: pal.primary.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.person_add_alt_1_rounded, size: 18, color: pal.primary),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text('Crear cliente "${_clienteBusqCtrl.text.trim()}"',
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.poppins(fontSize: 13.5,
+                                fontWeight: FontWeight.w600, color: pal.primary))),
+                      ]),
+                    ),
                   ),
                 ),
             ],
@@ -519,9 +652,17 @@ class _ItemRow extends StatelessWidget {
         Row(children: [
           Expanded(
             flex: 3,
-            child: TextField(
+            child: CampoArticulo(
               controller: item.nombreCtrl,
-              onChanged: (_) => onChanged(),
+              onChanged: (_) { item.productoId = null; onChanged(); },
+              onSeleccionado: (p) {
+                // Artículo ya guardado: poner su precio solo
+                item.productoId = p.id;
+                if (p.precioVenta > 0) {
+                  item.precioCtrl.text = p.precioVenta.toStringAsFixed(2);
+                }
+                onChanged();
+              },
               style: GoogleFonts.poppins(fontSize: 14, color: pal.textPrimary),
               decoration: InputDecoration(
                 hintText: 'Nombre del artículo',

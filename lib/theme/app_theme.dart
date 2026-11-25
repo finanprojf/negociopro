@@ -89,7 +89,10 @@ class AppTheme {
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.textOnPrimary,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          // Padding vertical pequeño + altura mínima: así el texto nunca se corta
+          // cuando el botón está dentro de una caja de altura fija (ej. 44 o 50)
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          minimumSize: const Size(64, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: GoogleFonts.poppins(
             fontSize: 15,
@@ -102,7 +105,10 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primary,
           side: const BorderSide(color: AppColors.primary, width: 1.5),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          // Padding vertical pequeño + altura mínima: así el texto nunca se corta
+          // cuando el botón está dentro de una caja de altura fija (ej. 44 o 50)
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          minimumSize: const Size(64, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600),
         ),
@@ -233,7 +239,10 @@ extension AppThemeDark on AppTheme {
           backgroundColor: AppColorsDark.primary,
           foregroundColor: AppColorsDark.textOnPrimary,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          // Padding vertical pequeño + altura mínima: así el texto nunca se corta
+          // cuando el botón está dentro de una caja de altura fija (ej. 44 o 50)
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          minimumSize: const Size(64, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: GoogleFonts.poppins(
             fontSize: 15,
@@ -246,7 +255,10 @@ extension AppThemeDark on AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColorsDark.primary,
           side: const BorderSide(color: AppColorsDark.primary, width: 1.5),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          // Padding vertical pequeño + altura mínima: así el texto nunca se corta
+          // cuando el botón está dentro de una caja de altura fija (ej. 44 o 50)
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          minimumSize: const Size(64, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600),
         ),

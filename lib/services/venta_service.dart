@@ -160,13 +160,29 @@ class VentaService {
     }
     return total;
   }
+  // Evita que dos sincronizaciones corran a la vez y descuenten el stock DOS veces
+  static bool _sincronizando = false;
+  // Ventas que ya se están subiendo justo después de venderse (no tocarlas aquí)
+  static final Set<String> _subiendo = {};
+
 static Future<void> sincronizarPendientes() async {
+    if (_sincronizando) return;
+    _sincronizando = true;
+    try {
+      await _sincronizarPendientesInterno();
+    } finally {
+      _sincronizando = false;
+    }
+  }
+
+  static Future<void> _sincronizarPendientesInterno() async {
     if (!await SupabaseService.isOnlineAsync) return;
 
     final pendientes = await LocalDatabase.consultarPendientesSync('ventas');
     final db = await LocalDatabase.database;
 
     for (final v in pendientes) {
+      if (_subiendo.contains(v['id'])) continue;
       try {
         // 1. Subir la venta
         final ventaData = Map<String, dynamic>.from(v)..remove('synced');
@@ -317,8 +333,13 @@ static Future<void> sincronizarPendientes() async {
    
 
    // Sync en background — no bloquea la UI
+    _subiendo.add(ventaId); // reservar desde YA para que nadie más la suba
     SupabaseService.isOnlineAsync.then((online) {
-      if (online) _syncVenta(ventaId, ventaMap, items, ahora).ignore();
+      if (online) {
+        _syncVenta(ventaId, ventaMap, items, ahora).ignore();
+      } else {
+        _subiendo.remove(ventaId); // sin internet: la subirá sincronizarPendientes
+      }
     });
 
     // Los descuentos NO se registran como gastos:
@@ -339,6 +360,7 @@ static Future<void> sincronizarPendientes() async {
     String? clienteId,
     String? clienteNombre,
     double abono = 0,
+    String? productoId, // producto del inventario (se crea solo si no existía)
   }) async {
     final empresaId = await SupabaseService.getEmpresaId();
     if (empresaId == null || precioTotal <= 0) return false;
@@ -369,7 +391,7 @@ static Future<void> sincronizarPendientes() async {
     await LocalDatabase.insertar('detalle_ventas', {
       'id': _uuid.v4(),
       'venta_id': ventaId,
-      'producto_id': null,
+      'producto_id': productoId,
       'nombre_producto': 'Encargo: $descripcion',
       'cantidad': cant,
       'precio_unitario': precioTotal / cant,
@@ -413,6 +435,20 @@ static Future<void> sincronizarPendientes() async {
 
   // Sync inmediato después de registrar una venta cuando hay internet
   static Future<void> _syncVenta(
+    String ventaId,
+    Map<String, dynamic> ventaMap,
+    List<Map<String, dynamic>> items,
+    String ahora,
+  ) async {
+    _subiendo.add(ventaId);
+    try {
+      await _syncVentaInterno(ventaId, ventaMap, items, ahora);
+    } finally {
+      _subiendo.remove(ventaId);
+    }
+  }
+
+  static Future<void> _syncVentaInterno(
     String ventaId,
     Map<String, dynamic> ventaMap,
     List<Map<String, dynamic>> items,

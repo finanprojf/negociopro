@@ -146,27 +146,26 @@ class GastoService {
     return lista.toSet();
   }
 
-  /// Elimina todos los gastos vinculados a un producto (por notas origen)
-  static Future<void> eliminarGastosPorProducto(String productoId) async {
+  /// Gastos de compra que se registraron al crear/editar un producto
+  static Future<List<Map<String, dynamic>>> gastosDeProducto(String productoId) async {
     try {
       final db = await LocalDatabase.database;
-      final origen = 'origen:producto:$productoId';
-      final rows = await db.query('gastos',
-          where: 'notas = ?', whereArgs: [origen]);
-      for (final row in rows) {
-        final id = row['id'] as String;
-        await db.delete('gastos', where: 'id = ?', whereArgs: [id]);
-        try {
-          if (await SupabaseService.isOnlineAsync) {
-            await SupabaseService.client
-                .from('gastos')
-                .delete()
-                .eq('id', id)
-                .timeout(const Duration(seconds: 8));
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
+      return await db.query('gastos',
+          where: 'notas = ?', whereArgs: ['origen:producto:$productoId']);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Elimina los gastos vinculados a un producto.
+  /// Usa eliminarGasto: si no hay internet, se borran de la nube al volver.
+  static Future<void> eliminarGastosPorProducto(String productoId) async {
+    final rows = await gastosDeProducto(productoId);
+    for (final row in rows) {
+      try {
+        await eliminarGasto(row['id'] as String);
+      } catch (_) {}
+    }
   }
 
 }

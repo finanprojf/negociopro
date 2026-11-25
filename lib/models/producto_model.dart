@@ -72,8 +72,15 @@ class ProductoModel {
   /// ¿Precio de venta cubre el costo?
   bool get precioRentable => ganancia >= 0;
 
-  bool get stockBajo => stockActual <= stockMinimo;
-  bool get sinStock  => stockActual <= 0;
+  /// Productos creados solos (desde una venta, fiado o apartado) no llevan
+  /// control de cantidad hasta que el dueño lo active. Se marca con stockMinimo < 0.
+  bool get controlaStock => stockMinimo >= 0;
+
+  /// Le faltan datos que el dueño puede completar (foto o costo)
+  bool get porCompletar => (fotoUrl == null || fotoUrl!.isEmpty) || precioCompra <= 0;
+
+  bool get stockBajo => controlaStock && stockActual <= stockMinimo;
+  bool get sinStock  => controlaStock && stockActual <= 0;
 
   /// Precio efectivo: usa precio de oferta si existe, si no el precio normal
   double get precioEfectivo => (precioOferta != null && precioOferta! > 0 && precioOferta! < precioVenta)
